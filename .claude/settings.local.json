@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx prisma generate:*)",
+      "Bash(npx prisma:*)",
+      "Bash(yarn add -D prisma@6 @prisma/client@6:*)",
+      "Bash(yarn build:*)"
+    ]
+  }
+}
