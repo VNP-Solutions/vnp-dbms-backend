@@ -46,6 +46,33 @@ interface UserWithRole {
     system_settings_permission: { permission_level: string; access_level: string } | null
     bank_details_permission: { permission_level: string; access_level: string } | null
   }
+  userProjectRoles?: Array<{
+    id: string
+    project_type: string
+    user_role_id: string
+    portfolio_ids: string[]
+    subportfolio_ids: string[]
+    property_ids: string[]
+    is_active: boolean
+    user_role: {
+      id: string
+      name: string
+      description: string
+      is_external: boolean
+      can_access_mis: boolean
+      portfolio_permission: { permission_level: string; access_level: string } | null
+      property_permission: { permission_level: string; access_level: string } | null
+      audit_permission: { permission_level: string; access_level: string } | null
+      user_permission: { permission_level: string; access_level: string } | null
+      system_settings_permission: { permission_level: string; access_level: string } | null
+      bank_details_permission: { permission_level: string; access_level: string } | null
+    }
+    project_role: {
+      id: string
+      name: string
+      project_type: string
+    }
+  }>
 }
 
 @Injectable()
@@ -410,7 +437,16 @@ export class AuthService implements IAuthService {
         email: user.email,
         first_name: user.first_name,
         last_name: user.last_name,
-        role: user.role
+        role: user.role,
+        projectRoles: user.userProjectRoles?.map(pr => ({
+          project_type: pr.project_type,
+          user_role_id: pr.user_role_id,
+          user_role: pr.user_role,
+          portfolio_ids: pr.portfolio_ids,
+          subportfolio_ids: pr.subportfolio_ids,
+          property_ids: pr.property_ids,
+          is_active: pr.is_active
+        }))
       }
     }
   }

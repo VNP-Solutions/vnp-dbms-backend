@@ -6,7 +6,8 @@ import type { IPropertyRepository, PropertyWithRelations } from './property.inte
 const propertyInclude = {
   portfolio: { select: { id: true, name: true } },
   subportfolio: { select: { id: true, name: true } },
-  currency: { select: { id: true, code: true, name: true } }
+  currency: { select: { id: true, code: true, name: true } },
+  credentials: true
 }
 
 @Injectable()
@@ -64,7 +65,16 @@ export class PropertyRepository implements IPropertyRepository {
       primary_case_email: data.primary_case_email,
       webmail_password: data.webmail_password,
       description: data.description,
-      hotel_address: data.hotel_address
+      hotel_address: data.hotel_address,
+      qp_username: data.qp_username,
+      qp_password: data.qp_password,
+      qp_api_key: data.qp_api_key,
+      expedia_id: data.expedia_id,
+      expedia_status: data.expedia_status,
+      booking_id: data.booking_id,
+      booking_status: data.booking_status,
+      agoda_id: data.agoda_id,
+      agoda_status: data.agoda_status
     }
     if (data.subportfolio_id) payload.subportfolio_id = data.subportfolio_id
 

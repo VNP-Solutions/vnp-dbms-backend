@@ -8,9 +8,15 @@ import {
     VerifyLoginOtpDto
 } from './auth.dto'
 
-type UserWithRole = Prisma.UserGetPayload<{
+export type UserWithRole = Prisma.UserGetPayload<{
   include: {
     role: true
+    userProjectRoles: {
+      include: {
+        user_role: true
+        project_role: true
+      }
+    }
   }
 }>
 

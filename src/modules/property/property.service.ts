@@ -1,6 +1,8 @@
 import { ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
 import { QueryBuilder } from '../../common/utils/query-builder.util'
+import { EncryptionUtil } from '../../common/utils/encryption.util'
+import type { IPropertyCredentialsService } from '../property-credentials/property-credentials.interface'
 import { CreatePropertyDto, PropertyQueryDto, UpdatePropertyDto } from './property.dto'
 import type { IPropertyRepository, IPropertyService, PropertyWithRelations } from './property.interface'
 
@@ -8,13 +10,38 @@ import type { IPropertyRepository, IPropertyService, PropertyWithRelations } fro
 export class PropertyService implements IPropertyService {
   constructor(
     @Inject('IPropertyRepository')
-    private readonly repo: IPropertyRepository
+    private readonly repo: IPropertyRepository,
+    @Inject('IPropertyCredentialsService')
+    private readonly credentialsService: IPropertyCredentialsService,
+    private readonly encryptionUtil: EncryptionUtil
   ) {}
 
-  async create(data: CreatePropertyDto, user: IUserWithPermissions): Promise<PropertyWithRelations> {
+  async create(data: CreatePropertyDto, _user: IUserWithPermissions): Promise<PropertyWithRelations> {
     const existing = await this.repo.findByName(data.name)
     if (existing) throw new ConflictException('Property with this name already exists')
-    return this.repo.create(data)
+    
+    const { credentials, qp_username, qp_password, qp_api_key, ...propertyData } = data
+    
+    const encryptedData: any = { ...propertyData }
+    if (qp_username) encryptedData.qp_username = qp_username
+    if (qp_password) encryptedData.qp_password = this.encryptionUtil.encrypt(qp_password)
+    if (qp_api_key) encryptedData.qp_api_key = this.encryptionUtil.encrypt(qp_api_key)
+    
+    const property = await this.repo.create(encryptedData)
+
+    if (credentials && Object.keys(credentials).length > 0) {
+      try {
+        await this.credentialsService.create({
+          ...credentials,
+          property_id: property.id
+        })
+      } catch (error) {
+        await this.repo.delete(property.id)
+        throw error
+      }
+    }
+
+    return this.repo.findById(property.id) as Promise<PropertyWithRelations>
   }
 
   async findAll(query: PropertyQueryDto, user: IUserWithPermissions) {
@@ -29,6 +56,12 @@ export class PropertyService implements IPropertyService {
     const additionalFilters: any = {}
     if (query.subportfolio_id) additionalFilters.subportfolio_id = query.subportfolio_id
     if (query.currency_id) additionalFilters.currency_id = query.currency_id
+    if (query.expedia_id) additionalFilters.expedia_id = query.expedia_id
+    if (query.expedia_status) additionalFilters.expedia_status = query.expedia_status
+    if (query.booking_id) additionalFilters.booking_id = query.booking_id
+    if (query.booking_status) additionalFilters.booking_status = query.booking_status
+    if (query.agoda_id) additionalFilters.agoda_id = query.agoda_id
+    if (query.agoda_status) additionalFilters.agoda_status = query.agoda_status
     if (query.is_active !== undefined && query.is_active !== '') {
       const v = (query.is_active || '').toLowerCase().trim()
       if (v === 'all') {
@@ -51,7 +84,17 @@ export class PropertyService implements IPropertyService {
 
     const queryConfig = {
       searchFields: ['name', 'address', 'description', 'hotel_address'],
-      filterableFields: ['subportfolio_id', 'currency_id', 'is_active'],
+      filterableFields: [
+        'subportfolio_id',
+        'currency_id',
+        'is_active',
+        'expedia_id',
+        'expedia_status',
+        'booking_id',
+        'booking_status',
+        'agoda_id',
+        'agoda_status'
+      ],
       sortableFields: ['name', 'created_at', 'updated_at', 'is_active', 'next_due_date'],
       defaultSortField: 'created_at',
       defaultSortOrder: 'desc' as const,
@@ -121,7 +164,30 @@ export class PropertyService implements IPropertyService {
         throw new ConflictException('Property with this name already exists')
       }
     }
-    return this.repo.update(id, data)
+
+    const { credentials, qp_username, qp_password, qp_api_key, ...propertyData } = data
+    
+    const encryptedData: any = { ...propertyData }
+    if (qp_username !== undefined) encryptedData.qp_username = qp_username
+    if (qp_password) encryptedData.qp_password = this.encryptionUtil.encrypt(qp_password)
+    if (qp_api_key) encryptedData.qp_api_key = this.encryptionUtil.encrypt(qp_api_key)
+    
+    await this.repo.update(id, encryptedData)
+
+    if (credentials && Object.keys(credentials).length > 0) {
+      const existingCredentials = await this.credentialsService.findByPropertyId(id)
+      
+      if (existingCredentials) {
+        await this.credentialsService.update(existingCredentials.id, credentials)
+      } else {
+        await this.credentialsService.create({
+          ...credentials,
+          property_id: id
+        })
+      }
+    }
+
+    return this.repo.findById(id) as Promise<PropertyWithRelations>
   }
 
   async remove(id: string, user: IUserWithPermissions) {

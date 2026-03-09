@@ -7,6 +7,12 @@ generator client {
   provider = "prisma-client-js"
 }
 
+enum ProjectType {
+  DBMS
+  DASHBOARD
+  PARSER
+}
+
 enum InvitationRoleEnum {
   admin
   partial
@@ -39,28 +45,29 @@ enum AccessLevel {
 }
 
 model User {
-  id             String   @id @default(auto()) @map("_id") @db.ObjectId
-  first_name     String
-  last_name      String
-  email          String   @unique
-  language       String
-  user_role_id   String   @db.ObjectId
-  role           UserRole @relation(fields: [user_role_id], references: [id])
-  password       String
-  display_image  String?
-  contact_number String?
-  is_verified          Boolean @default(false)
-  temp_password        String?
-  invitation_sent_at   DateTime?
-  invited_by_id        String?  @db.ObjectId
-  invitedBy      User?    @relation("UserInvitedBy", fields: [invited_by_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  invitedUsers   User[]   @relation("UserInvitedBy")
+  id                 String    @id @default(auto()) @map("_id") @db.ObjectId
+  first_name         String
+  last_name          String
+  email              String    @unique
+  language           String
+  user_role_id       String    @db.ObjectId
+  role               UserRole  @relation(fields: [user_role_id], references: [id])
+  password           String
+  display_image      String?
+  contact_number     String?
+  is_verified        Boolean   @default(false)
+  temp_password      String?
+  invitation_sent_at DateTime?
+  invited_by_id      String?   @db.ObjectId
+  invitedBy          User?     @relation("UserInvitedBy", fields: [invited_by_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  invitedUsers       User[]    @relation("UserInvitedBy")
 
-  otps                        Otp[]
-  userAccessedProperties      UserAccessedProperty[]
+  otps                         Otp[]
+  userAccessedProperties       UserAccessedProperty[]
   userFeatureAccessPermissions UserFeatureAccessPermission[]
   sentInvitations              UserInvitation[]              @relation("InvitedBy")
   receivedInvitations          UserInvitation[]              @relation("InvitedUser")
+  userProjectRoles             UserProjectRole[]
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -93,27 +100,28 @@ model Otp {
 }
 
 model UserInvitation {
-  id                String           @id @default(auto()) @map("_id") @db.ObjectId
-  email             String
-  invited_by_id     String           @db.ObjectId
-  invited_user_id   String?          @db.ObjectId
-  user_role_id      String           @db.ObjectId
-  invitation_token  String           @unique
-  role              InvitationRoleEnum @default(partial)
-  status            InvitationStatus @default(Pending)
-  expires_at        DateTime
-  accepted_at       DateTime?
-  message           String?
-  portfolio_ids     String[]         @default([]) @db.ObjectId
-  subportfolio_ids  String[]         @default([]) @db.ObjectId
-  property_ids      String[]         @default([]) @db.ObjectId
+  id               String                  @id @default(auto()) @map("_id") @db.ObjectId
+  email            String
+  invited_by_id    String                  @db.ObjectId
+  invited_user_id  String?                 @db.ObjectId
+  user_role_id     String                  @db.ObjectId
+  invitation_token String                  @unique
+  role             InvitationRoleEnum      @default(partial)
+  status           InvitationStatus        @default(Pending)
+  expires_at       DateTime
+  accepted_at      DateTime?
+  message          String?
+  portfolio_ids    String[]                @default([]) @db.ObjectId
+  subportfolio_ids String[]                @default([]) @db.ObjectId
+  property_ids     String[]                @default([]) @db.ObjectId
+  project_roles    ProjectRoleInvitation[]
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
-  invitedBy   User   @relation("InvitedBy", fields: [invited_by_id], references: [id], onDelete: Cascade)
-  invitedUser User? @relation("InvitedUser", fields: [invited_user_id], references: [id], onDelete: SetNull)
-  userRole   UserRole @relation(fields: [user_role_id], references: [id])
+  invitedBy   User     @relation("InvitedBy", fields: [invited_by_id], references: [id], onDelete: Cascade)
+  invitedUser User?    @relation("InvitedUser", fields: [invited_user_id], references: [id], onDelete: SetNull)
+  userRole    UserRole @relation(fields: [user_role_id], references: [id])
 
   @@unique([email, status], name: "unique_pending_invitation")
   @@index([email])
@@ -121,6 +129,14 @@ model UserInvitation {
   @@index([invited_by_id])
   @@index([invited_user_id])
   @@index([user_role_id])
+}
+
+type ProjectRoleInvitation {
+  project_type     ProjectType
+  user_role_id     String      @db.ObjectId
+  portfolio_ids    String[]    @default([]) @db.ObjectId
+  subportfolio_ids String[]    @default([]) @db.ObjectId
+  property_ids     String[]    @default([]) @db.ObjectId
 }
 
 model UserRole {
@@ -139,6 +155,8 @@ model UserRole {
   bank_details_permission    BankDetailsPermission?
   users                      User[]
   invitations                UserInvitation[]
+  projectRoles               ProjectRole[]
+  userProjectRoles           UserProjectRole[]
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -206,13 +224,14 @@ model ServiceType {
 }
 
 model Currency {
-  id         String     @id @default(auto()) @map("_id") @db.ObjectId
-  code       String     @unique
+  id         String      @id @default(auto()) @map("_id") @db.ObjectId
+  code       String      @unique
   name       String
   symbol     String?
-  is_active  Boolean    @default(true)
-  order      Int        @default(0)
+  is_active  Boolean     @default(true)
+  order      Int         @default(0)
   properties Property[]
+  portfolios Portfolio[]
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -222,17 +241,19 @@ model Currency {
 }
 
 model Portfolio {
-  id                   String   @id @default(auto()) @map("_id") @db.ObjectId
-  name                 String   @unique
-  service_type_id      String   @db.ObjectId
-  currency             String   @default("USD")
-  is_active            Boolean
-  contact_email        String?
-  portfolio_contact_email String?
-  is_commissionable    Boolean
-  sales_agent          String?
-  access_email         String?
-  access_phone         String?
+  id                           String                        @id @default(auto()) @map("_id") @db.ObjectId
+  name                         String                        @unique
+  service_type_id              String                        @db.ObjectId
+  currency_id                  String                        @db.ObjectId
+  is_active                    Boolean
+  contact_email                String?
+  portfolio_contact_email      String?
+  portfolio_contact_name       String?
+  portfolio_contact_phone      String?
+  is_commissionable            Boolean
+  sales_agent                  String?
+  access_email                 String?
+  access_phone                 String?
   subportfolios                Subportfolio[]
   properties                   Property[]
   userFeatureAccessPermissions UserFeatureAccessPermission[]
@@ -241,17 +262,19 @@ model Portfolio {
   updated_at DateTime @updatedAt
 
   serviceType ServiceType @relation(fields: [service_type_id], references: [id])
+  currency    Currency    @relation(fields: [currency_id], references: [id])
 
   @@index([service_type_id])
+  @@index([currency_id])
   @@index([is_active])
   @@index([is_commissionable])
 }
 
 model Subportfolio {
-  id           String   @id @default(auto()) @map("_id") @db.ObjectId
-  name         String   @unique
+  id           String    @id @default(auto()) @map("_id") @db.ObjectId
+  name         String    @unique
   description  String?
-  portfolio_id String   @db.ObjectId
+  portfolio_id String    @db.ObjectId
   portfolio    Portfolio @relation(fields: [portfolio_id], references: [id], onDelete: Cascade)
 
   properties                   Property[]
@@ -264,29 +287,43 @@ model Subportfolio {
 }
 
 model Property {
-  id                    String    @id @default(auto()) @map("_id") @db.ObjectId
-  name                  String    @unique
+  id                    String        @id @default(auto()) @map("_id") @db.ObjectId
+  name                  String        @unique
   address               String
-  currency_id           String    @db.ObjectId
-  currency              Currency  @relation(fields: [currency_id], references: [id])
+  currency_id           String        @db.ObjectId
+  currency              Currency      @relation(fields: [currency_id], references: [id])
   card_descriptor       String?
-  is_active             Boolean   @default(true)
-  next_due_date        DateTime?
-  portfolio_id          String    @db.ObjectId
-  portfolio             Portfolio @relation(fields: [portfolio_id], references: [id], onDelete: Cascade)
-  subportfolio_id       String?   @db.ObjectId
+  is_active             Boolean       @default(true)
+  next_due_date         DateTime?
+  portfolio_id          String        @db.ObjectId
+  portfolio             Portfolio     @relation(fields: [portfolio_id], references: [id], onDelete: Cascade)
+  subportfolio_id       String?       @db.ObjectId
   subportfolio          Subportfolio? @relation(fields: [subportfolio_id], references: [id], onDelete: SetNull)
-  previous_portfolio_id String?   @db.ObjectId
-  show_in_portfolio     String[]  @db.ObjectId @default([])
+  previous_portfolio_id String?       @db.ObjectId
+  show_in_portfolio     String[]      @default([]) @db.ObjectId
 
-  new_domain_email     String?
-  others_case_emails   String[]  @default([])
-  primary_case_email   String?
-  webmail_password     String?
-  description          String?
-  hotel_address        String?
+  new_domain_email   String?
+  others_case_emails String[] @default([])
+  primary_case_email String?
+  webmail_password   String?
+  description        String?
+  hotel_address      String?
+
+  // QP Credentials (encrypted)
+  qp_username String?
+  qp_password String?
+  qp_api_key  String?
+
+  // OTA Integration Fields
+  expedia_id     Int?
+  expedia_status String?
+  booking_id     Int?
+  booking_status String?
+  agoda_id       Int?
+  agoda_status   String?
 
   userFeatureAccessPermissions UserFeatureAccessPermission[]
+  credentials                  PropertyCredentials[]
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -297,22 +334,101 @@ model Property {
   @@index([is_active])
   @@index([next_due_date])
   @@index([portfolio_id, is_active])
+  @@index([expedia_id])
+  @@index([booking_id])
+  @@index([agoda_id])
 }
 
 model UserFeatureAccessPermission {
-  id               String  @id @default(auto()) @map("_id") @db.ObjectId
-  user_id          String  @db.ObjectId
-  portfolio_id     String? @db.ObjectId
-  subportfolio_id  String? @db.ObjectId
-  property_id      String? @db.ObjectId
+  id              String  @id @default(auto()) @map("_id") @db.ObjectId
+  user_id         String  @db.ObjectId
+  portfolio_id    String? @db.ObjectId
+  subportfolio_id String? @db.ObjectId
+  property_id     String? @db.ObjectId
 
-  user        User?        @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  portfolio   Portfolio?   @relation(fields: [portfolio_id], references: [id], onDelete: Cascade)
+  user         User?         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  portfolio    Portfolio?    @relation(fields: [portfolio_id], references: [id], onDelete: Cascade)
   subportfolio Subportfolio? @relation(fields: [subportfolio_id], references: [id], onDelete: Cascade)
-  property    Property?    @relation(fields: [property_id], references: [id], onDelete: Cascade)
+  property     Property?     @relation(fields: [property_id], references: [id], onDelete: Cascade)
 
   @@index([user_id])
   @@index([portfolio_id])
   @@index([subportfolio_id])
+  @@index([property_id])
+}
+
+model ProjectRole {
+  id                 String            @id @default(auto()) @map("_id") @db.ObjectId
+  project_type       ProjectType
+  name               String
+  description        String?
+  base_user_role_id  String            @db.ObjectId
+  base_user_role     UserRole          @relation(fields: [base_user_role_id], references: [id])
+  is_active          Boolean           @default(true)
+  user_project_roles UserProjectRole[]
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@unique([project_type, name])
+  @@index([project_type])
+  @@index([is_active])
+  @@index([base_user_role_id])
+}
+
+model UserProjectRole {
+  id               String      @id @default(auto()) @map("_id") @db.ObjectId
+  user_id          String      @db.ObjectId
+  project_role_id  String      @db.ObjectId
+  project_type     ProjectType
+  user_role_id     String      @db.ObjectId
+  portfolio_ids    String[]    @default([]) @db.ObjectId
+  subportfolio_ids String[]    @default([]) @db.ObjectId
+  property_ids     String[]    @default([]) @db.ObjectId
+  is_active        Boolean     @default(true)
+
+  user         User        @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  project_role ProjectRole @relation(fields: [project_role_id], references: [id], onDelete: Cascade)
+  user_role    UserRole    @relation(fields: [user_role_id], references: [id])
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@unique([user_id, project_type])
+  @@index([user_id])
+  @@index([project_role_id])
+  @@index([project_type])
+  @@index([user_role_id])
+  @@index([is_active])
+  @@index([user_id, project_type, is_active])
+}
+
+model PropertyCredentials {
+  id                      String   @id @default(auto()) @map("_id") @db.ObjectId
+  property_id             String   @db.ObjectId
+  expediaUsername         String?
+  expediaPassword         String?
+  agodaUsername           String?
+  agodaPassword           String?
+  bookingUsername         String?
+  bookingPassword         String?
+  expediaEmailAssociated  String?
+  propertyContactEmail    String?
+  portfolioContactEmail   String?
+  multiplePortfolioEmails String[] @default([])
+
+  case_contact_email String?
+  case_contact_name  String?
+  case_contact_phone String?
+
+  reporting_contact_name  String?
+  reporting_contact_email String?
+  reporting_contact_phone String?
+
+  property Property @relation(fields: [property_id], references: [id], onDelete: Cascade)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
   @@index([property_id])
 }

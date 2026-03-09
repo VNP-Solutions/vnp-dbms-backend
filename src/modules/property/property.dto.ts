@@ -7,9 +7,64 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
-  IsUrl
+  IsUrl,
+  ValidateNested
 } from 'class-validator'
+import { Type } from 'class-transformer'
 import { QueryDto } from '../../common/dto/query.dto'
+
+export class PropertyCredentialsInput {
+  @ApiPropertyOptional({ description: 'Expedia username' })
+  @IsString()
+  @IsOptional()
+  expediaUsername?: string
+
+  @ApiPropertyOptional({ description: 'Expedia password' })
+  @IsString()
+  @IsOptional()
+  expediaPassword?: string
+
+  @ApiPropertyOptional({ description: 'Agoda username' })
+  @IsString()
+  @IsOptional()
+  agodaUsername?: string
+
+  @ApiPropertyOptional({ description: 'Agoda password' })
+  @IsString()
+  @IsOptional()
+  agodaPassword?: string
+
+  @ApiPropertyOptional({ description: 'Booking.com username' })
+  @IsString()
+  @IsOptional()
+  bookingUsername?: string
+
+  @ApiPropertyOptional({ description: 'Booking.com password' })
+  @IsString()
+  @IsOptional()
+  bookingPassword?: string
+
+  @ApiPropertyOptional({ description: 'Expedia email associated with the account' })
+  @IsString()
+  @IsOptional()
+  expediaEmailAssociated?: string
+
+  @ApiPropertyOptional({ description: 'Property contact email' })
+  @IsString()
+  @IsOptional()
+  propertyContactEmail?: string
+
+  @ApiPropertyOptional({ description: 'Portfolio contact email' })
+  @IsString()
+  @IsOptional()
+  portfolioContactEmail?: string
+
+  @ApiPropertyOptional({ description: 'Multiple portfolio emails', type: [String] })
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  multiplePortfolioEmails?: string[]
+}
 
 export class CreatePropertyDto {
   @ApiProperty({ example: 'Grand Hotel', description: 'Property name' })
@@ -93,6 +148,54 @@ export class CreatePropertyDto {
   @IsString()
   @IsOptional()
   hotel_address?: string
+
+  @ApiPropertyOptional({ description: 'QP Username' })
+  @IsString()
+  @IsOptional()
+  qp_username?: string
+
+  @ApiPropertyOptional({ description: 'QP Password (will be encrypted)' })
+  @IsString()
+  @IsOptional()
+  qp_password?: string
+
+  @ApiPropertyOptional({ description: 'QP API Key (will be encrypted)' })
+  @IsString()
+  @IsOptional()
+  qp_api_key?: string
+
+  @ApiPropertyOptional({ description: 'Expedia ID', example: 123456 })
+  @IsOptional()
+  expedia_id?: number
+
+  @ApiPropertyOptional({ description: 'Expedia Status', example: 'Active' })
+  @IsString()
+  @IsOptional()
+  expedia_status?: string
+
+  @ApiPropertyOptional({ description: 'Booking.com ID', example: 789012 })
+  @IsOptional()
+  booking_id?: number
+
+  @ApiPropertyOptional({ description: 'Booking.com Status', example: 'Active' })
+  @IsString()
+  @IsOptional()
+  booking_status?: string
+
+  @ApiPropertyOptional({ description: 'Agoda ID', example: 345678 })
+  @IsOptional()
+  agoda_id?: number
+
+  @ApiPropertyOptional({ description: 'Agoda Status', example: 'Active' })
+  @IsString()
+  @IsOptional()
+  agoda_status?: string
+
+  @ApiPropertyOptional({ description: 'Property credentials (OTA login details)', type: PropertyCredentialsInput })
+  @ValidateNested()
+  @Type(() => PropertyCredentialsInput)
+  @IsOptional()
+  credentials?: PropertyCredentialsInput
 }
 
 export class UpdatePropertyDto extends PartialType(OmitType(CreatePropertyDto, ['is_active'] as const)) {
@@ -100,6 +203,12 @@ export class UpdatePropertyDto extends PartialType(OmitType(CreatePropertyDto, [
   @IsBoolean()
   @IsOptional()
   is_active?: boolean
+
+  @ApiPropertyOptional({ description: 'Property credentials (OTA login details)', type: PropertyCredentialsInput })
+  @ValidateNested()
+  @Type(() => PropertyCredentialsInput)
+  @IsOptional()
+  credentials?: PropertyCredentialsInput
 }
 
 export class PropertyQueryDto extends QueryDto {
@@ -132,4 +241,31 @@ export class PropertyQueryDto extends QueryDto {
   @IsOptional()
   @IsString()
   end_date?: string
+
+  @ApiPropertyOptional({ description: 'Filter by Expedia ID' })
+  @IsOptional()
+  expedia_id?: number
+
+  @ApiPropertyOptional({ description: 'Filter by Expedia Status' })
+  @IsOptional()
+  @IsString()
+  expedia_status?: string
+
+  @ApiPropertyOptional({ description: 'Filter by Booking.com ID' })
+  @IsOptional()
+  booking_id?: number
+
+  @ApiPropertyOptional({ description: 'Filter by Booking.com Status' })
+  @IsOptional()
+  @IsString()
+  booking_status?: string
+
+  @ApiPropertyOptional({ description: 'Filter by Agoda ID' })
+  @IsOptional()
+  agoda_id?: number
+
+  @ApiPropertyOptional({ description: 'Filter by Agoda Status' })
+  @IsOptional()
+  @IsString()
+  agoda_status?: string
 }

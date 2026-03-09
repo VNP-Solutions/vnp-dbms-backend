@@ -223,7 +223,11 @@ export class UserInvitationService implements IUserInvitationService {
       }
     })
 
+    // Create DBMS permissions (for backward compatibility)
     await this.createUserPermissions(user.id, invitation)
+
+    // Create project-specific role assignments
+    await this.createProjectRoleAssignments(user.id, invitation)
 
     const updatedInvitation = await this.invitationRepository.markAsAccepted(
       invitation.id,
@@ -304,6 +308,57 @@ export class UserInvitationService implements IUserInvitationService {
     } catch (error) {
       this.logger.error(
         `Error creating user feature permissions: ${error instanceof Error ? error.message : String(error)}`,
+        error instanceof Error ? error.stack : undefined
+      )
+    }
+  }
+
+  private async createProjectRoleAssignments(
+    userId: string,
+    invitation: any
+  ): Promise<void> {
+    try {
+      if (!invitation.project_roles || invitation.project_roles.length === 0) {
+        return
+      }
+
+      for (const projectRoleInvitation of invitation.project_roles) {
+        // Find ProjectRole for this project type and base user role
+        const projectRole = await this.prisma.projectRole.findFirst({
+          where: {
+            project_type: projectRoleInvitation.project_type,
+            base_user_role_id: projectRoleInvitation.user_role_id
+          }
+        })
+
+        if (!projectRole) {
+          this.logger.warn(
+            `ProjectRole not found for project type: ${projectRoleInvitation.project_type}`
+          )
+          continue
+        }
+
+        // Create UserProjectRole
+        await this.prisma.userProjectRole.create({
+          data: {
+            user_id: userId,
+            project_role_id: projectRole.id,
+            project_type: projectRoleInvitation.project_type,
+            user_role_id: projectRoleInvitation.user_role_id,
+            portfolio_ids: projectRoleInvitation.portfolio_ids || [],
+            subportfolio_ids: projectRoleInvitation.subportfolio_ids || [],
+            property_ids: projectRoleInvitation.property_ids || [],
+            is_active: true
+          }
+        })
+
+        this.logger.log(
+          `Created project role assignment for user ${userId} in project ${projectRoleInvitation.project_type}`
+        )
+      }
+    } catch (error) {
+      this.logger.error(
+        `Error creating project role assignments: ${error instanceof Error ? error.message : String(error)}`,
         error instanceof Error ? error.stack : undefined
       )
     }

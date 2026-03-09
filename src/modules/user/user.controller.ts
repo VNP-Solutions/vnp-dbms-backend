@@ -47,7 +47,8 @@ export class UserController {
   @ApiOperation({ summary: 'Get own profile' })
   @ApiResponse({ status: 200, description: 'Profile retrieved successfully' })
   getProfile(@CurrentUser() user: IUserWithPermissions) {
-    return this.userService.getProfile(user.id)
+    // return this.userService.getProfile(user.id)
+    return user
   }
 
   @Patch('profile')

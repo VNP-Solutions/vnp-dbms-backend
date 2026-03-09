@@ -1,14 +1,66 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
-import { InvitationRoleEnum, InvitationStatus } from '@prisma/client'
+import { InvitationRoleEnum, InvitationStatus, ProjectType } from '@prisma/client'
 import {
   IsArray,
   IsEmail,
   IsEnum,
+  IsMongoId,
   IsNotEmpty,
   IsOptional,
   IsString,
-  Matches
+  Matches,
+  ValidateNested
 } from 'class-validator'
+import { Type } from 'class-transformer'
+
+export class ProjectRoleInvitationDto {
+  @ApiProperty({
+    enum: ProjectType,
+    example: ProjectType.DASHBOARD,
+    description: 'Project type for this role assignment'
+  })
+  @IsEnum(ProjectType)
+  @IsNotEmpty()
+  project_type: ProjectType
+
+  @ApiProperty({
+    example: '507f1f77bcf86cd799439011',
+    description: 'ID of the user role to assign for this project'
+  })
+  @IsMongoId()
+  @IsNotEmpty()
+  user_role_id: string
+
+  @ApiPropertyOptional({
+    type: [String],
+    example: ['507f1f77bcf86cd799439011'],
+    description: 'Array of portfolio IDs for this project (optional)'
+  })
+  @IsOptional()
+  @IsArray()
+  @IsMongoId({ each: true })
+  portfolio_ids?: string[]
+
+  @ApiPropertyOptional({
+    type: [String],
+    example: ['507f1f77bcf86cd799439013'],
+    description: 'Array of subportfolio IDs for this project (optional)'
+  })
+  @IsOptional()
+  @IsArray()
+  @IsMongoId({ each: true })
+  subportfolio_ids?: string[]
+
+  @ApiPropertyOptional({
+    type: [String],
+    example: ['507f1f77bcf86cd799439015'],
+    description: 'Array of property IDs for this project (optional)'
+  })
+  @IsOptional()
+  @IsArray()
+  @IsMongoId({ each: true })
+  property_ids?: string[]
+}
 
 export class CreateInvitationDto {
   @ApiProperty({
@@ -22,7 +74,7 @@ export class CreateInvitationDto {
   @ApiProperty({
     example: '507f1f77bcf86cd799439011',
     description:
-      'ID of the user role to assign when the invitation is accepted'
+      'ID of the user role to assign when the invitation is accepted (for DBMS project)'
   })
   @IsString()
   @IsNotEmpty()
@@ -40,7 +92,7 @@ export class CreateInvitationDto {
     type: [String],
     example: ['507f1f77bcf86cd799439011', '507f1f77bcf86cd799439012'],
     description:
-      'Array of portfolio IDs the user should have access to (optional)'
+      'Array of portfolio IDs the user should have access to (optional, for DBMS project)'
   })
   @IsOptional()
   @IsArray()
@@ -50,7 +102,7 @@ export class CreateInvitationDto {
     type: [String],
     example: ['507f1f77bcf86cd799439013', '507f1f77bcf86cd799439014'],
     description:
-      'Array of subportfolio IDs the user should have access to (optional)'
+      'Array of subportfolio IDs the user should have access to (optional, for DBMS project)'
   })
   @IsOptional()
   @IsArray()
@@ -60,7 +112,7 @@ export class CreateInvitationDto {
     type: [String],
     example: ['507f1f77bcf86cd799439015', '507f1f77bcf86cd799439016'],
     description:
-      'Array of property IDs the user should have access to (optional)'
+      'Array of property IDs the user should have access to (optional, for DBMS project)'
   })
   @IsOptional()
   @IsArray()
@@ -75,6 +127,16 @@ export class CreateInvitationDto {
   @IsOptional()
   @IsEnum(InvitationRoleEnum)
   role?: InvitationRoleEnum
+
+  @ApiPropertyOptional({
+    type: [ProjectRoleInvitationDto],
+    description: 'Project-specific role assignments (optional, for DASHBOARD and PARSER projects)'
+  })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ProjectRoleInvitationDto)
+  project_roles?: ProjectRoleInvitationDto[]
 }
 
 export class AcceptInvitationDto {

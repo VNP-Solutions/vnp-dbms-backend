@@ -14,14 +14,18 @@ import { AuthModule } from './modules/auth/auth.module'
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard'
 import { CurrencyModule } from './modules/currency/currency.module'
 import { EmailModule } from './modules/email/email.module'
+import { ExternalApiModule } from './modules/external-api/external-api.module'
 import { FileUploadModule } from './modules/file-upload/file-upload.module'
 import { PermissionModule } from './modules/permission/permission.module'
 import { PortfolioModule } from './modules/portfolio/portfolio.module'
+import { ProjectRoleModule } from './modules/project-role/project-role.module'
 import { PrismaService } from './modules/prisma/prisma.service'
 import { PropertyModule } from './modules/property/property.module'
+import { PropertyCredentialsModule } from './modules/property-credentials/property-credentials.module'
 import { ServiceTypeModule } from './modules/service-type/service-type.module'
 import { SubportfolioModule } from './modules/subportfolio/subportfolio.module'
 import { UserInvitationModule } from './modules/user-invitation/user-invitation.module'
+import { UserProjectRoleModule } from './modules/user-project-role/user-project-role.module'
 import { UserRoleModule } from './modules/user-role/user-role.module'
 import { UserModule } from './modules/user/user.module'
 
@@ -37,14 +41,18 @@ import { UserModule } from './modules/user/user.module'
     AuthModule,
     UserModule,
     UserRoleModule,
+    ProjectRoleModule,
+    UserProjectRoleModule,
     EmailModule,
     FileUploadModule,
     UserInvitationModule,
     PortfolioModule,
     SubportfolioModule,
     PropertyModule,
+    PropertyCredentialsModule,
     ServiceTypeModule,
-    CurrencyModule
+    CurrencyModule,
+    ExternalApiModule
   ],
   controllers: [AppController],
   providers: [

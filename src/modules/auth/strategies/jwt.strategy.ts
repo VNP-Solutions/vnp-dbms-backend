@@ -27,11 +27,34 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       throw new UnauthorizedException('User not found')
     }
 
+    const projectRoles = user.userProjectRoles?.map(upr => ({
+      project_type: upr.project_role.project_type,
+      user_role_id: upr.user_role_id,
+      user_role: {
+        id: upr.user_role.id,
+        name: upr.user_role.name,
+        description: upr.user_role.description || '',
+        is_external: upr.user_role.is_external,
+        can_access_mis: upr.user_role.can_access_mis ?? false,
+        portfolio_permission: upr.user_role.portfolio_permission,
+        property_permission: upr.user_role.property_permission,
+        audit_permission: upr.user_role.audit_permission,
+        user_permission: upr.user_role.user_permission,
+        system_settings_permission: upr.user_role.system_settings_permission,
+        bank_details_permission: upr.user_role.bank_details_permission
+      },
+      portfolio_ids: upr.portfolio_ids || [],
+      subportfolio_ids: upr.subportfolio_ids || [],
+      property_ids: upr.property_ids || [],
+      is_active: upr.is_active
+    })) || []
+
     return {
       id: user.id,
       email: user.email,
       user_role_id: user.user_role_id,
-      role: user.role
+      role: user.role,
+      projectRoles
     }
   }
 }

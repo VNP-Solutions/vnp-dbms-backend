@@ -236,6 +236,35 @@ export class RefreshTokenDto {
   refresh_token: string
 }
 
+/** User object shape returned in auth responses */
+export interface AuthResponseUserDto {
+  id: string
+  email: string
+  first_name: string
+  last_name: string
+  role: {
+    id: string
+    name: string
+    description: string
+    is_external: boolean
+    portfolio_permission?: { permission_level: string; access_level: string } | null
+    property_permission?: { permission_level: string; access_level: string } | null
+    audit_permission?: { permission_level: string; access_level: string } | null
+    user_permission?: { permission_level: string; access_level: string } | null
+    system_settings_permission?: { permission_level: string; access_level: string } | null
+    bank_details_permission?: { permission_level: string; access_level: string } | null
+  }
+  projectRoles?: Array<{
+    project_type: string
+    user_role_id: string
+    user_role?: { id: string; name: string; description: string }
+    portfolio_ids: string[]
+    subportfolio_ids: string[]
+    property_ids: string[]
+    is_active: boolean
+  }>
+}
+
 export class AuthResponseDto {
   @ApiProperty({
     example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
@@ -265,22 +294,5 @@ export class AuthResponseDto {
     },
     description: 'User information'
   })
-  user: {
-    id: string
-    email: string
-    first_name: string
-    last_name: string
-    role: {
-      id: string
-      name: string
-      description: string
-      is_external: boolean
-      portfolio_permission?: { permission_level: string; access_level: string } | null
-      property_permission?: { permission_level: string; access_level: string } | null
-      audit_permission?: { permission_level: string; access_level: string } | null
-      user_permission?: { permission_level: string; access_level: string } | null
-      system_settings_permission?: { permission_level: string; access_level: string } | null
-      bank_details_permission?: { permission_level: string; access_level: string } | null
-    }
-  }
+  user: AuthResponseUserDto
 }

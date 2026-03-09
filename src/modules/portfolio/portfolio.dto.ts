@@ -21,10 +21,10 @@ export class CreatePortfolioDto {
   @IsNotEmpty()
   service_type_id: string
 
-  @ApiPropertyOptional({ example: 'USD', description: 'Currency code (defaults to USD)' })
+  @ApiProperty({ example: '507f1f77bcf86cd799439020', description: 'Currency ID' })
   @IsString()
-  @IsOptional()
-  currency?: string
+  @IsNotEmpty()
+  currency_id: string
 
   @ApiProperty({ example: true, description: 'Whether portfolio is active' })
   @IsBoolean()
@@ -42,6 +42,16 @@ export class CreatePortfolioDto {
   @IsEmail()
   @IsOptional()
   portfolio_contact_email?: string
+
+  @ApiPropertyOptional({ example: 'John Smith', description: 'Portfolio contact name' })
+  @IsString()
+  @IsOptional()
+  portfolio_contact_name?: string
+
+  @ApiPropertyOptional({ example: '+1234567890', description: 'Portfolio contact phone' })
+  @IsString()
+  @IsOptional()
+  portfolio_contact_phone?: string
 
   @ApiProperty({ example: true, description: 'Whether portfolio is commissionable' })
   @IsBoolean()
