@@ -222,10 +222,10 @@ export class PropertyQueryDto extends QueryDto {
   @IsString()
   subportfolio_id?: string
 
-  @ApiPropertyOptional({ description: 'Filter by active status (true/false/all)', example: 'true' })
+  @ApiPropertyOptional({ description: 'Filter by active status (true/false/all)', example: true })
   @IsOptional()
-  @IsString()
-  is_active?: string
+  @IsBoolean()
+  is_active?: boolean
 
   @ApiPropertyOptional({ description: 'Filter by currency ID' })
   @IsOptional()
@@ -268,4 +268,9 @@ export class PropertyQueryDto extends QueryDto {
   @IsOptional()
   @IsString()
   agoda_status?: string
+
+  @ApiPropertyOptional({ description: 'Filter by access lost status', example: false })
+  @IsOptional()
+  @IsBoolean()
+  access_lost?: boolean
 }

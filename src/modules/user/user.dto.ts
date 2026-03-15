@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
-import { IsEmail, IsNotEmpty, IsOptional, IsString } from 'class-validator'
+import { IsBoolean, IsEmail, IsNotEmpty, IsOptional, IsString } from 'class-validator'
 import { QueryDto } from '../../common/dto/query.dto'
 
 export class CreateUserDto {
@@ -136,11 +136,11 @@ export class UserQueryDto extends QueryDto {
 
   @ApiPropertyOptional({
     description: 'Filter by verified status (true/false/All)',
-    example: 'true'
+    example: true
   })
   @IsOptional()
-  @IsString()
-  is_verified?: string
+  @IsBoolean()
+  is_verified?: boolean
 }
 
 export class DeleteUserDto {

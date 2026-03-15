@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common'
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger'
 import { ProjectType } from '@prisma/client'
+import { ParseQuery } from '../../common/decorators/parse-query.decorator'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
 import { CurrentUser } from '../auth/decorators/current-user.decorator'
 import {
@@ -65,7 +66,10 @@ export class UserProjectRoleController {
   @ApiOperation({ summary: 'Get all user project roles (Super Admin only)' })
   @ApiResponse({ status: 200, description: 'List of all user project roles' })
   @ApiResponse({ status: 403, description: 'Only super admins can view all project roles' })
-  async findAll(@CurrentUser() user: IUserWithPermissions) {
+  async findAll(
+    @ParseQuery() _query: Record<string, any>,
+    @CurrentUser() user: IUserWithPermissions
+  ) {
     return this.userProjectRoleService.findAll(user)
   }
 

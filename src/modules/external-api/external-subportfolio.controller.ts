@@ -3,11 +3,11 @@ import {
   Get,
   NotFoundException,
   Param,
-  Query,
   UseGuards
 } from '@nestjs/common'
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger'
 import { ProjectType } from '@prisma/client'
+import { ParseQuery } from '../../common/decorators/parse-query.decorator'
 import { RequireProjectRole } from '../../common/decorators/require-project-role.decorator'
 import { ProjectRoleGuard } from '../../common/guards/project-role.guard'
 import type { IUserWithProjectRole } from '../../common/utils/project-context.util'
@@ -35,9 +35,10 @@ export class ExternalSubportfolioController {
   @ApiResponse({ status: 200, description: 'List of subportfolios' })
   async findAll(
     @CurrentUser() user: IUserWithProjectRole,
-    @Query('project_type') projectType: ProjectType,
-    @Query('portfolio_id') portfolioId?: string
+    @ParseQuery() query: Record<string, any>
   ) {
+    const projectType = query.project_type as ProjectType
+    const portfolioId = query.portfolio_id as string | undefined
     return this.externalSubportfolioService.findAllForExternalProject(
       user,
       projectType,
@@ -58,8 +59,9 @@ export class ExternalSubportfolioController {
   async findByPortfolio(
     @CurrentUser() user: IUserWithProjectRole,
     @Param('portfolioId') portfolioId: string,
-    @Query('project_type') projectType: ProjectType
+    @ParseQuery() query: Record<string, any>
   ) {
+    const projectType = query.project_type as ProjectType
     return this.externalSubportfolioService.findByPortfolioForExternalProject(
       user,
       projectType,
@@ -78,8 +80,9 @@ export class ExternalSubportfolioController {
   async findOne(
     @CurrentUser() user: IUserWithProjectRole,
     @Param('id') id: string,
-    @Query('project_type') projectType: ProjectType
+    @ParseQuery() query: Record<string, any>
   ) {
+    const projectType = query.project_type as ProjectType
     const subportfolio =
       await this.externalSubportfolioService.findOneForExternalProject(
         user,

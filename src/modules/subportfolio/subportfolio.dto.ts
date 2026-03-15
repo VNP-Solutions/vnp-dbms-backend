@@ -1,6 +1,6 @@
 import { PartialType } from '@nestjs/mapped-types'
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
-import { IsNotEmpty, IsOptional, IsString } from 'class-validator'
+import { IsBoolean, IsNotEmpty, IsOptional, IsString } from 'class-validator'
 import { QueryDto } from '../../common/dto/query.dto'
 
 export class CreateSubportfolioDto {
@@ -37,4 +37,9 @@ export class SubportfolioQueryDto extends QueryDto {
   @IsOptional()
   @IsString()
   end_date?: string
+
+  @ApiPropertyOptional({ description: 'Filter by access lost status', example: false })
+  @IsOptional()
+  @IsBoolean()
+  access_lost?: boolean
 }

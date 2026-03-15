@@ -17,11 +17,20 @@ export class CurrencyRepository implements ICurrencyRepository {
     })
   }
 
-  async findAll() {
+  async findAll(search?: string) {
+    const where = search?.trim()
+      ? {
+          OR: [
+            { code: { contains: search.trim(), mode: 'insensitive' as const } },
+            { name: { contains: search.trim(), mode: 'insensitive' as const } },
+            { symbol: { contains: search.trim(), mode: 'insensitive' as const } }
+          ]
+        }
+      : undefined
+
     return this.prisma.currency.findMany({
-      orderBy: {
-        order: 'asc'
-      }
+      where,
+      orderBy: { order: 'asc' }
     })
   }
 

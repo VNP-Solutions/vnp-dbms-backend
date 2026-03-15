@@ -1,5 +1,6 @@
-import { Body, Controller, Delete, Get, Inject, Param, Patch, Post, Query, UseGuards } from '@nestjs/common'
+import { Body, Controller, Delete, Get, Inject, Param, Patch, Post, UseGuards } from '@nestjs/common'
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
+import { ParseQuery } from '../../common/decorators/parse-query.decorator'
 import { RequirePermission } from '../../common/decorators/require-permission.decorator'
 import { PermissionGuard } from '../../common/guards/permission.guard'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
@@ -32,7 +33,7 @@ export class PortfolioController {
   @RequirePermission(ModuleType.PORTFOLIO, PermissionAction.READ)
   @ApiOperation({ summary: 'Get all portfolios with pagination, search, filter and sort' })
   @ApiResponse({ status: 200, description: 'Paginated list of portfolios' })
-  findAll(@Query() query: PortfolioQueryDto, @CurrentUser() user: IUserWithPermissions) {
+  findAll(@ParseQuery() query: PortfolioQueryDto, @CurrentUser() user: IUserWithPermissions) {
     return this.portfolioService.findAll(query, user)
   }
 

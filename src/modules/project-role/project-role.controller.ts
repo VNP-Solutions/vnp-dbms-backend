@@ -9,6 +9,7 @@ import {
   Post
 } from '@nestjs/common'
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
+import { ParseQuery } from '../../common/decorators/parse-query.decorator'
 import { CreateProjectRoleDto, UpdateProjectRoleDto } from './project-role.dto'
 import type { IProjectRoleService } from './project-role.interface'
 
@@ -32,7 +33,7 @@ export class ProjectRoleController {
   @Get()
   @ApiOperation({ summary: 'Get all project roles' })
   @ApiResponse({ status: 200, description: 'List of project roles' })
-  async findAll() {
+  async findAll(@ParseQuery() _query: Record<string, any>) {
     return this.projectRoleService.findAll()
   }
 

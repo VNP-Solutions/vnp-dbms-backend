@@ -11,9 +11,11 @@ import {
 import {
     ApiBearerAuth,
     ApiOperation,
+    ApiQuery,
     ApiResponse,
     ApiTags
 } from '@nestjs/swagger'
+import { ParseQuery } from '../../common/decorators/parse-query.decorator'
 import { RequirePermission } from '../../common/decorators/require-permission.decorator'
 import { PermissionGuard } from '../../common/guards/permission.guard'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
@@ -22,9 +24,11 @@ import {
     PermissionAction
 } from '../../common/interfaces/permission.interface'
 import { CurrentUser } from '../auth/decorators/current-user.decorator'
+import { Public } from '../auth/decorators/public.decorator'
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
 import {
     CreateCurrencyDto,
+    CurrencyQueryDto,
     DeleteCurrencyDto,
     ReorderCurrencyDto,
     UpdateCurrencyDto
@@ -57,14 +61,15 @@ export class CurrencyController {
   }
 
   @Get()
-  @RequirePermission(ModuleType.SYSTEM_SETTINGS, PermissionAction.READ)
-  @ApiOperation({ summary: 'Get all currencies' })
+  @Public()
+  @ApiOperation({ summary: 'Get all currencies with optional search (public)' })
+  @ApiQuery({ name: 'search', required: false, description: 'Search by code, name, or symbol' })
   @ApiResponse({
     status: 200,
     description: 'List of currencies retrieved successfully'
   })
-  findAll(@CurrentUser() user: IUserWithPermissions) {
-    return this.currencyService.findAll(user)
+  findAll(@ParseQuery() query: CurrencyQueryDto) {
+    return this.currencyService.findAll(query, null as any)
   }
 
   @Get(':id')
