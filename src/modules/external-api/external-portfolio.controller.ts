@@ -3,12 +3,11 @@ import {
   Get,
   NotFoundException,
   Param,
-  ParseBoolPipe,
-  Query,
   UseGuards
 } from '@nestjs/common'
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger'
 import { ProjectType } from '@prisma/client'
+import { ParseQuery } from '../../common/decorators/parse-query.decorator'
 import { RequireProjectRole } from '../../common/decorators/require-project-role.decorator'
 import { ProjectRoleGuard } from '../../common/guards/project-role.guard'
 import type { IUserWithProjectRole } from '../../common/utils/project-context.util'
@@ -37,11 +36,12 @@ export class ExternalPortfolioController {
   @ApiResponse({ status: 200, description: 'List of portfolios with optional credentials' })
   async findAll(
     @CurrentUser() user: IUserWithProjectRole,
-    @Query('project_type') projectType: ProjectType,
-    @Query('is_active') isActive?: boolean,
-    @Query('include_credentials', new ParseBoolPipe({ optional: true }))
-    includeCredentials = false
+    @ParseQuery() query: Record<string, any>
   ) {
+    const projectType = query.project_type as ProjectType
+    const isActive = query.is_active as boolean | undefined
+    const includeCredentials = query.include_credentials ?? false
+
     return this.externalPortfolioService.findAllForExternalProject(
       user,
       projectType,
@@ -65,10 +65,10 @@ export class ExternalPortfolioController {
   async findOne(
     @CurrentUser() user: IUserWithProjectRole,
     @Param('id') id: string,
-    @Query('project_type') projectType: ProjectType,
-    @Query('include_credentials', new ParseBoolPipe({ optional: true }))
-    includeCredentials = true
+    @ParseQuery() query: Record<string, any>
   ) {
+    const projectType = query.project_type as ProjectType
+    const includeCredentials = query.include_credentials ?? true
     const portfolio =
       await this.externalPortfolioService.findOneForExternalProject(
         user,

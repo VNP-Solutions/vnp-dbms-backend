@@ -14,6 +14,7 @@ import {
   ApiResponse,
   ApiTags
 } from '@nestjs/swagger'
+import { ParseQuery } from '../../common/decorators/parse-query.decorator'
 import { RequirePermission } from '../../common/decorators/require-permission.decorator'
 import { PermissionGuard } from '../../common/guards/permission.guard'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
@@ -63,7 +64,10 @@ export class UserRoleController {
     status: 200,
     description: 'List of roles retrieved successfully'
   })
-  findAll(@CurrentUser() user: IUserWithPermissions) {
+  findAll(
+    @ParseQuery() _query: Record<string, any>,
+    @CurrentUser() user: IUserWithPermissions
+  ) {
     return this.userRoleService.findAll(user)
   }
 

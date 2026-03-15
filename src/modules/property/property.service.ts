@@ -62,13 +62,8 @@ export class PropertyService implements IPropertyService {
     if (query.booking_status) additionalFilters.booking_status = query.booking_status
     if (query.agoda_id) additionalFilters.agoda_id = query.agoda_id
     if (query.agoda_status) additionalFilters.agoda_status = query.agoda_status
-    if (query.is_active !== undefined && query.is_active !== '') {
-      const v = (query.is_active || '').toLowerCase().trim()
-      if (v === 'all') {
-        // no filter
-      } else if (v === 'true') additionalFilters.is_active = true
-      else if (v === 'false') additionalFilters.is_active = false
-      else additionalFilters.is_active = true
+    if (query.is_active !== undefined) {
+      additionalFilters.is_active = query.is_active === true
     }
     if (query.start_date && query.end_date) {
       additionalFilters.created_at = {

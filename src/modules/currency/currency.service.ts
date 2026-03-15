@@ -8,7 +8,7 @@ import {
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
 import { EncryptionUtil } from '../../common/utils/encryption.util'
 import { PrismaService } from '../prisma/prisma.service'
-import { CreateCurrencyDto, ReorderCurrencyDto, UpdateCurrencyDto } from './currency.dto'
+import { CreateCurrencyDto, CurrencyQueryDto, ReorderCurrencyDto, UpdateCurrencyDto } from './currency.dto'
 import type {
     ICurrencyRepository,
     ICurrencyService
@@ -33,8 +33,9 @@ export class CurrencyService implements ICurrencyService {
     return this.currencyRepository.create(data)
   }
 
-  async findAll(_user: IUserWithPermissions) {
-    return this.currencyRepository.findAll()
+  async findAll(query: CurrencyQueryDto, _user: IUserWithPermissions) {
+    const search = query.search?.trim()
+    return this.currencyRepository.findAll(search || undefined)
   }
 
   async findOne(id: string, _user: IUserWithPermissions) {

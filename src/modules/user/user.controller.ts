@@ -6,7 +6,6 @@ import {
   Param,
   Patch,
   Post,
-  Query,
   UseGuards
 } from '@nestjs/common'
 import {
@@ -15,6 +14,7 @@ import {
   ApiResponse,
   ApiTags
 } from '@nestjs/swagger'
+import { ParseQuery } from '../../common/decorators/parse-query.decorator'
 import { RequirePermission } from '../../common/decorators/require-permission.decorator'
 import { PermissionGuard } from '../../common/guards/permission.guard'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
@@ -79,7 +79,7 @@ export class UserController {
     description: 'Forbidden - Insufficient permissions'
   })
   findAll(
-    @Query() query: UserQueryDto,
+    @ParseQuery() query: UserQueryDto,
     @CurrentUser() user: IUserWithPermissions
   ) {
     return this.userService.findAll(query, user)

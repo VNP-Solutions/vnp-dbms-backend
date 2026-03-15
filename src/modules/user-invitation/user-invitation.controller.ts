@@ -7,7 +7,6 @@ import {
   Param,
   Patch,
   Post,
-  Query,
   UseGuards
 } from '@nestjs/common'
 import {
@@ -20,6 +19,7 @@ import {
   ApiTags
 } from '@nestjs/swagger'
 import type { UserInvitation } from '@prisma/client'
+import { ParseQuery } from '../../common/decorators/parse-query.decorator'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
 import {
   AcceptInvitationDto,
@@ -111,7 +111,7 @@ export class UserInvitationController {
     description: 'Search by email or inviter name'
   })
   async getAllInvitations(
-    @Query() query: Record<string, any>
+    @ParseQuery() query: Record<string, any>
   ): Promise<{ data: UserInvitation[]; metadata: any }> {
     return this.invitationService.getAllInvitations(query)
   }

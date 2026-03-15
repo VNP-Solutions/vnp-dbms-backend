@@ -4,13 +4,13 @@ import {
   Get,
   NotFoundException,
   Param,
-  ParseBoolPipe,
   Patch,
   Query,
   UseGuards
 } from '@nestjs/common'
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger'
 import { ProjectType } from '@prisma/client'
+import { ParseQuery } from '../../common/decorators/parse-query.decorator'
 import { RequireProjectRole } from '../../common/decorators/require-project-role.decorator'
 import { ProjectRoleGuard } from '../../common/guards/project-role.guard'
 import type { IUserWithProjectRole } from '../../common/utils/project-context.util'
@@ -42,13 +42,14 @@ export class ExternalPropertyController {
   @ApiResponse({ status: 200, description: 'List of properties with optional credentials' })
   async findAll(
     @CurrentUser() user: IUserWithProjectRole,
-    @Query('project_type') projectType: ProjectType,
-    @Query('portfolio_id') portfolioId?: string,
-    @Query('subportfolio_id') subportfolioId?: string,
-    @Query('is_active') isActive?: boolean,
-    @Query('include_credentials', new ParseBoolPipe({ optional: true }))
-    includeCredentials = false
+    @ParseQuery() query: Record<string, any>
   ) {
+    const projectType = query.project_type as ProjectType
+    const portfolioId = query.portfolio_id as string | undefined
+    const subportfolioId = query.subportfolio_id as string | undefined
+    const isActive = query.is_active as boolean | undefined
+    const includeCredentials = query.include_credentials ?? false
+
     return this.externalPropertyService.findAllForExternalProject(
       user,
       projectType,
@@ -73,14 +74,15 @@ export class ExternalPropertyController {
   async findByPortfolio(
     @CurrentUser() user: IUserWithProjectRole,
     @Param('portfolioId') portfolioId: string,
-    @Query('project_type') projectType: ProjectType,
-    @Query('include_credentials', new ParseBoolPipe({ optional: true }))
-    includeCredentials = false
+    @ParseQuery() query: Record<string, any>
   ) {
+    const projectType = query.project_type as ProjectType
+    const includeCredentials = query.include_credentials ?? false
     return this.externalPropertyService.findAllForExternalProject(
       user,
       projectType,
       {
+        project_type: projectType,
         portfolio_ids: [portfolioId],
         include_credentials: includeCredentials
       }
@@ -98,14 +100,15 @@ export class ExternalPropertyController {
   async findBySubportfolio(
     @CurrentUser() user: IUserWithProjectRole,
     @Param('subportfolioId') subportfolioId: string,
-    @Query('project_type') projectType: ProjectType,
-    @Query('include_credentials', new ParseBoolPipe({ optional: true }))
-    includeCredentials = false
+    @ParseQuery() query: Record<string, any>
   ) {
+    const projectType = query.project_type as ProjectType
+    const includeCredentials = query.include_credentials ?? false
     return this.externalPropertyService.findAllForExternalProject(
       user,
       projectType,
       {
+        project_type: projectType,
         subportfolio_ids: [subportfolioId],
         include_credentials: includeCredentials
       }
@@ -124,10 +127,10 @@ export class ExternalPropertyController {
   async findOne(
     @CurrentUser() user: IUserWithProjectRole,
     @Param('id') id: string,
-    @Query('project_type') projectType: ProjectType,
-    @Query('include_credentials', new ParseBoolPipe({ optional: true }))
-    includeCredentials = true
+    @ParseQuery() query: Record<string, any>
   ) {
+    const projectType = query.project_type as ProjectType
+    const includeCredentials = query.include_credentials ?? true
     const property =
       await this.externalPropertyService.findOneForExternalProject(
         user,

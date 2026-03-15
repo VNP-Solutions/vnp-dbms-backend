@@ -2,6 +2,16 @@ import { PartialType } from '@nestjs/mapped-types'
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import { IsBoolean, IsNotEmpty, IsOptional, IsString } from 'class-validator'
 
+export class CurrencyQueryDto {
+  @ApiPropertyOptional({
+    description: 'Search by code, name, or symbol',
+    example: 'USD'
+  })
+  @IsOptional()
+  @IsString()
+  search?: string
+}
+
 export class CreateCurrencyDto {
   @ApiProperty({
     example: 'USD',
