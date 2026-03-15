@@ -11,6 +11,7 @@ import {
   UseGuards
 } from '@nestjs/common'
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
+import { ParseQuery } from '../../common/decorators/parse-query.decorator'
 import { RequirePermission } from '../../common/decorators/require-permission.decorator'
 import { PermissionGuard } from '../../common/guards/permission.guard'
 import { ModuleType, PermissionAction } from '../../common/interfaces/permission.interface'
@@ -46,7 +47,7 @@ export class PropertyCredentialsController {
   @RequirePermission(ModuleType.PROPERTY, PermissionAction.READ)
   @ApiOperation({ summary: 'Get all property credentials' })
   @ApiResponse({ status: 200, description: 'Returns list of property credentials' })
-  findAll() {
+  findAll(@ParseQuery() _query: Record<string, any>) {
     return this.credentialsService.findAll()
   }
 

@@ -85,10 +85,10 @@ export class PortfolioQueryDto extends QueryDto {
   @IsString()
   service_type_id?: string
 
-  @ApiPropertyOptional({ description: 'Filter by active status (true/false/all)', example: 'true' })
+  @ApiPropertyOptional({ description: 'Filter by active status (true/false/all)', example: true })
   @IsOptional()
-  @IsString()
-  is_active?: string
+  @IsBoolean()
+  is_active?: boolean
 
   @ApiPropertyOptional({ description: 'Start date for created_at filter (ISO)', example: '2024-01-01' })
   @IsOptional()
@@ -99,4 +99,9 @@ export class PortfolioQueryDto extends QueryDto {
   @IsOptional()
   @IsString()
   end_date?: string
+
+  @ApiPropertyOptional({ description: 'Filter by access lost status', example: false })
+  @IsOptional()
+  @IsBoolean()
+  access_lost?: boolean
 }

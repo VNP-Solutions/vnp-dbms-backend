@@ -14,6 +14,7 @@ import {
     ApiResponse,
     ApiTags
 } from '@nestjs/swagger'
+import { ParseQuery } from '../../common/decorators/parse-query.decorator'
 import { RequirePermission } from '../../common/decorators/require-permission.decorator'
 import { PermissionGuard } from '../../common/guards/permission.guard'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
@@ -22,6 +23,7 @@ import {
     PermissionAction
 } from '../../common/interfaces/permission.interface'
 import { CurrentUser } from '../auth/decorators/current-user.decorator'
+import { Public } from '../auth/decorators/public.decorator'
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
 import {
     CreateServiceTypeDto,
@@ -60,14 +62,14 @@ export class ServiceTypeController {
   }
 
   @Get()
-  @RequirePermission(ModuleType.SYSTEM_SETTINGS, PermissionAction.READ)
-  @ApiOperation({ summary: 'Get all service types' })
+  @Public()
+  @ApiOperation({ summary: 'Get all service types (public)' })
   @ApiResponse({
     status: 200,
     description: 'List of service types retrieved successfully'
   })
-  findAll(@CurrentUser() user: IUserWithPermissions) {
-    return this.serviceTypeService.findAll(user)
+  findAll() {
+    return this.serviceTypeService.findAll(null as any)
   }
 
   @Get(':id')

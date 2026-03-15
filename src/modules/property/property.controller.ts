@@ -1,5 +1,6 @@
-import { Body, Controller, Delete, Get, Inject, Param, Patch, Post, Query, UseGuards } from '@nestjs/common'
+import { Body, Controller, Delete, Get, Inject, Param, Patch, Post, UseGuards } from '@nestjs/common'
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
+import { ParseQuery } from '../../common/decorators/parse-query.decorator'
 import { RequirePermission } from '../../common/decorators/require-permission.decorator'
 import { PermissionGuard } from '../../common/guards/permission.guard'
 import { ModuleType, PermissionAction } from '../../common/interfaces/permission.interface'
@@ -32,7 +33,7 @@ export class PropertyController {
   @RequirePermission(ModuleType.PROPERTY, PermissionAction.READ)
   @ApiOperation({ summary: 'Get all properties with pagination, search, filter and sort' })
   @ApiResponse({ status: 200, description: 'Paginated list of properties' })
-  findAll(@Query() query: PropertyQueryDto, @CurrentUser() user: IUserWithPermissions) {
+  findAll(@ParseQuery() query: PropertyQueryDto, @CurrentUser() user: IUserWithPermissions) {
     return this.propertyService.findAll(query, user)
   }
 
@@ -50,6 +51,7 @@ export class PropertyController {
   @ApiResponse({ status: 200, description: 'List of properties for the portfolio' })
   findByPortfolioId(
     @Param('portfolioId') portfolioId: string,
+    @ParseQuery() _query: Record<string, any>,
     @CurrentUser() user: IUserWithPermissions
   ) {
     return this.propertyService.findByPortfolioId(portfolioId, user)
@@ -61,6 +63,7 @@ export class PropertyController {
   @ApiResponse({ status: 200, description: 'List of properties for the subportfolio' })
   findBySubportfolioId(
     @Param('subportfolioId') subportfolioId: string,
+    @ParseQuery() _query: Record<string, any>,
     @CurrentUser() user: IUserWithPermissions
   ) {
     return this.propertyService.findBySubportfolioId(subportfolioId, user)

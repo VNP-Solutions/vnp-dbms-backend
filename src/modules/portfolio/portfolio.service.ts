@@ -37,13 +37,8 @@ export class PortfolioService implements IPortfolioService {
 
     const additionalFilters: any = {}
     if (query.service_type_id) additionalFilters.service_type_id = query.service_type_id
-    if (query.is_active) {
-      const v = (query.is_active || '').toLowerCase().trim()
-      if (v === 'all') {
-        // no filter
-      } else if (v === 'true') additionalFilters.is_active = true
-      else if (v === 'false') additionalFilters.is_active = false
-      else additionalFilters.is_active = true
+    if (query.is_active !== undefined) {
+      additionalFilters.is_active = query.is_active === true
     }
     if (query.start_date && query.end_date) {
       additionalFilters.created_at = {
