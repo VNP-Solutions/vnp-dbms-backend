@@ -97,9 +97,12 @@ export class ExternalPortfolioService {
       portfolio_contact_name: portfolio.portfolio_contact_name || undefined,
       portfolio_contact_phone: portfolio.portfolio_contact_phone || undefined,
       is_commissionable: portfolio.is_commissionable,
+      commission: portfolio.commission ?? undefined,
       sales_agent: portfolio.sales_agent || undefined,
       access_email: portfolio.access_email || undefined,
       access_phone: portfolio.access_phone || undefined,
+      attachment: portfolio.attachment || undefined,
+      contract_signed: portfolio.contract_signed ?? undefined,
       created_at: portfolio.created_at.toISOString(),
       updated_at: portfolio.updated_at.toISOString(),
       total_properties: portfolio.properties.length,
@@ -111,7 +114,7 @@ export class ExternalPortfolioService {
     user: IUserWithProjectRole,
     projectType: ProjectType,
     portfolioId: string,
-    includeCredentials = true
+    _includeCredentials = true
   ): Promise<ExternalPortfolioDto | null> {
     const accessibleResources = getProjectAccessibleResources(user, projectType)
 
@@ -173,9 +176,12 @@ export class ExternalPortfolioService {
       portfolio_contact_name: portfolio.portfolio_contact_name || undefined,
       portfolio_contact_phone: portfolio.portfolio_contact_phone || undefined,
       is_commissionable: portfolio.is_commissionable,
+      commission: portfolio.commission ?? undefined,
       sales_agent: portfolio.sales_agent || undefined,
       access_email: portfolio.access_email || undefined,
       access_phone: portfolio.access_phone || undefined,
+      attachment: portfolio.attachment || undefined,
+      contract_signed: portfolio.contract_signed ?? undefined,
       created_at: portfolio.created_at.toISOString(),
       updated_at: portfolio.updated_at.toISOString(),
       total_properties: portfolio.properties.length,
