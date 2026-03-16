@@ -26,6 +26,16 @@ export interface IPropertyRepository {
   }>
 }
 
+export interface ImportPropertiesResult {
+  portfoliosCreated: number
+  subportfoliosCreated: number
+  propertiesCreated: number
+  credentialsCreated: number
+  portfolios: any[]
+  subportfolios: any[]
+  properties: any[]
+}
+
 export interface IPropertyService {
   create(data: CreatePropertyDto, user: IUserWithPermissions): Promise<PropertyWithRelations>
   findAll(query: PropertyQueryDto, user: IUserWithPermissions): Promise<PaginatedResult<PropertyWithRelations>>
@@ -38,4 +48,8 @@ export interface IPropertyService {
     portfolios: { id: string; name: string }[]
     subportfolios: { id: string; name: string; portfolio_id: string }[]
   }>
+  importFromExcel(
+    file: Express.Multer.File,
+    user: IUserWithPermissions
+  ): Promise<ImportPropertiesResult>
 }

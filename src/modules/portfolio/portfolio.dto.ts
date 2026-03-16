@@ -75,6 +75,11 @@ export class CreatePortfolioDto {
   @IsString()
   @IsOptional()
   access_phone?: string
+
+  @ApiPropertyOptional({ example: 'https://example.com/document.pdf', description: 'Attachment URL or path' })
+  @IsString()
+  @IsOptional()
+  attachment?: string
 }
 
 export class UpdatePortfolioDto extends PartialType(OmitType(CreatePortfolioDto, ['is_active'] as const)) {}

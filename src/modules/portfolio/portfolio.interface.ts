@@ -29,10 +29,19 @@ export interface IPortfolioRepository {
   getAccessiblePortfolioIds(userId: string): Promise<string[] | 'all'>
 }
 
+export interface ImportPortfoliosResult {
+  portfoliosCreated: number
+  portfolios: any[]
+}
+
 export interface IPortfolioService {
   create(data: CreatePortfolioDto, user: IUserWithPermissions): Promise<PortfolioWithServiceType>
   findAll(query: PortfolioQueryDto, user: IUserWithPermissions): Promise<PaginatedResult<PortfolioWithCounts>>
   findOne(id: string, user: IUserWithPermissions): Promise<PortfolioWithCounts>
   update(id: string, data: UpdatePortfolioDto, user: IUserWithPermissions): Promise<PortfolioWithServiceType>
   remove(id: string, user: IUserWithPermissions): Promise<{ message: string }>
+  importFromExcel(
+    file: Express.Multer.File,
+    user: IUserWithPermissions
+  ): Promise<ImportPortfoliosResult>
 }

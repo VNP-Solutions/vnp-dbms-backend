@@ -254,6 +254,7 @@ model Portfolio {
   sales_agent                  String?
   access_email                 String?
   access_phone                 String?
+  attachment                   String?
   subportfolios                Subportfolio[]
   properties                   Property[]
   userFeatureAccessPermissions UserFeatureAccessPermission[]
