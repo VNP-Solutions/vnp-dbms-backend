@@ -1,5 +1,19 @@
-import { Body, Controller, Delete, Get, Inject, Param, Patch, Post, UseGuards } from '@nestjs/common'
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Inject,
+  Param,
+  Patch,
+  Post,
+  UploadedFile,
+  UseGuards,
+  UseInterceptors
+} from '@nestjs/common'
+import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
+import { ExcelFileInterceptor } from '../../common/interceptors/excel-file.interceptor'
 import { ParseQuery } from '../../common/decorators/parse-query.decorator'
 import { RequirePermission } from '../../common/decorators/require-permission.decorator'
 import { PermissionGuard } from '../../common/guards/permission.guard'
@@ -27,6 +41,41 @@ export class PropertyController {
   @ApiResponse({ status: 403, description: 'Forbidden' })
   create(@Body() dto: CreatePropertyDto, @CurrentUser() user: IUserWithPermissions) {
     return this.propertyService.create(dto, user)
+  }
+
+  @Post('import')
+  @RequirePermission(ModuleType.PROPERTY, PermissionAction.CREATE)
+  @UseInterceptors(ExcelFileInterceptor)
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({
+    summary: 'Bulk import properties from Excel',
+    description:
+      'Upload an Excel file to import properties, portfolios, and subportfolios. Required: Property Name (or Property). Optional: Portfolio, Sub Portfolio, Address, Currency, Expedia ID/Status, Booking ID/Status, Agoda ID/Status. Credential columns: Expedia Username, Expedia Password, Agoda Username, Agoda Password, Booking Username, Booking Password, Expedia Email Associated, Property Contact Email, Portfolio Contact Email, Multiple Portfolio Emails.'
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+          description: 'Excel file (.xlsx, .xls, .csv) containing property data'
+        }
+      },
+      required: ['file']
+    }
+  })
+  @ApiResponse({ status: 201, description: 'Properties imported successfully' })
+  @ApiResponse({ status: 400, description: 'Bad request - Invalid file or missing required columns' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  importFromExcel(
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() user: IUserWithPermissions
+  ) {
+    if (!file) {
+      throw new BadRequestException('Excel file is required')
+    }
+    return this.propertyService.importFromExcel(file, user)
   }
 
   @Get()

@@ -3,18 +3,29 @@ import {
   ConflictException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException
 } from '@nestjs/common'
+import * as XLSX from 'xlsx'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
 import { QueryBuilder } from '../../common/utils/query-builder.util'
+import { PrismaService } from '../prisma/prisma.service'
 import { CreatePortfolioDto, PortfolioQueryDto, UpdatePortfolioDto } from './portfolio.dto'
-import type { IPortfolioRepository, IPortfolioService, PortfolioWithCounts } from './portfolio.interface'
+import type {
+  IPortfolioRepository,
+  IPortfolioService,
+  ImportPortfoliosResult,
+  PortfolioWithCounts
+} from './portfolio.interface'
 
 @Injectable()
 export class PortfolioService implements IPortfolioService {
+  private readonly logger = new Logger(PortfolioService.name)
+
   constructor(
     @Inject('IPortfolioRepository')
-    private readonly portfolioRepository: IPortfolioRepository
+    private readonly portfolioRepository: IPortfolioRepository,
+    private readonly prisma: PrismaService
   ) {}
 
   async create(data: CreatePortfolioDto, user: IUserWithPermissions) {
@@ -125,5 +136,153 @@ export class PortfolioService implements IPortfolioService {
     }
     await this.portfolioRepository.delete(id)
     return { message: 'Portfolio deleted successfully' }
+  }
+
+  async importFromExcel(file: Express.Multer.File, _user: IUserWithPermissions): Promise<ImportPortfoliosResult> {
+    const buffer = file.buffer || (file as any).buffer
+    if (!buffer || buffer.length === 0) {
+      throw new BadRequestException('File buffer is empty')
+    }
+
+    const workbook = XLSX.read(buffer, { type: 'buffer' })
+    const sheetName = workbook.SheetNames[0]
+    const worksheet = workbook.Sheets[sheetName]
+    const data = XLSX.utils.sheet_to_json(worksheet)
+
+    if (!data || data.length === 0) {
+      throw new BadRequestException('Excel file is empty or invalid')
+    }
+
+    const headers = Object.keys(data[0] as object)
+    if (!headers.some((h) => h.toLowerCase().includes('portfolio') && h.toLowerCase().includes('name'))) {
+      const hasName = headers.some((h) => h.toLowerCase() === 'portfolio' || h.toLowerCase() === 'name')
+      if (!hasName) {
+        throw new BadRequestException('Excel must contain "Portfolio" or "Portfolio Name" column')
+      }
+    }
+
+    const portfolioCol = headers.find(
+      (h) => h.toLowerCase() === 'portfolio name' || h.toLowerCase() === 'portfolio'
+    ) || 'Portfolio'
+
+    const serviceTypeCol = headers.find(
+      (h) => h.toLowerCase().includes('service') && h.toLowerCase().includes('type')
+    ) || 'Service Type'
+
+    const currencyCol = headers.find(
+      (h) => h.toLowerCase() === 'currency' || h.toLowerCase() === 'currency code'
+    ) || 'Currency'
+
+    const defaultServiceType = await this.prisma.serviceType.findFirst({
+      where: { is_active: true },
+      orderBy: { order: 'asc' }
+    })
+    const defaultCurrency = await this.prisma.currency.findFirst({
+      where: { is_active: true },
+      orderBy: { order: 'asc' }
+    })
+
+    if (!defaultServiceType || !defaultCurrency) {
+      throw new BadRequestException(
+        'No active Service Type or Currency found in system. Please configure these first.'
+      )
+    }
+
+    let portfoliosCreated = 0
+    const portfolios: any[] = []
+    const portfolioNames = [
+      ...new Set(
+        data
+          .map((row) => {
+            const val = (row as any)[portfolioCol]
+            return val && String(val).trim() ? String(val).trim() : null
+          })
+          .filter(Boolean)
+      )
+    ] as string[]
+
+    this.logger.log(`Processing ${portfolioNames.length} unique portfolios from ${data.length} rows`)
+
+    for (const name of portfolioNames) {
+      try {
+        const existing = await this.portfolioRepository.findByName(name)
+        if (existing) {
+          this.logger.debug(`Portfolio "${name}" already exists, skipping`)
+          continue
+        }
+
+        const row = data.find((r) => String((r as any)[portfolioCol]).trim() === name) as any
+
+        let service_type_id = defaultServiceType.id
+        let currency_id = defaultCurrency.id
+
+        if (row?.[serviceTypeCol]) {
+          const st = await this.prisma.serviceType.findFirst({
+            where: {
+              OR: [
+                { type: { equals: String(row[serviceTypeCol]).trim(), mode: 'insensitive' } },
+                { id: String(row[serviceTypeCol]).trim() }
+              ]
+            }
+          })
+          if (st) service_type_id = st.id
+        }
+
+        if (row?.[currencyCol]) {
+          const cur = await this.prisma.currency.findFirst({
+            where: {
+              OR: [
+                { code: { equals: String(row[currencyCol]).trim(), mode: 'insensitive' } },
+                { id: String(row[currencyCol]).trim() }
+              ]
+            }
+          })
+          if (cur) currency_id = cur.id
+        }
+
+        const is_active = row?.['Is Active'] !== undefined
+          ? String(row['Is Active']).toLowerCase() === 'true' || row['Is Active'] === true
+          : true
+        const is_commissionable = row?.['Is Commissionable'] !== undefined
+          ? String(row['Is Commissionable']).toLowerCase() === 'true' || row['Is Commissionable'] === true
+          : false
+
+        const dto: CreatePortfolioDto = {
+          name,
+          service_type_id,
+          currency_id,
+          is_active,
+          is_commissionable,
+          contact_email: row?.['Contact Email'] ? String(row['Contact Email']).trim() : undefined,
+          portfolio_contact_email: row?.['Portfolio Contact Email']
+            ? String(row['Portfolio Contact Email']).trim()
+            : undefined,
+          portfolio_contact_name: row?.['Portfolio Contact Name']
+            ? String(row['Portfolio Contact Name']).trim()
+            : undefined,
+          portfolio_contact_phone: row?.['Portfolio Contact Phone']
+            ? String(row['Portfolio Contact Phone']).trim()
+            : undefined,
+          sales_agent: row?.['Sales Agent'] ? String(row['Sales Agent']).trim() : undefined,
+          access_email: row?.['Access Email'] ? String(row['Access Email']).trim() : undefined,
+          access_phone: row?.['Access Phone'] ? String(row['Access Phone']).trim() : undefined,
+          attachment: row?.['Attachment'] ? String(row['Attachment']).trim() : undefined
+        }
+
+        if (is_commissionable && !dto.sales_agent) {
+          dto.sales_agent = name
+        }
+
+        const created = await this.portfolioRepository.create(dto)
+        portfolios.push(created)
+        portfoliosCreated++
+        this.logger.log(`Created portfolio: ${name}`)
+      } catch (err: any) {
+        this.logger.error(`Error creating portfolio "${name}": ${err.message}`)
+        throw err
+      }
+    }
+
+    return { portfoliosCreated, portfolios }
   }
 }

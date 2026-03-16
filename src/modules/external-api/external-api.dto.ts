@@ -59,6 +59,7 @@ export interface ExternalPortfolioDto {
   sales_agent?: string
   access_email?: string
   access_phone?: string
+  attachment?: string
   created_at: string
   updated_at: string
   total_properties: number
