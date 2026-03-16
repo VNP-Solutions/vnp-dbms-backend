@@ -28,7 +28,7 @@ export class PortfolioService implements IPortfolioService {
     private readonly prisma: PrismaService
   ) {}
 
-  async create(data: CreatePortfolioDto, user: IUserWithPermissions) {
+  async create(data: CreatePortfolioDto, _user: IUserWithPermissions) {
     const existing = await this.portfolioRepository.findByName(data.name)
     if (existing) throw new ConflictException('Portfolio with this name already exists')
     if (data.is_commissionable && !data.sales_agent) {
@@ -127,7 +127,7 @@ export class PortfolioService implements IPortfolioService {
   }
 
   async remove(id: string, user: IUserWithPermissions) {
-    const portfolio = await this.findOne(id, user)
+    const _portfolio = await this.findOne(id, user)
     const count = await this.portfolioRepository.countProperties(id)
     if (count > 0) {
       throw new BadRequestException(
@@ -263,10 +263,15 @@ export class PortfolioService implements IPortfolioService {
           portfolio_contact_phone: row?.['Portfolio Contact Phone']
             ? String(row['Portfolio Contact Phone']).trim()
             : undefined,
+          commission: row?.['Commission'] != null ? Number(row['Commission']) : undefined,
           sales_agent: row?.['Sales Agent'] ? String(row['Sales Agent']).trim() : undefined,
           access_email: row?.['Access Email'] ? String(row['Access Email']).trim() : undefined,
           access_phone: row?.['Access Phone'] ? String(row['Access Phone']).trim() : undefined,
-          attachment: row?.['Attachment'] ? String(row['Attachment']).trim() : undefined
+          attachment: row?.['Attachment'] ? String(row['Attachment']).trim() : undefined,
+          contract_signed:
+            row?.['Contract Signed'] !== undefined
+              ? String(row['Contract Signed']).toLowerCase() === 'true' || row['Contract Signed'] === true
+              : undefined
         }
 
         if (is_commissionable && !dto.sales_agent) {

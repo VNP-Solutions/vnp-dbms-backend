@@ -4,6 +4,7 @@ import {
   IsBoolean,
   IsEmail,
   IsNotEmpty,
+  IsNumber,
   IsOptional,
   IsString,
   ValidateIf
@@ -58,6 +59,11 @@ export class CreatePortfolioDto {
   @IsNotEmpty()
   is_commissionable: boolean
 
+  @ApiPropertyOptional({ example: 5.5, description: 'Commission percentage or amount' })
+  @IsNumber()
+  @IsOptional()
+  commission?: number
+
   @ApiPropertyOptional({ example: 'John Doe', description: 'Sales agent (required if commissionable)' })
   @ValidateIf((o) => o.is_commissionable === true)
   @IsNotEmpty({ message: 'Sales agent is required when portfolio is commissionable' })
@@ -80,6 +86,11 @@ export class CreatePortfolioDto {
   @IsString()
   @IsOptional()
   attachment?: string
+
+  @ApiPropertyOptional({ example: true, description: 'Whether contract has been signed' })
+  @IsBoolean()
+  @IsOptional()
+  contract_signed?: boolean
 }
 
 export class UpdatePortfolioDto extends PartialType(OmitType(CreatePortfolioDto, ['is_active'] as const)) {}

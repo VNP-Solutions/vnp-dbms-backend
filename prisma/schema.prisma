@@ -251,10 +251,12 @@ model Portfolio {
   portfolio_contact_name       String?
   portfolio_contact_phone      String?
   is_commissionable            Boolean
+  commission                   Float?
   sales_agent                  String?
   access_email                 String?
   access_phone                 String?
   attachment                   String?
+  contract_signed              Boolean?
   subportfolios                Subportfolio[]
   properties                   Property[]
   userFeatureAccessPermissions UserFeatureAccessPermission[]

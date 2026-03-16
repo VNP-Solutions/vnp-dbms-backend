@@ -50,7 +50,7 @@ export class PortfolioController {
   @ApiOperation({
     summary: 'Bulk import portfolios from Excel',
     description:
-      'Upload an Excel file to import portfolios. Required column: Portfolio (or Portfolio Name). Optional: Service Type, Currency, Is Active, Is Commissionable, Contact Email, Portfolio Contact Email, Portfolio Contact Name, Portfolio Contact Phone, Sales Agent, Access Email, Access Phone, Attachment.'
+      'Upload an Excel file to import portfolios. Required column: Portfolio (or Portfolio Name). Optional: Service Type, Currency, Is Active, Is Commissionable, Commission, Contact Email, Portfolio Contact Email, Portfolio Contact Name, Portfolio Contact Phone, Sales Agent, Access Email, Access Phone, Attachment, Contract Signed.'
   })
   @ApiBody({
     schema: {

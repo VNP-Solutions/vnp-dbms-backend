@@ -56,10 +56,12 @@ export interface ExternalPortfolioDto {
   portfolio_contact_name?: string
   portfolio_contact_phone?: string
   is_commissionable: boolean
+  commission?: number
   sales_agent?: string
   access_email?: string
   access_phone?: string
   attachment?: string
+  contract_signed?: boolean
   created_at: string
   updated_at: string
   total_properties: number
