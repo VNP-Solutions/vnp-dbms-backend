@@ -118,6 +118,7 @@ export class PropertyRepository implements IPropertyRepository {
   async update(id: string, data: UpdatePropertyDto): Promise<PropertyWithRelations> {
     const payload: any = { ...data }
     if (data.next_due_date !== undefined) payload.next_due_date = data.next_due_date ? new Date(data.next_due_date) : null
+    if (data.is_active !== undefined) payload.is_active = data.is_active
     return this.prisma.property.update({
       where: { id },
       data: payload,

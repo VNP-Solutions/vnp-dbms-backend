@@ -149,10 +149,10 @@ export class PortfolioRepository implements IPortfolioRepository {
       updateData.currency = { connect: { id: currency_id } }
     }
 
-    if (is_active) {
-      // Do nothing
+    if (is_active !== undefined) {
+      updateData.is_active = is_active
     }
-    
+
     return this.prisma.portfolio.update({
       where: { id },
       data: updateData,
