@@ -205,11 +205,12 @@ export class UserService implements IUserService {
     )
 
     if (Array.isArray(accessibleIds) && accessibleIds.length === 0) {
+      const usePagination = query.page != null && query.limit != null
       return QueryBuilder.buildPaginatedResult(
         [],
         0,
-        query.page || 1,
-        query.limit || 10
+        1,
+        usePagination ? (query.limit || 10) : 0
       )
     }
 
@@ -261,7 +262,7 @@ export class UserService implements IUserService {
           }
 
     // Build Prisma query options
-    const { where, skip, take, orderBy } = QueryBuilder.buildPrismaQuery(
+    const { where, skip, take, orderBy, usePagination } = QueryBuilder.buildPrismaQuery(
       mergedQuery,
       queryConfig,
       baseWhere
@@ -273,11 +274,8 @@ export class UserService implements IUserService {
       this.userRepository.count(where, undefined)
     ])
 
-    return QueryBuilder.buildPaginatedResult(
-      data,
-      total,
-      query.page || 1,
-      query.limit || 10
-    )
+    const page = usePagination ? (query.page || 1) : 1
+    const limit = usePagination ? (take || 10) : data.length
+    return QueryBuilder.buildPaginatedResult(data, total, page, limit)
   }
 }

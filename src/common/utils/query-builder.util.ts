@@ -450,8 +450,9 @@ export class QueryBuilder {
   ): {
     where: any
     skip: number
-    take: number
+    take: number | undefined
     orderBy: any
+    usePagination: boolean
   } {
     const {
       searchFields = [],
@@ -462,9 +463,12 @@ export class QueryBuilder {
       nestedFieldMap
     } = config
 
-    // Parse query parameters
-    const page = queryDto.page || 1
-    const limit = queryDto.limit || 10
+    // Only use pagination when BOTH page and limit are explicitly provided; otherwise fetch all
+    const pageProvided = queryDto.page != null && Number(queryDto.page) > 0
+    const limitProvided = queryDto.limit != null && Number(queryDto.limit) > 0
+    const usePagination = pageProvided && limitProvided
+    const page = usePagination ? Number(queryDto.page) : 1
+    const limit = usePagination ? Number(queryDto.limit) : undefined
     const searchTerm = queryDto.search
     const sortBy = queryDto.sortBy
     const sortOrder = queryDto.sortOrder
@@ -510,15 +514,16 @@ export class QueryBuilder {
       nestedFieldMap
     )
 
-    // Calculate pagination
-    const skip = (page - 1) * limit
+    // Calculate pagination (skip/take only when pagination is used)
+    const skip = usePagination ? (page - 1) * limit! : 0
     const take = limit
 
     return {
       where,
       skip,
       take,
-      orderBy
+      orderBy,
+      usePagination
     }
   }
 
@@ -531,7 +536,7 @@ export class QueryBuilder {
     page: number,
     limit: number
   ): PaginatedResult<T> {
-    const totalPages = Math.ceil(total / limit)
+    const totalPages = limit > 0 ? Math.ceil(total / limit) : 0
 
     return {
       data,

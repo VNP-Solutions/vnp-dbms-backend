@@ -64,9 +64,15 @@ export class PropertyService implements IPropertyService {
   async findAll(query: PropertyQueryDto, user: IUserWithPermissions) {
     const accessibleIds = await this.repo.getAccessiblePropertyIds(user.id)
     if (Array.isArray(accessibleIds) && accessibleIds.length === 0) {
+      const usePagination = query.page != null && query.limit != null
       return {
         data: [],
-        metadata: { totalDocuments: 0, currentPage: query.page || 1, totalPages: 0, limit: query.limit || 10 }
+        metadata: {
+          totalDocuments: 0,
+          currentPage: usePagination ? (query.page || 1) : 1,
+          totalPages: 0,
+          limit: usePagination ? (query.limit || 10) : 0
+        }
       }
     }
 
@@ -122,7 +128,7 @@ export class PropertyService implements IPropertyService {
         ? {}
         : { id: { in: accessibleIds } }
 
-    const { where: builtWhere, skip, take, orderBy } = QueryBuilder.buildPrismaQuery(
+    const { where: builtWhere, skip, take, orderBy, usePagination } = QueryBuilder.buildPrismaQuery(
       mergedQuery,
       queryConfig,
       baseWhere
@@ -147,14 +153,16 @@ export class PropertyService implements IPropertyService {
       this.repo.count(where)
     ])
 
-    const totalPages = Math.ceil(total / (take || 10)) || 1
+    const totalPages = usePagination ? Math.ceil(total / (take || 10)) || 1 : 1
+    const currentPage = usePagination ? (query.page || 1) : 1
+    const limit = usePagination ? (take || 10) : data.length
     return {
       data,
       metadata: {
         totalDocuments: total,
-        currentPage: query.page || 1,
+        currentPage,
         totalPages,
-        limit: take || 10
+        limit
       }
     }
   }
