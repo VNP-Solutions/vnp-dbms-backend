@@ -43,20 +43,23 @@ export class PortfolioRepository implements IPortfolioRepository {
       throw new Error(`ServiceType with ID ${service_type_id} not found`)
     }
 
-    const currency = await this.prisma.currency.findUnique({
-      where: { id: currency_id }
-    })
-
-    if (!currency) {
-      throw new Error(`Currency with ID ${currency_id} not found`)
+    const createData: any = {
+      ...rest,
+      serviceType: { connect: { id: service_type_id } }
     }
-    
+
+    if (currency_id) {
+      const currency = await this.prisma.currency.findUnique({
+        where: { id: currency_id }
+      })
+      if (!currency) {
+        throw new Error(`Currency with ID ${currency_id} not found`)
+      }
+      createData.currency = { connect: { id: currency_id } }
+    }
+
     return this.prisma.portfolio.create({
-      data: {
-        ...rest,
-        serviceType: { connect: { id: service_type_id } },
-        currency: { connect: { id: currency_id } }
-      },
+      data: createData,
       include: {
         serviceType: { select: { id: true, type: true, is_active: true } },
         currency: { select: { id: true, code: true, name: true, symbol: true } }

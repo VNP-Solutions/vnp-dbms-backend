@@ -84,13 +84,15 @@ export class ExternalPortfolioService {
         id: portfolio.serviceType.id,
         type: portfolio.serviceType.type
       },
-      currency_id: portfolio.currency_id,
-      currency: {
-        id: portfolio.currency.id,
-        code: portfolio.currency.code,
-        name: portfolio.currency.name,
-        symbol: portfolio.currency.symbol || undefined
-      },
+      currency_id: portfolio.currency_id ?? undefined,
+      currency: portfolio.currency
+        ? {
+            id: portfolio.currency.id,
+            code: portfolio.currency.code,
+            name: portfolio.currency.name,
+            symbol: portfolio.currency.symbol || undefined
+          }
+        : undefined,
       is_active: portfolio.is_active,
       contact_email: portfolio.contact_email || undefined,
       portfolio_contact_email: portfolio.portfolio_contact_email || undefined,
@@ -163,13 +165,15 @@ export class ExternalPortfolioService {
         id: portfolio.serviceType.id,
         type: portfolio.serviceType.type
       },
-      currency_id: portfolio.currency_id,
-      currency: {
-        id: portfolio.currency.id,
-        code: portfolio.currency.code,
-        name: portfolio.currency.name,
-        symbol: portfolio.currency.symbol || undefined
-      },
+      currency_id: portfolio.currency_id ?? undefined,
+      currency: portfolio.currency
+        ? {
+            id: portfolio.currency.id,
+            code: portfolio.currency.code,
+            name: portfolio.currency.name,
+            symbol: portfolio.currency.symbol || undefined
+          }
+        : undefined,
       is_active: portfolio.is_active,
       contact_email: portfolio.contact_email || undefined,
       portfolio_contact_email: portfolio.portfolio_contact_email || undefined,

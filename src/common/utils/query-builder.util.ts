@@ -538,7 +538,8 @@ export class QueryBuilder {
       metadata: {
         totalDocuments: total,
         currentPage: page,
-        totalPages
+        totalPages,
+        limit
       }
     }
   }

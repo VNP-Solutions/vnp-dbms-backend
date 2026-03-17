@@ -16,7 +16,7 @@ export class SubportfolioService implements ISubportfolioService {
     private readonly repo: ISubportfolioRepository
   ) {}
 
-  async create(data: CreateSubportfolioDto, user: IUserWithPermissions): Promise<SubportfolioWithPortfolio> {
+  async create(data: CreateSubportfolioDto, _user: IUserWithPermissions): Promise<SubportfolioWithPortfolio> {
     const existing = await this.repo.findByName(data.name)
     if (existing) throw new ConflictException('Subportfolio with this name already exists')
     return this.repo.create(data)
@@ -27,7 +27,7 @@ export class SubportfolioService implements ISubportfolioService {
     if (Array.isArray(accessibleIds) && accessibleIds.length === 0) {
       return {
         data: [],
-        metadata: { totalDocuments: 0, currentPage: query.page || 1, totalPages: 0 }
+        metadata: { totalDocuments: 0, currentPage: query.page || 1, totalPages: 0, limit: query.limit || 10 }
       }
     }
 
@@ -75,7 +75,8 @@ export class SubportfolioService implements ISubportfolioService {
       metadata: {
         totalDocuments: total,
         currentPage: query.page || 1,
-        totalPages
+        totalPages,
+        limit: take || 10
       }
     }
   }

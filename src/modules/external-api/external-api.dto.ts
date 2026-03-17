@@ -43,8 +43,8 @@ export interface ExternalPortfolioDto {
     id: string
     type: string
   }
-  currency_id: string
-  currency: {
+  currency_id?: string
+  currency?: {
     id: string
     code: string
     name: string
