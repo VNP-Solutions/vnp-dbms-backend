@@ -4,6 +4,7 @@ import {
   IsArray,
   IsBoolean,
   IsDateString,
+  IsIn,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -221,10 +222,14 @@ export class PropertyQueryDto extends QueryDto {
   @IsString()
   subportfolio_id?: string
 
-  @ApiPropertyOptional({ description: 'Filter by active status (true/false/all)', example: true })
+  @ApiPropertyOptional({
+    description: 'Filter by active status: All (both), true (active only), false (inactive only)',
+    example: 'All',
+    enum: ['All', 'true', 'false']
+  })
   @IsOptional()
-  @IsBoolean()
-  is_active?: boolean
+  @IsIn(['All', 'true', 'false'])
+  is_active?: 'All' | 'true' | 'false'
 
   @ApiPropertyOptional({ description: 'Filter by currency ID' })
   @IsOptional()
