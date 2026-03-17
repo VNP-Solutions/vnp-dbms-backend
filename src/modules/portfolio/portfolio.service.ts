@@ -115,11 +115,6 @@ export class PortfolioService implements IPortfolioService {
     if (!existing) {
       throw new NotFoundException('Portfolio not found')
     }
-    if (data.name) {
-      if (existing.name !== data.name && existing.name) {
-        throw new ConflictException('Portfolio with this name already exists')
-      }
-    }
     return this.portfolioRepository.update(id, data)
   }
 
