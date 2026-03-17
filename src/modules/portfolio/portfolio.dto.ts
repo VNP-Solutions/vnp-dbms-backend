@@ -22,10 +22,10 @@ export class CreatePortfolioDto {
   @IsNotEmpty()
   service_type_id: string
 
-  @ApiProperty({ example: '507f1f77bcf86cd799439020', description: 'Currency ID' })
+  @ApiPropertyOptional({ example: '507f1f77bcf86cd799439020', description: 'Currency ID' })
   @IsString()
-  @IsNotEmpty()
-  currency_id: string
+  @IsOptional()
+  currency_id?: string
 
   @ApiProperty({ example: true, description: 'Whether portfolio is active' })
   @IsBoolean()

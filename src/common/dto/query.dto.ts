@@ -132,5 +132,6 @@ export interface PaginatedResult<T> {
     totalDocuments: number
     currentPage: number
     totalPages: number
+    limit: number
   }
 }

@@ -42,7 +42,7 @@ export class PortfolioService implements IPortfolioService {
     if (Array.isArray(accessibleIds) && accessibleIds.length === 0) {
       return {
         data: [],
-        metadata: { totalDocuments: 0, currentPage: query.page || 1, totalPages: 0 }
+        metadata: { totalDocuments: 0, currentPage: query.page || 1, totalPages: 0, limit: query.limit || 10 }
       }
     }
 
@@ -94,7 +94,8 @@ export class PortfolioService implements IPortfolioService {
       metadata: {
         totalDocuments: total,
         currentPage: query.page || 1,
-        totalPages
+        totalPages,
+        limit: take || 10
       }
     }
   }
@@ -182,9 +183,9 @@ export class PortfolioService implements IPortfolioService {
       orderBy: { order: 'asc' }
     })
 
-    if (!defaultServiceType || !defaultCurrency) {
+    if (!defaultServiceType) {
       throw new BadRequestException(
-        'No active Service Type or Currency found in system. Please configure these first.'
+        'No active Service Type found in system. Please configure it first.'
       )
     }
 
@@ -214,7 +215,7 @@ export class PortfolioService implements IPortfolioService {
         const row = data.find((r) => String((r as any)[portfolioCol]).trim() === name) as any
 
         let service_type_id = defaultServiceType.id
-        let currency_id = defaultCurrency.id
+        let currency_id: string | undefined = defaultCurrency?.id
 
         if (row?.[serviceTypeCol]) {
           const st = await this.prisma.serviceType.findFirst({

@@ -66,7 +66,7 @@ export class PropertyService implements IPropertyService {
     if (Array.isArray(accessibleIds) && accessibleIds.length === 0) {
       return {
         data: [],
-        metadata: { totalDocuments: 0, currentPage: query.page || 1, totalPages: 0 }
+        metadata: { totalDocuments: 0, currentPage: query.page || 1, totalPages: 0, limit: query.limit || 10 }
       }
     }
 
@@ -153,7 +153,8 @@ export class PropertyService implements IPropertyService {
       metadata: {
         totalDocuments: total,
         currentPage: query.page || 1,
-        totalPages
+        totalPages,
+        limit: take || 10
       }
     }
   }
@@ -237,7 +238,7 @@ export class PropertyService implements IPropertyService {
     const workbook = XLSX.read(buffer, { type: 'buffer' })
     const sheetName = workbook.SheetNames[0]
     const worksheet = workbook.Sheets[sheetName]
-    const data = XLSX.utils.sheet_to_json(worksheet) as Record<string, unknown>[]
+    const data = XLSX.utils.sheet_to_json(worksheet)
 
     if (!data || data.length === 0) {
       throw new BadRequestException('Excel file is empty or invalid')
