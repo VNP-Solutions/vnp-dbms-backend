@@ -3,6 +3,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import {
   IsBoolean,
   IsEmail,
+  IsIn,
   IsNotEmpty,
   IsNumber,
   IsOptional,
@@ -101,10 +102,14 @@ export class PortfolioQueryDto extends QueryDto {
   @IsString()
   service_type_id?: string
 
-  @ApiPropertyOptional({ description: 'Filter by active status (true/false/all)', example: true })
+  @ApiPropertyOptional({
+    description: 'Filter by active status: All (both), true (active only), false (inactive only)',
+    example: 'All',
+    enum: ['All', 'true', 'false']
+  })
   @IsOptional()
-  @IsBoolean()
-  is_active?: boolean
+  @IsIn(['All', 'true', 'false'])
+  is_active?: 'All' | 'true' | 'false'
 
   @ApiPropertyOptional({ description: 'Start date for created_at filter (ISO)', example: '2024-01-01' })
   @IsOptional()
