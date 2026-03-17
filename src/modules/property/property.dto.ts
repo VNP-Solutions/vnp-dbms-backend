@@ -1,4 +1,4 @@
-import { OmitType, PartialType } from '@nestjs/mapped-types'
+import { PartialType } from '@nestjs/mapped-types'
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import {
   IsArray,
@@ -7,7 +7,6 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
-  IsUrl,
   ValidateNested
 } from 'class-validator'
 import { Type } from 'class-transformer'
@@ -198,7 +197,7 @@ export class CreatePropertyDto {
   credentials?: PropertyCredentialsInput
 }
 
-export class UpdatePropertyDto extends PartialType(OmitType(CreatePropertyDto, ['is_active'] as const)) {
+export class UpdatePropertyDto extends PartialType(CreatePropertyDto) {
   @ApiPropertyOptional({ description: 'Set is_active (use activate/deactivate endpoints if needed)' })
   @IsBoolean()
   @IsOptional()

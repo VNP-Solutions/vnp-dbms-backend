@@ -111,18 +111,14 @@ export class PortfolioService implements IPortfolioService {
   }
 
   async update(id: string, data: UpdatePortfolioDto, user: IUserWithPermissions) {
-    await this.findOne(id, user)
+    const existing = await this.findOne(id, user)
+    if (!existing) {
+      throw new NotFoundException('Portfolio not found')
+    }
     if (data.name) {
-      const existing = await this.portfolioRepository.findByName(data.name)
-      if (existing && existing.id !== id) {
+      if (existing.name !== data.name && existing.name) {
         throw new ConflictException('Portfolio with this name already exists')
       }
-    }
-    const current = await this.portfolioRepository.findById(id)
-    const isCommissionable = data.is_commissionable !== undefined ? data.is_commissionable : current?.is_commissionable
-    const salesAgent = data.sales_agent !== undefined ? data.sales_agent : current?.sales_agent
-    if (isCommissionable && !salesAgent) {
-      throw new BadRequestException('Sales agent is required when portfolio is commissionable')
     }
     return this.portfolioRepository.update(id, data)
   }
