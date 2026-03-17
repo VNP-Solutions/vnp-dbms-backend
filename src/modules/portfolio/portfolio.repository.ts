@@ -122,7 +122,7 @@ export class PortfolioRepository implements IPortfolioRepository {
   }
 
   async update(id: string, data: UpdatePortfolioDto): Promise<PortfolioWithServiceType> {
-    const { service_type_id, currency_id, ...rest } = data
+    const { service_type_id, currency_id, is_active, ...rest } = data
     const updateData: any = { ...rest }
     
     if (service_type_id) {
@@ -147,6 +147,10 @@ export class PortfolioRepository implements IPortfolioRepository {
       }
 
       updateData.currency = { connect: { id: currency_id } }
+    }
+
+    if (is_active) {
+      // Do nothing
     }
     
     return this.prisma.portfolio.update({

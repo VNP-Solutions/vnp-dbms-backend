@@ -1,4 +1,4 @@
-import { OmitType, PartialType } from '@nestjs/mapped-types'
+import { PartialType } from '@nestjs/mapped-types'
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import {
   IsBoolean,
@@ -93,7 +93,7 @@ export class CreatePortfolioDto {
   contract_signed?: boolean
 }
 
-export class UpdatePortfolioDto extends PartialType(OmitType(CreatePortfolioDto, ['is_active'] as const)) {}
+export class UpdatePortfolioDto extends PartialType(CreatePortfolioDto) {}
 
 export class PortfolioQueryDto extends QueryDto {
   @ApiPropertyOptional({ description: 'Filter by service type ID', example: '507f1f77bcf86cd799439011' })

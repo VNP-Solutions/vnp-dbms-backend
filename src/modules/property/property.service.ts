@@ -404,7 +404,10 @@ export class PropertyService implements IPropertyService {
               await this.credentialsService.create({ ...creds, property_id: existingProp.id })
             }
             credentialsCreated++
-          } catch (_) {}
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          } catch (_) {
+            // ignore
+          }
         }
         continue
       }
