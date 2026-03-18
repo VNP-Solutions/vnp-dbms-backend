@@ -6,7 +6,6 @@ import type { IPropertyRepository, PropertyWithRelations } from './property.inte
 const propertyInclude = {
   portfolio: { select: { id: true, name: true } },
   subportfolio: { select: { id: true, name: true } },
-  currency: { select: { id: true, code: true, name: true } },
   credentials: true
 }
 
@@ -77,7 +76,6 @@ export class PropertyRepository implements IPropertyRepository {
       agoda_status: data.agoda_status
     }
     if (data.subportfolio_id) payload.subportfolio_id = data.subportfolio_id
-    if (data.currency_id) payload.currency_id = data.currency_id
 
     return this.prisma.property.create({
       data: payload,

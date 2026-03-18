@@ -224,13 +224,12 @@ model ServiceType {
 }
 
 model Currency {
-  id         String      @id @default(auto()) @map("_id") @db.ObjectId
-  code       String      @unique
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  code       String   @unique
   name       String
   symbol     String?
-  is_active  Boolean     @default(true)
-  order      Int         @default(0)
-  properties Property[]
+  is_active  Boolean  @default(true)
+  order      Int      @default(0)
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -286,8 +285,6 @@ model Property {
   id                    String        @id @default(auto()) @map("_id") @db.ObjectId
   name                  String        @unique
   address               String
-  currency_id           String?       @db.ObjectId
-  currency              Currency?     @relation(fields: [currency_id], references: [id])
   card_descriptor       String?
   is_active             Boolean       @default(true)
   next_due_date         DateTime?
@@ -327,7 +324,6 @@ model Property {
 
   @@index([portfolio_id])
   @@index([subportfolio_id])
-  @@index([currency_id])
   @@index([is_active])
   @@index([next_due_date])
   @@index([portfolio_id, is_active])

@@ -72,10 +72,6 @@ export interface ExternalPropertyDto {
   subportfolio_name?: string
   previous_portfolio_id?: string
   show_in_portfolio?: string[]
-  currency_id?: string
-  currency_code?: string
-  currency_name?: string
-  currency_symbol?: string
   new_domain_email?: string
   others_case_emails?: string[]
   primary_case_email?: string

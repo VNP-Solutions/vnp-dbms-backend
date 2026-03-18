@@ -122,14 +122,6 @@ export class ExternalPropertyService {
             name: true
           }
         },
-        currency: {
-          select: {
-            id: true,
-            code: true,
-            name: true,
-            symbol: true
-          }
-        },
         ...(includeCredentials && {
           credentials: true
         })
@@ -149,10 +141,6 @@ export class ExternalPropertyService {
       subportfolio_name: property.subportfolio?.name,
       previous_portfolio_id: property.previous_portfolio_id || undefined,
       show_in_portfolio: property.show_in_portfolio.length > 0 ? property.show_in_portfolio : undefined,
-      currency_id: property.currency?.id,
-      currency_code: property.currency?.code,
-      currency_name: property.currency?.name,
-      currency_symbol: property.currency?.symbol || undefined,
       new_domain_email: property.new_domain_email || undefined,
       others_case_emails: property.others_case_emails.length > 0 ? property.others_case_emails : undefined,
       primary_case_email: property.primary_case_email || undefined,
@@ -210,14 +198,6 @@ export class ExternalPropertyService {
             name: true
           }
         },
-        currency: {
-          select: {
-            id: true,
-            code: true,
-            name: true,
-            symbol: true
-          }
-        },
         ...(includeCredentials && {
           credentials: true
         })
@@ -248,10 +228,6 @@ export class ExternalPropertyService {
       subportfolio_name: property.subportfolio?.name,
       previous_portfolio_id: property.previous_portfolio_id || undefined,
       show_in_portfolio: property.show_in_portfolio.length > 0 ? property.show_in_portfolio : undefined,
-      currency_id: property.currency?.id,
-      currency_code: property.currency?.code,
-      currency_name: property.currency?.name,
-      currency_symbol: property.currency?.symbol || undefined,
       new_domain_email: property.new_domain_email || undefined,
       others_case_emails: property.others_case_emails.length > 0 ? property.others_case_emails : undefined,
       primary_case_email: property.primary_case_email || undefined,

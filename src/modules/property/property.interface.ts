@@ -6,7 +6,6 @@ import { CreatePropertyDto, PropertyQueryDto, UpdatePropertyDto } from './proper
 export type PropertyWithRelations = Property & {
   portfolio: { id: string; name: string }
   subportfolio: { id: string; name: string } | null
-  currency: { id: string; code: string; name: string } | null
 }
 
 export interface IPropertyRepository {
