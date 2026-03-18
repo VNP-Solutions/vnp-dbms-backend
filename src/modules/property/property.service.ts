@@ -542,8 +542,6 @@ export class PropertyService implements IPropertyService {
       )
     }
 
-    const addressCol =
-      headers.find(h => h.toLowerCase() === 'address') || 'Address'
     const portfolioCol =
       headers.find(h => h.toLowerCase() === 'portfolio') || 'Portfolio'
     const subPortfolioCol =
@@ -663,9 +661,6 @@ export class PropertyService implements IPropertyService {
         : ''
       if (!propertyName) continue
 
-      const address = r[addressCol]
-        ? String(r[addressCol]).trim()
-        : propertyName
       const portfolioName = r[portfolioCol]
         ? String(r[portfolioCol]).trim()
         : null
@@ -734,7 +729,6 @@ export class PropertyService implements IPropertyService {
 
       const propertyData: CreatePropertyDto = {
         name: propertyName,
-        address,
         portfolio_id: portfolioId,
         subportfolio_id: subportfolioId || undefined,
         is_active: true,

@@ -131,7 +131,6 @@ export class ExternalPropertyService {
     return properties.map(property => ({
       id: property.id,
       name: property.name,
-      address: property.address,
       card_descriptor: property.card_descriptor || undefined,
       is_active: property.is_active,
       next_due_date: property.next_due_date?.toISOString(),
@@ -218,7 +217,6 @@ export class ExternalPropertyService {
     return {
       id: property.id,
       name: property.name,
-      address: property.address,
       card_descriptor: property.card_descriptor || undefined,
       is_active: property.is_active,
       next_due_date: property.next_due_date?.toISOString(),

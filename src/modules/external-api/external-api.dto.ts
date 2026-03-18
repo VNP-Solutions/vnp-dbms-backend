@@ -62,7 +62,6 @@ export interface ExternalPortfolioDto {
 export interface ExternalPropertyDto {
   id: string
   name: string
-  address: string
   card_descriptor?: string
   is_active: boolean
   next_due_date?: string
