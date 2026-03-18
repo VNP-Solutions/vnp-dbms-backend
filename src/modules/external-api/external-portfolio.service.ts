@@ -59,14 +59,6 @@ export class ExternalPortfolioService {
             type: true
           }
         },
-        currency: {
-          select: {
-            id: true,
-            code: true,
-            name: true,
-            symbol: true
-          }
-        },
         subportfolios: {
           select: { id: true }
         },
@@ -84,15 +76,6 @@ export class ExternalPortfolioService {
         id: portfolio.serviceType.id,
         type: portfolio.serviceType.type
       },
-      currency_id: portfolio.currency_id ?? undefined,
-      currency: portfolio.currency
-        ? {
-            id: portfolio.currency.id,
-            code: portfolio.currency.code,
-            name: portfolio.currency.name,
-            symbol: portfolio.currency.symbol || undefined
-          }
-        : undefined,
       is_active: portfolio.is_active,
       contact_email: portfolio.contact_email || undefined,
       portfolio_contact_email: portfolio.portfolio_contact_email || undefined,
@@ -100,9 +83,6 @@ export class ExternalPortfolioService {
       portfolio_contact_phone: portfolio.portfolio_contact_phone || undefined,
       is_commissionable: portfolio.is_commissionable,
       commission: portfolio.commission ?? undefined,
-      sales_agent: portfolio.sales_agent || undefined,
-      access_email: portfolio.access_email || undefined,
-      access_phone: portfolio.access_phone || undefined,
       attachment: portfolio.attachment || undefined,
       contract_signed: portfolio.contract_signed ?? undefined,
       created_at: portfolio.created_at.toISOString(),
@@ -136,14 +116,6 @@ export class ExternalPortfolioService {
             type: true
           }
         },
-        currency: {
-          select: {
-            id: true,
-            code: true,
-            name: true,
-            symbol: true
-          }
-        },
         subportfolios: {
           select: { id: true }
         },
@@ -165,15 +137,6 @@ export class ExternalPortfolioService {
         id: portfolio.serviceType.id,
         type: portfolio.serviceType.type
       },
-      currency_id: portfolio.currency_id ?? undefined,
-      currency: portfolio.currency
-        ? {
-            id: portfolio.currency.id,
-            code: portfolio.currency.code,
-            name: portfolio.currency.name,
-            symbol: portfolio.currency.symbol || undefined
-          }
-        : undefined,
       is_active: portfolio.is_active,
       contact_email: portfolio.contact_email || undefined,
       portfolio_contact_email: portfolio.portfolio_contact_email || undefined,
@@ -181,9 +144,6 @@ export class ExternalPortfolioService {
       portfolio_contact_phone: portfolio.portfolio_contact_phone || undefined,
       is_commissionable: portfolio.is_commissionable,
       commission: portfolio.commission ?? undefined,
-      sales_agent: portfolio.sales_agent || undefined,
-      access_email: portfolio.access_email || undefined,
-      access_phone: portfolio.access_phone || undefined,
       attachment: portfolio.attachment || undefined,
       contract_signed: portfolio.contract_signed ?? undefined,
       created_at: portfolio.created_at.toISOString(),

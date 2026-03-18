@@ -602,11 +602,10 @@ export class PropertyService implements IPropertyService {
           data: {
             name,
             service_type_id: defaultServiceType.id,
-            currency_id: defaultCurrency?.id,
             is_active: true,
             is_commissionable: false
           },
-          include: { serviceType: true, currency: true }
+          include: { serviceType: true }
         })
         portfolios.push(created)
         portfoliosCreated++
