@@ -11,6 +11,7 @@ import {
   ValidateIf
 } from 'class-validator'
 import { QueryDto } from '../../common/dto/query.dto'
+import { Transform } from 'class-transformer'
 
 export class CreatePortfolioDto {
   @ApiProperty({ example: 'Luxury Hotels Portfolio', description: 'Portfolio name' })
@@ -124,5 +125,15 @@ export class PortfolioQueryDto extends QueryDto {
   @ApiPropertyOptional({ description: 'Filter by access lost status', example: false })
   @IsOptional()
   @IsBoolean()
+  @Transform(({ value }) => {
+    if (value === true) return true
+    if (value === false) return false
+    if (typeof value === 'string') {
+      const lower = value.toLowerCase()
+      if (lower === 'true' || lower === '1') return true
+      if (lower === 'false' || lower === '0') return false
+    }
+    return value
+  })
   access_lost?: boolean
 }
