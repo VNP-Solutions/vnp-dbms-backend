@@ -284,7 +284,6 @@ model Subportfolio {
 model Property {
   id                    String        @id @default(auto()) @map("_id") @db.ObjectId
   name                  String        @unique
-  address               String
   card_descriptor       String?
   is_active             Boolean       @default(true)
   next_due_date         DateTime?

@@ -77,14 +77,6 @@ export class CreatePropertyDto {
   @IsNotEmpty()
   name: string
 
-  @ApiProperty({
-    example: '123 Main Street, New York, NY 10001',
-    description: 'Property address'
-  })
-  @IsString()
-  @IsNotEmpty()
-  address: string
-
   @ApiPropertyOptional({
     example: 'GRAND HOTEL NY',
     description: 'Card descriptor'

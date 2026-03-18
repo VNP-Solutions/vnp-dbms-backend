@@ -51,7 +51,6 @@ export class PropertyRepository implements IPropertyRepository {
   async create(data: CreatePropertyDto): Promise<PropertyWithRelations> {
     const payload: any = {
       name: data.name,
-      address: data.address,
       portfolio_id: data.portfolio_id,
       card_descriptor: data.card_descriptor,
       is_active: data.is_active ?? true,
