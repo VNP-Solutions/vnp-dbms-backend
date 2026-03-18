@@ -86,14 +86,6 @@ export class CreatePropertyDto {
   address: string
 
   @ApiPropertyOptional({
-    example: '507f1f77bcf86cd799439020',
-    description: 'Currency ID'
-  })
-  @IsString()
-  @IsOptional()
-  currency_id?: string
-
-  @ApiPropertyOptional({
     example: 'GRAND HOTEL NY',
     description: 'Card descriptor'
   })
@@ -318,11 +310,6 @@ export class PropertyQueryDto extends QueryDto {
   @IsOptional()
   @IsIn(['All', 'true', 'false'])
   is_active?: 'All' | 'true' | 'false'
-
-  @ApiPropertyOptional({ description: 'Filter by currency ID' })
-  @IsOptional()
-  @IsString()
-  currency_id?: string
 
   @ApiPropertyOptional({
     description: 'Start date for created_at filter (ISO)'

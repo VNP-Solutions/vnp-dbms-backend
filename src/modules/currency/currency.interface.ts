@@ -16,7 +16,6 @@ export interface ICurrencyRepository {
   findByCode(code: string): Promise<Currency | null>
   update(id: string, data: UpdateCurrencyDto): Promise<Currency>
   delete(id: string): Promise<Currency>
-  countProperties(currencyId: string): Promise<number>
   count(): Promise<number>
   updateMany(data: Array<{ id: string; order: number }>): Promise<void>
 }

@@ -99,14 +99,6 @@ export class CurrencyService implements ICurrencyService {
       throw new NotFoundException('Currency not found')
     }
 
-    const propertyCount = await this.currencyRepository.countProperties(id)
-
-    if (propertyCount > 0) {
-      throw new BadRequestException(
-        `Cannot delete currency with ${propertyCount} associated properties. Please reassign the properties first.`
-      )
-    }
-
     await this.currencyRepository.delete(id)
 
     return { message: 'Currency deleted successfully' }

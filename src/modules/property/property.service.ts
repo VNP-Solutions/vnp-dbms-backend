@@ -105,7 +105,6 @@ export class PropertyService implements IPropertyService {
     const additionalFilters: any = {}
     if (query.subportfolio_id)
       additionalFilters.subportfolio_id = query.subportfolio_id
-    if (query.currency_id) additionalFilters.currency_id = query.currency_id
     if (query.expedia_id) additionalFilters.expedia_id = query.expedia_id
     if (query.expedia_status)
       additionalFilters.expedia_status = query.expedia_status
@@ -136,7 +135,6 @@ export class PropertyService implements IPropertyService {
       searchFields: ['name', 'address', 'description', 'hotel_address'],
       filterableFields: [
         'subportfolio_id',
-        'currency_id',
         'is_active',
         'expedia_id',
         'expedia_status',
@@ -552,14 +550,8 @@ export class PropertyService implements IPropertyService {
       headers.find(h =>
         ['sub portfolio', 'subportfolio'].includes(h.toLowerCase())
       ) || 'Sub Portfolio'
-    const currencyCol =
-      headers.find(h => h.toLowerCase() === 'currency') || 'Currency'
 
     const defaultServiceType = await this.prisma.serviceType.findFirst({
-      where: { is_active: true },
-      orderBy: { order: 'asc' }
-    })
-    const defaultCurrency = await this.prisma.currency.findFirst({
       where: { is_active: true },
       orderBy: { order: 'asc' }
     })
@@ -740,28 +732,9 @@ export class PropertyService implements IPropertyService {
         continue
       }
 
-      let currency_id: string | undefined = defaultCurrency?.id
-      if (r[currencyCol]) {
-        const found = await this.prisma.currency.findFirst({
-          where: {
-            OR: [
-              {
-                code: {
-                  equals: String(r[currencyCol]).trim(),
-                  mode: 'insensitive'
-                }
-              },
-              { id: String(r[currencyCol]).trim() }
-            ]
-          }
-        })
-        if (found) currency_id = found.id
-      }
-
       const propertyData: CreatePropertyDto = {
         name: propertyName,
         address,
-        currency_id,
         portfolio_id: portfolioId,
         subportfolio_id: subportfolioId || undefined,
         is_active: true,

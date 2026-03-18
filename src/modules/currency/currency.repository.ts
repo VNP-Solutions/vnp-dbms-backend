@@ -59,12 +59,6 @@ export class CurrencyRepository implements ICurrencyRepository {
     })
   }
 
-  async countProperties(currencyId: string): Promise<number> {
-    return this.prisma.property.count({
-      where: { currency_id: currencyId }
-    })
-  }
-
   async count(): Promise<number> {
     return this.prisma.currency.count()
   }
