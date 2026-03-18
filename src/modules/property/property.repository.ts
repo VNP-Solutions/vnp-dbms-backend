@@ -53,7 +53,6 @@ export class PropertyRepository implements IPropertyRepository {
     const payload: any = {
       name: data.name,
       address: data.address,
-      currency_id: data.currency_id,
       portfolio_id: data.portfolio_id,
       card_descriptor: data.card_descriptor,
       is_active: data.is_active ?? true,
@@ -63,6 +62,7 @@ export class PropertyRepository implements IPropertyRepository {
       new_domain_email: data.new_domain_email,
       others_case_emails: data.others_case_emails ?? [],
       primary_case_email: data.primary_case_email,
+      portfolio_contact_email: data.portfolio_contact_email,
       webmail_password: data.webmail_password,
       description: data.description,
       hotel_address: data.hotel_address,
@@ -77,6 +77,7 @@ export class PropertyRepository implements IPropertyRepository {
       agoda_status: data.agoda_status
     }
     if (data.subportfolio_id) payload.subportfolio_id = data.subportfolio_id
+    if (data.currency_id) payload.currency_id = data.currency_id
 
     return this.prisma.property.create({
       data: payload,

@@ -21,6 +21,14 @@ export class ExternalPropertyService {
     })
   }
 
+  private safeDecrypt(encrypted: string): string {
+    try {
+      return EncryptionUtil.decrypt(encrypted, this.encryptionSecret)
+    } catch {
+      return encrypted
+    }
+  }
+
   private decryptCredentials(credentials: any) {
     if (!credentials) return undefined
 
@@ -141,14 +149,18 @@ export class ExternalPropertyService {
       subportfolio_name: property.subportfolio?.name,
       previous_portfolio_id: property.previous_portfolio_id || undefined,
       show_in_portfolio: property.show_in_portfolio.length > 0 ? property.show_in_portfolio : undefined,
-      currency_id: property.currency.id,
-      currency_code: property.currency.code,
-      currency_name: property.currency.name,
-      currency_symbol: property.currency.symbol || undefined,
+      currency_id: property.currency?.id,
+      currency_code: property.currency?.code,
+      currency_name: property.currency?.name,
+      currency_symbol: property.currency?.symbol || undefined,
       new_domain_email: property.new_domain_email || undefined,
       others_case_emails: property.others_case_emails.length > 0 ? property.others_case_emails : undefined,
       primary_case_email: property.primary_case_email || undefined,
-      webmail_password: property.webmail_password || undefined,
+      portfolio_contact_email: (property as any).portfolio_contact_email || undefined,
+      webmail_password:
+        property.webmail_password
+          ? this.safeDecrypt(property.webmail_password)
+          : undefined,
       description: property.description || undefined,
       hotel_address: property.hotel_address || undefined,
       qp_username: property.qp_username || undefined,
@@ -236,14 +248,18 @@ export class ExternalPropertyService {
       subportfolio_name: property.subportfolio?.name,
       previous_portfolio_id: property.previous_portfolio_id || undefined,
       show_in_portfolio: property.show_in_portfolio.length > 0 ? property.show_in_portfolio : undefined,
-      currency_id: property.currency.id,
-      currency_code: property.currency.code,
-      currency_name: property.currency.name,
-      currency_symbol: property.currency.symbol || undefined,
+      currency_id: property.currency?.id,
+      currency_code: property.currency?.code,
+      currency_name: property.currency?.name,
+      currency_symbol: property.currency?.symbol || undefined,
       new_domain_email: property.new_domain_email || undefined,
       others_case_emails: property.others_case_emails.length > 0 ? property.others_case_emails : undefined,
       primary_case_email: property.primary_case_email || undefined,
-      webmail_password: property.webmail_password || undefined,
+      portfolio_contact_email: (property as any).portfolio_contact_email || undefined,
+      webmail_password:
+        property.webmail_password
+          ? this.safeDecrypt(property.webmail_password)
+          : undefined,
       description: property.description || undefined,
       hotel_address: property.hotel_address || undefined,
       qp_username: property.qp_username || undefined,
