@@ -43,13 +43,6 @@ export interface ExternalPortfolioDto {
     id: string
     type: string
   }
-  currency_id?: string
-  currency?: {
-    id: string
-    code: string
-    name: string
-    symbol?: string
-  }
   is_active: boolean
   contact_email?: string
   portfolio_contact_email?: string
@@ -57,9 +50,6 @@ export interface ExternalPortfolioDto {
   portfolio_contact_phone?: string
   is_commissionable: boolean
   commission?: number
-  sales_agent?: string
-  access_email?: string
-  access_phone?: string
   attachment?: string
   contract_signed?: boolean
   created_at: string

@@ -33,7 +33,7 @@ export class PortfolioRepository implements IPortfolioRepository {
   }
 
   async create(data: CreatePortfolioDto): Promise<PortfolioWithServiceType> {
-    const { service_type_id, currency_id, ...rest } = data
+    const { service_type_id, ...rest } = data
     
     const serviceType = await this.prisma.serviceType.findUnique({
       where: { id: service_type_id }
@@ -48,21 +48,10 @@ export class PortfolioRepository implements IPortfolioRepository {
       serviceType: { connect: { id: service_type_id } }
     }
 
-    if (currency_id) {
-      const currency = await this.prisma.currency.findUnique({
-        where: { id: currency_id }
-      })
-      if (!currency) {
-        throw new Error(`Currency with ID ${currency_id} not found`)
-      }
-      createData.currency = { connect: { id: currency_id } }
-    }
-
     return this.prisma.portfolio.create({
       data: createData,
       include: {
-        serviceType: { select: { id: true, type: true, is_active: true } },
-        currency: { select: { id: true, code: true, name: true, symbol: true } }
+        serviceType: { select: { id: true, type: true, is_active: true } }
       }
     }) as Promise<PortfolioWithServiceType>
   }
@@ -81,7 +70,6 @@ export class PortfolioRepository implements IPortfolioRepository {
       orderBy,
       include: {
         serviceType: { select: { id: true, type: true, is_active: true } },
-        currency: { select: { id: true, code: true, name: true, symbol: true } },
         _count: {
           select: { properties: true, subportfolios: true }
         }
@@ -104,7 +92,6 @@ export class PortfolioRepository implements IPortfolioRepository {
       where: { id },
       include: {
         serviceType: { select: { id: true, type: true, is_active: true } },
-        currency: { select: { id: true, code: true, name: true, symbol: true } },
         _count: { select: { properties: true, subportfolios: true } }
       }
     })
@@ -122,7 +109,7 @@ export class PortfolioRepository implements IPortfolioRepository {
   }
 
   async update(id: string, data: UpdatePortfolioDto): Promise<PortfolioWithServiceType> {
-    const { service_type_id, currency_id, is_active, ...rest } = data
+    const { service_type_id, is_active, ...rest } = data
     const updateData: any = { ...rest }
     
     if (service_type_id) {
@@ -137,18 +124,6 @@ export class PortfolioRepository implements IPortfolioRepository {
       updateData.serviceType = { connect: { id: service_type_id } }
     }
 
-    if (currency_id) {
-      const currency = await this.prisma.currency.findUnique({
-        where: { id: currency_id }
-      })
-
-      if (!currency) {
-        throw new Error(`Currency with ID ${currency_id} not found`)
-      }
-
-      updateData.currency = { connect: { id: currency_id } }
-    }
-
     if (is_active !== undefined) {
       updateData.is_active = is_active
     }
@@ -157,8 +132,7 @@ export class PortfolioRepository implements IPortfolioRepository {
       where: { id },
       data: updateData,
       include: {
-        serviceType: { select: { id: true, type: true, is_active: true } },
-        currency: { select: { id: true, code: true, name: true, symbol: true } }
+        serviceType: { select: { id: true, type: true, is_active: true } }
       }
     }) as Promise<PortfolioWithServiceType>
   }

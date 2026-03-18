@@ -7,8 +7,7 @@ import {
   IsNotEmpty,
   IsNumber,
   IsOptional,
-  IsString,
-  ValidateIf
+  IsString
 } from 'class-validator'
 import { QueryDto } from '../../common/dto/query.dto'
 import { Transform } from 'class-transformer'
@@ -23,11 +22,6 @@ export class CreatePortfolioDto {
   @IsString()
   @IsNotEmpty()
   service_type_id: string
-
-  @ApiPropertyOptional({ example: '507f1f77bcf86cd799439020', description: 'Currency ID' })
-  @IsString()
-  @IsOptional()
-  currency_id?: string
 
   @ApiProperty({ example: true, description: 'Whether portfolio is active' })
   @IsBoolean()
@@ -65,24 +59,6 @@ export class CreatePortfolioDto {
   @IsNumber()
   @IsOptional()
   commission?: number
-
-  @ApiPropertyOptional({ example: 'John Doe', description: 'Sales agent (required if commissionable)' })
-  @ValidateIf((o) => o.is_commissionable === true)
-  @IsNotEmpty({ message: 'Sales agent is required when portfolio is commissionable' })
-  @IsString()
-  @IsOptional()
-  sales_agent?: string
-
-  @ApiPropertyOptional({ example: 'access@example.com', description: 'Access email' })
-  @IsString()
-  @IsEmail()
-  @IsOptional()
-  access_email?: string
-
-  @ApiPropertyOptional({ example: '+1234567890', description: 'Access phone' })
-  @IsString()
-  @IsOptional()
-  access_phone?: string
 
   @ApiPropertyOptional({ example: 'https://example.com/document.pdf', description: 'Attachment URL or path' })
   @IsString()
