@@ -18,7 +18,8 @@ async function bootstrap() {
       forbidNonWhitelisted: true,
       transform: true,
       transformOptions: {
-        enableImplicitConversion: true
+        // Disable to prevent Boolean("false") = true issue
+        enableImplicitConversion: false
       }
     })
   )

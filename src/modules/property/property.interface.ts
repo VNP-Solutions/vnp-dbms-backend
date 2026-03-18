@@ -6,7 +6,7 @@ import { CreatePropertyDto, PropertyQueryDto, UpdatePropertyDto } from './proper
 export type PropertyWithRelations = Property & {
   portfolio: { id: string; name: string }
   subportfolio: { id: string; name: string } | null
-  currency: { id: string; code: string; name: string }
+  currency: { id: string; code: string; name: string } | null
 }
 
 export interface IPropertyRepository {
@@ -36,6 +36,10 @@ export interface ImportPropertiesResult {
   properties: any[]
 }
 
+export interface GetPropertyCredentialResult {
+  credential: Record<string, string>
+}
+
 export interface IPropertyService {
   create(data: CreatePropertyDto, user: IUserWithPermissions): Promise<PropertyWithRelations>
   findAll(query: PropertyQueryDto, user: IUserWithPermissions): Promise<PaginatedResult<PropertyWithRelations>>
@@ -48,6 +52,12 @@ export interface IPropertyService {
     portfolios: { id: string; name: string }[]
     subportfolios: { id: string; name: string; portfolio_id: string }[]
   }>
+  getPropertyCredential(dto: {
+    email: string
+    password: string
+    required_field: string
+    property_id: string
+  }): Promise<GetPropertyCredentialResult>
   importFromExcel(
     file: Express.Multer.File,
     user: IUserWithPermissions

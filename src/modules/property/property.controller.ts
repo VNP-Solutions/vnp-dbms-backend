@@ -19,9 +19,15 @@ import { RequirePermission } from '../../common/decorators/require-permission.de
 import { PermissionGuard } from '../../common/guards/permission.guard'
 import { ModuleType, PermissionAction } from '../../common/interfaces/permission.interface'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
+import { Public } from '../auth/decorators/public.decorator'
 import { CurrentUser } from '../auth/decorators/current-user.decorator'
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
-import { CreatePropertyDto, PropertyQueryDto, UpdatePropertyDto } from './property.dto'
+import {
+  CreatePropertyDto,
+  GetPropertyCredentialDto,
+  PropertyQueryDto,
+  UpdatePropertyDto
+} from './property.dto'
 import type { IPropertyService } from './property.interface'
 
 @ApiTags('Property')
@@ -33,6 +39,21 @@ export class PropertyController {
     @Inject('IPropertyService')
     private readonly propertyService: IPropertyService
   ) {}
+
+  @Post('credential')
+  @Public()
+  @ApiOperation({
+    summary: 'Get decrypted credential for a property',
+    description:
+      'Authenticate with email and password, then retrieve a specific decrypted credential for a property the user has access to. required_field: expedia | booking | agoda | webmail_password | qp_api_key | qp_password'
+  })
+  @ApiResponse({ status: 200, description: 'Decrypted credential returned' })
+  @ApiResponse({ status: 400, description: 'Invalid credentials' })
+  @ApiResponse({ status: 403, description: 'No access to property' })
+  @ApiResponse({ status: 404, description: 'Property or credential not found' })
+  getPropertyCredential(@Body() dto: GetPropertyCredentialDto) {
+    return this.propertyService.getPropertyCredential(dto)
+  }
 
   @Post()
   @RequirePermission(ModuleType.PROPERTY, PermissionAction.CREATE)
@@ -80,7 +101,11 @@ export class PropertyController {
 
   @Get()
   @RequirePermission(ModuleType.PROPERTY, PermissionAction.READ)
-  @ApiOperation({ summary: 'Get all properties with pagination, search, filter and sort' })
+  @ApiOperation({
+    summary: 'Get all properties with pagination, search, filter and sort',
+    description:
+      'Use masked=true (default) for encrypted credentials. Use masked=false for decrypted credentials.'
+  })
   @ApiResponse({ status: 200, description: 'Paginated list of properties' })
   findAll(@ParseQuery() query: PropertyQueryDto, @CurrentUser() user: IUserWithPermissions) {
     return this.propertyService.findAll(query, user)

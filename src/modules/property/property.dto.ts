@@ -1,5 +1,6 @@
 import { PartialType } from '@nestjs/mapped-types'
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
+import { Transform, Type } from 'class-transformer'
 import {
   IsArray,
   IsBoolean,
@@ -10,7 +11,6 @@ import {
   IsString,
   ValidateNested
 } from 'class-validator'
-import { Type } from 'class-transformer'
 import { QueryDto } from '../../common/dto/query.dto'
 
 export class PropertyCredentialsInput {
@@ -44,7 +44,9 @@ export class PropertyCredentialsInput {
   @IsOptional()
   bookingPassword?: string
 
-  @ApiPropertyOptional({ description: 'Expedia email associated with the account' })
+  @ApiPropertyOptional({
+    description: 'Expedia email associated with the account'
+  })
   @IsString()
   @IsOptional()
   expediaEmailAssociated?: string
@@ -59,7 +61,10 @@ export class PropertyCredentialsInput {
   @IsOptional()
   portfolioContactEmail?: string
 
-  @ApiPropertyOptional({ description: 'Multiple portfolio emails', type: [String] })
+  @ApiPropertyOptional({
+    description: 'Multiple portfolio emails',
+    type: [String]
+  })
   @IsArray()
   @IsString({ each: true })
   @IsOptional()
@@ -72,37 +77,58 @@ export class CreatePropertyDto {
   @IsNotEmpty()
   name: string
 
-  @ApiProperty({ example: '123 Main Street, New York, NY 10001', description: 'Property address' })
+  @ApiProperty({
+    example: '123 Main Street, New York, NY 10001',
+    description: 'Property address'
+  })
   @IsString()
   @IsNotEmpty()
   address: string
 
-  @ApiProperty({ example: '507f1f77bcf86cd799439020', description: 'Currency ID' })
+  @ApiPropertyOptional({
+    example: '507f1f77bcf86cd799439020',
+    description: 'Currency ID'
+  })
   @IsString()
-  @IsNotEmpty()
-  currency_id: string
+  @IsOptional()
+  currency_id?: string
 
-  @ApiPropertyOptional({ example: 'GRAND HOTEL NY', description: 'Card descriptor' })
+  @ApiPropertyOptional({
+    example: 'GRAND HOTEL NY',
+    description: 'Card descriptor'
+  })
   @IsString()
   @IsOptional()
   card_descriptor?: string
 
-  @ApiPropertyOptional({ example: true, description: 'Whether property is active' })
+  @ApiPropertyOptional({
+    example: true,
+    description: 'Whether property is active'
+  })
   @IsBoolean()
   @IsOptional()
   is_active?: boolean
 
-  @ApiPropertyOptional({ example: '2025-12-31T23:59:59.000Z', description: 'Next due date' })
+  @ApiPropertyOptional({
+    example: '2025-12-31T23:59:59.000Z',
+    description: 'Next due date'
+  })
   @IsDateString()
   @IsOptional()
   next_due_date?: string
 
-  @ApiProperty({ example: '507f1f77bcf86cd799439012', description: 'Portfolio ID' })
+  @ApiProperty({
+    example: '507f1f77bcf86cd799439012',
+    description: 'Portfolio ID'
+  })
   @IsString()
   @IsNotEmpty()
   portfolio_id: string
 
-  @ApiPropertyOptional({ example: '507f1f77bcf86cd799439014', description: 'Subportfolio ID' })
+  @ApiPropertyOptional({
+    example: '507f1f77bcf86cd799439014',
+    description: 'Subportfolio ID'
+  })
   @IsString()
   @IsOptional()
   subportfolio_id?: string
@@ -112,7 +138,10 @@ export class CreatePropertyDto {
   @IsOptional()
   previous_portfolio_id?: string
 
-  @ApiPropertyOptional({ description: 'Portfolio IDs where property is visible', type: [String] })
+  @ApiPropertyOptional({
+    description: 'Portfolio IDs where property is visible',
+    type: [String]
+  })
   @IsArray()
   @IsString({ each: true })
   @IsOptional()
@@ -134,7 +163,12 @@ export class CreatePropertyDto {
   @IsOptional()
   primary_case_email?: string
 
-  @ApiPropertyOptional({ description: 'Webmail password' })
+  @ApiPropertyOptional({ description: 'Portfolio contact email' })
+  @IsString()
+  @IsOptional()
+  portfolio_contact_email?: string
+
+  @ApiPropertyOptional({ description: 'Webmail password (will be encrypted)' })
   @IsString()
   @IsOptional()
   webmail_password?: string
@@ -191,7 +225,10 @@ export class CreatePropertyDto {
   @IsOptional()
   agoda_status?: string
 
-  @ApiPropertyOptional({ description: 'Property credentials (OTA login details)', type: PropertyCredentialsInput })
+  @ApiPropertyOptional({
+    description: 'Property credentials (OTA login details)',
+    type: PropertyCredentialsInput
+  })
   @ValidateNested()
   @Type(() => PropertyCredentialsInput)
   @IsOptional()
@@ -199,31 +236,82 @@ export class CreatePropertyDto {
 }
 
 export class UpdatePropertyDto extends PartialType(CreatePropertyDto) {
-  @ApiPropertyOptional({ description: 'Set is_active (use activate/deactivate endpoints if needed)' })
+  @ApiPropertyOptional({
+    description: 'Set is_active (use activate/deactivate endpoints if needed)'
+  })
   @IsBoolean()
   @IsOptional()
   is_active?: boolean
 
-  @ApiPropertyOptional({ description: 'Property credentials (OTA login details)', type: PropertyCredentialsInput })
+  @ApiPropertyOptional({
+    description: 'Property credentials (OTA login details)',
+    type: PropertyCredentialsInput
+  })
   @ValidateNested()
   @Type(() => PropertyCredentialsInput)
   @IsOptional()
   credentials?: PropertyCredentialsInput
 }
 
+export const REQUIRED_FIELD_VALUES = [
+  'expedia',
+  'booking',
+  'agoda',
+  'webmail_password',
+  'qp_api_key',
+  'qp_password'
+] as const
+
+export type RequiredFieldType = (typeof REQUIRED_FIELD_VALUES)[number]
+
+export class GetPropertyCredentialDto {
+  @ApiProperty({ example: 'user@example.com', description: 'User email' })
+  @IsString()
+  @IsNotEmpty()
+  email: string
+
+  @ApiProperty({ example: 'password123', description: 'User password' })
+  @IsString()
+  @IsNotEmpty()
+  password: string
+
+  @ApiProperty({
+    example: 'expedia',
+    description: 'Credential type to retrieve',
+    enum: REQUIRED_FIELD_VALUES
+  })
+  @IsIn(REQUIRED_FIELD_VALUES)
+  required_field: RequiredFieldType
+
+  @ApiProperty({
+    example: '507f1f77bcf86cd799439011',
+    description: 'Property ID'
+  })
+  @IsString()
+  @IsNotEmpty()
+  property_id: string
+}
+
 export class PropertyQueryDto extends QueryDto {
-  @ApiPropertyOptional({ description: 'Filter by portfolio ID', example: '507f1f77bcf86cd799439012' })
+  @ApiPropertyOptional({
+    description: 'Filter by portfolio ID',
+    example: '507f1f77bcf86cd799439012'
+  })
   @IsOptional()
   @IsString()
   portfolio_id?: string
 
-  @ApiPropertyOptional({ description: 'Filter by subportfolio ID', example: '507f1f77bcf86cd799439014' })
+  @ApiPropertyOptional({
+    description: 'Filter by subportfolio ID',
+    example: '507f1f77bcf86cd799439014'
+  })
   @IsOptional()
   @IsString()
   subportfolio_id?: string
 
   @ApiPropertyOptional({
-    description: 'Filter by active status: All (both), true (active only), false (inactive only)',
+    description:
+      'Filter by active status: All (both), true (active only), false (inactive only)',
     example: 'All',
     enum: ['All', 'true', 'false']
   })
@@ -236,7 +324,9 @@ export class PropertyQueryDto extends QueryDto {
   @IsString()
   currency_id?: string
 
-  @ApiPropertyOptional({ description: 'Start date for created_at filter (ISO)' })
+  @ApiPropertyOptional({
+    description: 'Start date for created_at filter (ISO)'
+  })
   @IsOptional()
   @IsString()
   start_date?: string
@@ -273,8 +363,54 @@ export class PropertyQueryDto extends QueryDto {
   @IsString()
   agoda_status?: string
 
-  @ApiPropertyOptional({ description: 'Filter by access lost status', example: false })
+  @ApiPropertyOptional({
+    description: 'Filter by access lost status',
+    example: false
+  })
   @IsOptional()
+  @Transform(({ value }) => {
+    // Handle string booleans from query params/Swagger
+    if (typeof value === 'string') {
+      if (value.toLowerCase() === 'true' || value === '1') return true
+      if (value.toLowerCase() === 'false' || value === '0') return false
+    }
+    // Return as-is if already boolean or other type
+    return value
+  })
   @IsBoolean()
   access_lost?: boolean
+
+  @ApiPropertyOptional({
+    description:
+      'If true (default), credentials are masked/encrypted. If false, credentials are decrypted. When false, user_name and user_password may be required for validation.',
+    example: true
+  })
+  @IsOptional()
+  @Transform(({ value }) => {
+    // Handle string booleans from query params/Swagger
+    if (typeof value === 'string') {
+      if (value.toLowerCase() === 'true' || value === '1') return true
+      if (value.toLowerCase() === 'false' || value === '0') return false
+    }
+    // Return as-is if already boolean or other type
+    return value
+  })
+  @IsBoolean()
+  masked?: boolean
+
+  @ApiPropertyOptional({
+    description:
+      'User email/username for validation when masked=false. Required when masked=false with credential validation enabled.'
+  })
+  @IsOptional()
+  @IsString()
+  user_name?: string
+
+  @ApiPropertyOptional({
+    description:
+      'User password for validation when masked=false. Required when masked=false with credential validation enabled.'
+  })
+  @IsOptional()
+  @IsString()
+  user_password?: string
 }
