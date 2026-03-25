@@ -29,9 +29,16 @@ export interface IPortfolioRepository {
   getAccessiblePortfolioIds(userId: string): Promise<string[] | 'all'>
 }
 
+export interface SkippedPortfolio {
+  row_no: number
+  portfolio_name: string
+  reason: string
+}
+
 export interface ImportPortfoliosResult {
   portfoliosCreated: number
   portfolios: any[]
+  skipped_portfolios: SkippedPortfolio[]
 }
 
 export interface IPortfolioService {
