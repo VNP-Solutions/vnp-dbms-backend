@@ -342,6 +342,51 @@ export class PropertyQueryDto extends QueryDto {
   @IsString()
   agoda_status?: string
 
+  @ApiPropertyOptional({ description: 'Filter by card descriptor' })
+  @IsOptional()
+  @IsString()
+  card_descriptor?: string
+
+  @ApiPropertyOptional({ description: 'Filter by next due date (ISO format)' })
+  @IsOptional()
+  @IsString()
+  next_due_date?: string
+
+  @ApiPropertyOptional({ description: 'Filter by previous portfolio ID' })
+  @IsOptional()
+  @IsString()
+  previous_portfolio_id?: string
+
+  @ApiPropertyOptional({ description: 'Filter by new domain email' })
+  @IsOptional()
+  @IsString()
+  new_domain_email?: string
+
+  @ApiPropertyOptional({ description: 'Filter by primary case email' })
+  @IsOptional()
+  @IsString()
+  primary_case_email?: string
+
+  @ApiPropertyOptional({ description: 'Filter by portfolio contact email' })
+  @IsOptional()
+  @IsString()
+  portfolio_contact_email?: string
+
+  @ApiPropertyOptional({ description: 'Filter by description (partial match)' })
+  @IsOptional()
+  @IsString()
+  description?: string
+
+  @ApiPropertyOptional({ description: 'Filter by hotel address (partial match)' })
+  @IsOptional()
+  @IsString()
+  hotel_address?: string
+
+  @ApiPropertyOptional({ description: 'Filter by QP username' })
+  @IsOptional()
+  @IsString()
+  qp_username?: string
+
   @ApiPropertyOptional({
     description: 'Filter by access lost status',
     example: false

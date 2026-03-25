@@ -12,9 +12,9 @@ import { QueryBuilder } from '../../common/utils/query-builder.util'
 import { PrismaService } from '../prisma/prisma.service'
 import { CreatePortfolioDto, PortfolioQueryDto, UpdatePortfolioDto } from './portfolio.dto'
 import type {
+  ImportPortfoliosResult,
   IPortfolioRepository,
   IPortfolioService,
-  ImportPortfoliosResult,
   PortfolioWithCounts
 } from './portfolio.interface'
 
