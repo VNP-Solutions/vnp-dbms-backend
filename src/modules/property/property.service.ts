@@ -135,6 +135,10 @@ export class PropertyService implements IPropertyService {
     if (query.is_active !== undefined && query.is_active !== 'All') {
       additionalFilters.is_active = query.is_active
     }
+    if (query.is_commissionable !== undefined)
+      additionalFilters.is_commissionable = query.is_commissionable
+    if (query.commission != null)
+      additionalFilters.commission = query.commission
     if (query.start_date && query.end_date) {
       additionalFilters.created_at = {
         gte: new Date(query.start_date),
@@ -164,6 +168,8 @@ export class PropertyService implements IPropertyService {
         'hotel_address',
         'qp_username',
         'is_active',
+        'is_commissionable',
+        'commission',
         'expedia_id',
         'expedia_status',
         'booking_id',
