@@ -22,9 +22,10 @@ import {
   UpdatePropertyDto
 } from './property.dto'
 import type {
+  ImportPropertiesResult,
+  ImportPropertyRow,
   IPropertyRepository,
   IPropertyService,
-  ImportPropertiesResult,
   PropertyWithRelations
 } from './property.interface'
 
@@ -105,6 +106,24 @@ export class PropertyService implements IPropertyService {
     const additionalFilters: any = {}
     if (query.subportfolio_id)
       additionalFilters.subportfolio_id = query.subportfolio_id
+    if (query.previous_portfolio_id)
+      additionalFilters.previous_portfolio_id = query.previous_portfolio_id
+    if (query.card_descriptor)
+      additionalFilters.card_descriptor = { contains: query.card_descriptor, mode: 'insensitive' }
+    if (query.next_due_date)
+      additionalFilters.next_due_date = new Date(query.next_due_date)
+    if (query.new_domain_email)
+      additionalFilters.new_domain_email = { contains: query.new_domain_email, mode: 'insensitive' }
+    if (query.primary_case_email)
+      additionalFilters.primary_case_email = { contains: query.primary_case_email, mode: 'insensitive' }
+    if (query.portfolio_contact_email)
+      additionalFilters.portfolio_contact_email = { contains: query.portfolio_contact_email, mode: 'insensitive' }
+    if (query.description)
+      additionalFilters.description = { contains: query.description, mode: 'insensitive' }
+    if (query.hotel_address)
+      additionalFilters.hotel_address = { contains: query.hotel_address, mode: 'insensitive' }
+    if (query.qp_username)
+      additionalFilters.qp_username = { contains: query.qp_username, mode: 'insensitive' }
     if (query.expedia_id) additionalFilters.expedia_id = query.expedia_id
     if (query.expedia_status)
       additionalFilters.expedia_status = query.expedia_status
@@ -132,9 +151,18 @@ export class PropertyService implements IPropertyService {
     }
 
     const queryConfig = {
-      searchFields: ['name', 'address', 'description', 'hotel_address'],
+      searchFields: ['name', 'description', 'hotel_address'],
       filterableFields: [
         'subportfolio_id',
+        'previous_portfolio_id',
+        'card_descriptor',
+        'next_due_date',
+        'new_domain_email',
+        'primary_case_email',
+        'portfolio_contact_email',
+        'description',
+        'hotel_address',
+        'qp_username',
         'is_active',
         'expedia_id',
         'expedia_status',
@@ -193,38 +221,12 @@ export class PropertyService implements IPropertyService {
     const currentPage = usePagination ? query.page || 1 : 1
     const limit = usePagination ? take || 10 : data.length
 
-    // Debug: Log the masked value
     this.logger.debug(`masked value: ${JSON.stringify(query.masked)}, type: ${typeof query.masked}`)
 
-    // If masked=false, return decrypted credentials. Default (masked true or not provided) = encrypted/masked.
     const shouldDecrypt = query.masked === false
     this.logger.debug(`shouldDecrypt: ${shouldDecrypt}`)
-    
-    if (shouldDecrypt) {
-      // FEATURE (commented): When masked=false, validate user_name and user_password before returning decrypted data.
-      // Uncomment the block below to enable credential validation for unmasked requests.
-      /*
-      if (!query.user_name || !query.user_password) {
-        throw new BadRequestException(
-          'user_name and user_password are required when requesting unmasked credentials'
-        )
-      }
-      const authUser = await this.authRepository.findUserByEmail(query.user_name)
-      if (!authUser) {
-        throw new BadRequestException('Invalid user_name or user_password')
-      }
-      if (authUser.temp_password) {
-        throw new BadRequestException('Invalid user_name or user_password')
-      }
-      const isPasswordValid = await EncryptionUtil.comparePassword(
-        query.user_password,
-        authUser.password
-      )
-      if (!isPasswordValid) {
-        throw new BadRequestException('Invalid user_name or user_password')
-      }
-      */
 
+    if (shouldDecrypt) {
       const dataWithDecryptedCredentials = data.map(p =>
         this.decryptCredentialsForResponse(p)
       )
@@ -512,268 +514,107 @@ export class PropertyService implements IPropertyService {
     }
   }
 
+  // ──────────────────────────────────────────────────────────────────────────
+  // Import flow  (vnp-parser-backend thin-service convention)
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Service responsibilities:
+   *  1. Validate the file buffer.
+   *  2. Parse the Excel workbook into raw rows.
+   *  3. Detect column names (property, portfolio, sub-portfolio).
+   *  4. Map every row to a typed ImportPropertyRow, encrypting passwords inline.
+   *  5. Delegate ALL DB operations to repo.importProperties().
+   *
+   * The repository handles:
+   *  - Portfolio find-or-create
+   *  - Subportfolio find-or-create
+   *  - Property duplicate check / create
+   *  - Credentials create / merge
+   */
   async importFromExcel(
     file: Express.Multer.File,
     _user: IUserWithPermissions
   ): Promise<ImportPropertiesResult> {
+    // ── 1. Validate buffer ─────────────────────────────────────────────────
     const buffer = file.buffer || (file as any).buffer
     if (!buffer || buffer.length === 0) {
       throw new BadRequestException('File buffer is empty')
     }
 
+    // ── 2. Parse workbook ──────────────────────────────────────────────────
     const workbook = XLSX.read(buffer, { type: 'buffer' })
     const sheetName = workbook.SheetNames[0]
     const worksheet = workbook.Sheets[sheetName]
-    const data = XLSX.utils.sheet_to_json(worksheet)
+    const rawRows = XLSX.utils.sheet_to_json(worksheet) as Record<string, any>[]
 
-    if (!data || data.length === 0) {
+    if (!rawRows || rawRows.length === 0) {
       throw new BadRequestException('Excel file is empty or invalid')
     }
 
-    const headers = Object.keys(data[0] as object)
+    // ── 3. Detect column names ─────────────────────────────────────────────
+    const headers = Object.keys(rawRows[0])
     const propertyNameCol =
       headers.find(
-        h =>
-          h.toLowerCase() === 'property name' || h.toLowerCase() === 'property'
+        (h) => h.toLowerCase() === 'property name' || h.toLowerCase() === 'property'
       ) || 'Property Name'
+
     if (!headers.includes(propertyNameCol)) {
       throw new BadRequestException(
-        'Excel must contain "Property Name" or "Property" column'
+        'Excel must contain a "Property Name" or "Property" column'
       )
     }
 
     const portfolioCol =
-      headers.find(h => h.toLowerCase() === 'portfolio') || 'Portfolio'
+      headers.find((h) => h.toLowerCase() === 'portfolio') || null
     const subPortfolioCol =
-      headers.find(h =>
+      headers.find((h) =>
         ['sub portfolio', 'subportfolio'].includes(h.toLowerCase())
-      ) || 'Sub Portfolio'
+      ) || null
 
-    const defaultServiceType = await this.prisma.serviceType.findFirst({
-      where: { is_active: true },
-      orderBy: { order: 'asc' }
-    })
+    this.logger.log(
+      `Parsing ${rawRows.length} rows. propertyCol="${propertyNameCol}", portfolioCol="${portfolioCol}", subPortfolioCol="${subPortfolioCol}"`
+    )
 
-    if (!defaultServiceType) {
-      throw new BadRequestException(
-        'No active Service Type found. Please configure it first.'
-      )
-    }
+    // ── 4. Map rows → typed ImportPropertyRow (passwords encrypted here) ──
+    const rows: ImportPropertyRow[] = rawRows
+      .map((r) => {
+        const propertyName = r[propertyNameCol] ? String(r[propertyNameCol]).trim() : ''
+        if (!propertyName) return null
 
-    let portfoliosCreated = 0
-    let subportfoliosCreated = 0
-    let propertiesCreated = 0
-    let credentialsCreated = 0
-    const portfolios: any[] = []
-    const subportfolios: any[] = []
-    const properties: any[] = []
+        const credentials = this.buildCredentialsFromRow(r)
 
-    if (headers.includes(portfolioCol)) {
-      const portfolioNames = [
-        ...new Set(
-          data
-            .map(r => {
-              const v = (r as any)[portfolioCol]
-              return v && String(v).trim() ? String(v).trim() : null
-            })
-            .filter(Boolean)
-        )
-      ] as string[]
+        return {
+          propertyName,
+          portfolioName: portfolioCol && r[portfolioCol]
+            ? String(r[portfolioCol]).trim()
+            : undefined,
+          subPortfolioName: subPortfolioCol && r[subPortfolioCol]
+            ? String(r[subPortfolioCol]).trim()
+            : undefined,
+          isActive: true,
+          expediaStatus: r['Expedia Status'] || 'Access Required',
+          bookingStatus: r['Booking Status'] || 'Access Required',
+          agodaStatus: r['Agoda Status'] || 'Access Required',
+          expediaId: r['Expedia ID'] ? Number(r['Expedia ID']) : undefined,
+          bookingId: r['Booking ID'] ? Number(r['Booking ID']) : undefined,
+          agodaId: r['Agoda ID'] ? Number(r['Agoda ID']) : undefined,
+          webmailPassword: r['Webmail Password']
+            ? this.encryptionUtil.encrypt(String(r['Webmail Password']).trim())
+            : undefined,
+          credentials
+        } satisfies ImportPropertyRow
+      })
+      .filter(Boolean) as ImportPropertyRow[]
 
-      for (const name of portfolioNames) {
-        const existing = await this.prisma.portfolio.findUnique({
-          where: { name }
-        })
-        if (existing) {
-          portfolios.push(existing)
-          continue
-        }
-        const created = await this.prisma.portfolio.create({
-          data: {
-            name,
-            service_type_id: defaultServiceType.id,
-            is_active: true,
-            is_commissionable: false
-          },
-          include: { serviceType: true }
-        })
-        portfolios.push(created)
-        portfoliosCreated++
-        this.logger.log(`Created portfolio: ${name}`)
-      }
-    }
-
-    if (headers.includes(subPortfolioCol) && headers.includes(portfolioCol)) {
-      const subData = data
-        .map(r => ({
-          subName: String((r as any)[subPortfolioCol] || '').trim(),
-          portfolioName: String((r as any)[portfolioCol] || '').trim()
-        }))
-        .filter(x => x.subName && x.portfolioName)
-
-      const uniqueSubs = Array.from(
-        new Map(
-          subData.map(x => [`${x.portfolioName}::${x.subName}`, x])
-        ).values()
-      )
-
-      for (const { subName, portfolioName } of uniqueSubs) {
-        const portfolio = portfolios.find(p => p.name === portfolioName)
-        if (!portfolio) continue
-
-        const existing = await this.prisma.subportfolio.findFirst({
-          where: { name: subName, portfolio_id: portfolio.id }
-        })
-        if (existing) {
-          subportfolios.push(existing)
-          continue
-        }
-
-        try {
-          const created = await this.prisma.subportfolio.create({
-            data: {
-              name: subName,
-              portfolio_id: portfolio.id,
-              description: null
-            },
-            include: { portfolio: true }
-          })
-          subportfolios.push(created)
-          subportfoliosCreated++
-          this.logger.log(
-            `Created subportfolio: ${subName} under ${portfolioName}`
-          )
-        } catch (err: any) {
-          if (err.code === 'P2002') {
-            const existingByName = await this.prisma.subportfolio.findUnique({
-              where: { name: subName }
-            })
-            if (existingByName) subportfolios.push(existingByName)
-          } else throw err
-        }
-      }
-    }
-
-    for (const row of data) {
-      const r = row as any
-      const propertyName = r[propertyNameCol]
-        ? String(r[propertyNameCol]).trim()
-        : ''
-      if (!propertyName) continue
-
-      const portfolioName = r[portfolioCol]
-        ? String(r[portfolioCol]).trim()
-        : null
-      const subPortfolioName = r[subPortfolioCol]
-        ? String(r[subPortfolioCol]).trim()
-        : null
-
-      let portfolioId: string
-      let subportfolioId: string | null = null
-
-      if (portfolioName) {
-        const portfolio = portfolios.find(p => p.name === portfolioName)
-        if (!portfolio) {
-          this.logger.warn(
-            `Portfolio "${portfolioName}" not found for property "${propertyName}", skipping`
-          )
-          continue
-        }
-        portfolioId = portfolio.id
-
-        if (subPortfolioName) {
-          const sub = subportfolios.find(
-            s => s.name === subPortfolioName && s.portfolio_id === portfolioId
-          )
-          if (sub) subportfolioId = sub.id
-        }
-      } else {
-        const firstPortfolio = await this.prisma.portfolio.findFirst({
-          orderBy: { created_at: 'asc' }
-        })
-        if (!firstPortfolio) {
-          this.logger.warn(
-            'No portfolio in system, cannot create property without portfolio'
-          )
-          continue
-        }
-        portfolioId = firstPortfolio.id
-      }
-
-      const existingProp = await this.repo.findByName(propertyName)
-      if (existingProp) {
-        this.logger.debug(
-          `Property "${propertyName}" already exists, merging credentials if any`
-        )
-        const creds = this.buildCredentialsFromRow(r)
-        if (creds && Object.keys(creds).length > 0) {
-          try {
-            const existingCreds =
-              await this.credentialsService.findByPropertyId(existingProp.id)
-            if (existingCreds) {
-              await this.credentialsService.update(existingCreds.id, creds)
-            } else {
-              await this.credentialsService.create({
-                ...creds,
-                property_id: existingProp.id
-              })
-            }
-            credentialsCreated++
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          } catch (_) {
-            // ignore
-          }
-        }
-        continue
-      }
-
-      const propertyData: CreatePropertyDto = {
-        name: propertyName,
-        portfolio_id: portfolioId,
-        subportfolio_id: subportfolioId || undefined,
-        is_active: true,
-        expedia_status: r['Expedia Status'] || 'Access Required',
-        booking_status: r['Booking Status'] || 'Access Required',
-        agoda_status: r['Agoda Status'] || 'Access Required',
-        expedia_id: r['Expedia ID'] ? Number(r['Expedia ID']) : undefined,
-        booking_id: r['Booking ID'] ? Number(r['Booking ID']) : undefined,
-        agoda_id: r['Agoda ID'] ? Number(r['Agoda ID']) : undefined,
-        webmail_password: r['Webmail Password']
-          ? String(r['Webmail Password']).trim()
-          : undefined,
-        credentials: this.buildCredentialsFromRow(r)
-      }
-
-      try {
-        const created = await this.create(propertyData, _user)
-        properties.push(created)
-        propertiesCreated++
-        if (
-          propertyData.credentials &&
-          Object.keys(propertyData.credentials).length > 0
-        ) {
-          credentialsCreated++
-        }
-        this.logger.log(`Created property: ${propertyName}`)
-      } catch (err: any) {
-        this.logger.error(
-          `Error creating property "${propertyName}": ${err.message}`
-        )
-        throw err
-      }
-    }
-
-    return {
-      portfoliosCreated,
-      subportfoliosCreated,
-      propertiesCreated,
-      credentialsCreated,
-      portfolios,
-      subportfolios,
-      properties
-    }
+    // ── 5. Delegate all DB operations to the repository ───────────────────
+    return this.repo.importProperties(rows)
   }
 
+  /**
+   * Extracts OTA credential columns from a raw Excel row.
+   * Passwords are encrypted at call time so the repository stores them safely.
+   */
   private buildCredentialsFromRow(r: any): Record<string, any> | undefined {
     const creds: Record<string, any> = {}
     const map: [string, string][] = [
@@ -800,7 +641,7 @@ export class PropertyService implements IPropertyService {
     if (r['Multiple Portfolio Emails']) {
       const emails = String(r['Multiple Portfolio Emails'])
         .split(',')
-        .map(e => e.trim())
+        .map((e) => e.trim())
         .filter(Boolean)
       if (emails.length) creds.multiplePortfolioEmails = emails
     }

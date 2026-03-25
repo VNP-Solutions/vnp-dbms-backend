@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
+import { PortfolioModule } from '../portfolio/portfolio.module'
 import { PrismaService } from '../prisma/prisma.service'
 import { ExternalPortfolioController } from './external-portfolio.controller'
 import { ExternalPortfolioService } from './external-portfolio.service'
@@ -9,7 +10,7 @@ import { ExternalSubportfolioController } from './external-subportfolio.controll
 import { ExternalSubportfolioService } from './external-subportfolio.service'
 
 @Module({
-  imports: [ConfigModule],
+  imports: [ConfigModule, PortfolioModule],
   controllers: [
     ExternalPortfolioController,
     ExternalPropertyController,

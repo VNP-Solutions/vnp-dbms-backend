@@ -8,6 +8,51 @@ export type PropertyWithRelations = Property & {
   subportfolio: { id: string; name: string } | null
 }
 
+/**
+ * A single typed row fed from the service (after Excel parsing)
+ * into the repository's importProperties method.
+ */
+export interface ImportPropertyRow {
+  propertyName: string
+  portfolioName?: string
+  subPortfolioName?: string
+  isActive?: boolean
+  expediaStatus?: string
+  bookingStatus?: string
+  agodaStatus?: string
+  expediaId?: number
+  bookingId?: number
+  agodaId?: number
+  webmailPassword?: string
+  // Credentials (passwords should be encrypted before passing here)
+  credentials?: {
+    expediaUsername?: string
+    expediaPassword?: string
+    agodaUsername?: string
+    agodaPassword?: string
+    bookingUsername?: string
+    bookingPassword?: string
+    expediaEmailAssociated?: string
+    propertyContactEmail?: string
+    portfolioContactEmail?: string
+    multiplePortfolioEmails?: string[]
+  }
+}
+
+export interface ImportPropertiesResult {
+  portfoliosCreated: number
+  subportfoliosCreated: number
+  propertiesCreated: number
+  credentialsCreated: number
+  portfolios: any[]
+  subportfolios: any[]
+  properties: any[]
+}
+
+export interface GetPropertyCredentialResult {
+  credential: Record<string, string>
+}
+
 export interface IPropertyRepository {
   create(data: CreatePropertyDto): Promise<PropertyWithRelations>
   findAll(queryOptions: { where: any; skip?: number; take?: number; orderBy?: any }): Promise<PropertyWithRelations[]>
@@ -23,20 +68,12 @@ export interface IPropertyRepository {
     portfolios: { id: string; name: string }[]
     subportfolios: { id: string; name: string; portfolio_id: string }[]
   }>
-}
-
-export interface ImportPropertiesResult {
-  portfoliosCreated: number
-  subportfoliosCreated: number
-  propertiesCreated: number
-  credentialsCreated: number
-  portfolios: any[]
-  subportfolios: any[]
-  properties: any[]
-}
-
-export interface GetPropertyCredentialResult {
-  credential: Record<string, string>
+  // Import helpers — all DB access for bulk-import lives in the repository
+  findDefaultServiceTypeId(): Promise<string | null>
+  findOrCreatePortfolio(name: string, defaultServiceTypeId: string): Promise<{ id: string; name: string }>
+  findOrCreateSubportfolio(name: string, portfolioId: string): Promise<{ id: string; name: string; portfolio_id: string }>
+  findFirstPortfolio(): Promise<{ id: string; name: string } | null>
+  importProperties(rows: ImportPropertyRow[]): Promise<ImportPropertiesResult>
 }
 
 export interface IPropertyService {
