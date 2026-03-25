@@ -222,12 +222,20 @@ export class PortfolioService implements IPortfolioService {
         }
         // If no serviceTypeCol / empty cell → keep defaultServiceType.id
 
-        const is_active = row?.['Is Active'] !== undefined
-          ? String(row['Is Active']).toLowerCase() === 'true' || row['Is Active'] === true
+        const valActive = row?.['Active status']
+        const is_active = valActive !== undefined
+          ? ['active', 'yes', 'true', '1'].includes(String(valActive).toLowerCase().trim())
           : true
-        const is_commissionable = row?.['Is Commissionable'] !== undefined
-          ? String(row['Is Commissionable']).toLowerCase() === 'true' || row['Is Commissionable'] === true
+
+        const valCommissionable = row?.['Commissionable']
+        const is_commissionable = valCommissionable !== undefined
+          ? ['yes', 'true', '1'].includes(String(valCommissionable).toLowerCase().trim())
           : false
+
+        const valContractSigned = row?.['Contract Signed']
+        const contract_signed = valContractSigned !== undefined
+          ? ['yes', 'true', '1'].includes(String(valContractSigned).toLowerCase().trim())
+          : undefined
 
         const dto: CreatePortfolioDto = {
           name,
@@ -245,11 +253,8 @@ export class PortfolioService implements IPortfolioService {
             ? String(row['Portfolio Contact Phone']).trim()
             : undefined,
           commission: row?.['Commission'] != null ? Number(row['Commission']) : undefined,
-          attachment: row?.['Attachment'] ? String(row['Attachment']).trim() : undefined,
-          contract_signed:
-            row?.['Contract Signed'] !== undefined
-              ? String(row['Contract Signed']).toLowerCase() === 'true' || row['Contract Signed'] === true
-              : undefined
+          attachment: row?.['Documents'] ? String(row['Documents']).trim() : undefined,
+          contract_signed
         }
 
         const created = await this.portfolioRepository.create(dto)
