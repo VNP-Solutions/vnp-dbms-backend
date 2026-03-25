@@ -179,6 +179,7 @@ export class PortfolioService implements IPortfolioService {
 
     let portfoliosCreated = 0
     const portfolios: any[] = []
+    const skipped_portfolios: any[] = []
     const portfolioNames = [
       ...new Set(
         data
@@ -193,14 +194,22 @@ export class PortfolioService implements IPortfolioService {
     this.logger.log(`Processing ${portfolioNames.length} unique portfolios from ${data.length} rows`)
 
     for (const name of portfolioNames) {
+      const rowIndex = data.findIndex((r) => String((r as any)[portfolioCol]).trim() === name)
+      const row_no = rowIndex >= 0 ? rowIndex + 2 : 0 // +2 accounting for 0-index and header row
+
       try {
         const existing = await this.portfolioRepository.findByName(name)
         if (existing) {
           this.logger.debug(`Portfolio "${name}" already exists, skipping`)
+          skipped_portfolios.push({
+            row_no,
+            portfolio_name: name,
+            reason: 'Portfolio already exists'
+          })
           continue
         }
 
-        const row = data.find((r) => String((r as any)[portfolioCol]).trim() === name) as any
+        const row = data[rowIndex] as any
 
         let service_type_id = defaultServiceType.id
 
@@ -216,6 +225,11 @@ export class PortfolioService implements IPortfolioService {
             this.logger.warn(
               `ServiceType "${stName}" not found for portfolio "${name}" — skipping`
             )
+            skipped_portfolios.push({
+              row_no,
+              portfolio_name: name,
+              reason: `ServiceType "${stName}" not found`
+            })
             continue
           }
           service_type_id = st.id
@@ -263,10 +277,15 @@ export class PortfolioService implements IPortfolioService {
         this.logger.log(`Created portfolio: ${name}`)
       } catch (err: any) {
         this.logger.error(`Error creating portfolio "${name}": ${err.message}`)
-        throw err
+        skipped_portfolios.push({
+          row_no,
+          portfolio_name: name,
+          reason: `Error: ${err.message}`
+        })
+        continue
       }
     }
 
-    return { portfoliosCreated, portfolios }
+    return { portfoliosCreated, portfolios, skipped_portfolios }
   }
 }
