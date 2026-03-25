@@ -204,17 +204,23 @@ export class PortfolioService implements IPortfolioService {
 
         let service_type_id = defaultServiceType.id
 
+        // Service type column value is always a human-readable name (e.g. "OTA").
+        // Never try to match it as an ObjectId.
         if (row?.[serviceTypeCol]) {
+          const stName = String(row[serviceTypeCol]).trim()
           const st = await this.prisma.serviceType.findFirst({
-            where: {
-              OR: [
-                { type: { equals: String(row[serviceTypeCol]).trim(), mode: 'insensitive' } },
-                { id: String(row[serviceTypeCol]).trim() }
-              ]
-            }
+            where: { type: { equals: stName, mode: 'insensitive' } }
           })
-          if (st) service_type_id = st.id
+          if (!st) {
+            // Name provided but doesn't match any ServiceType → skip this portfolio
+            this.logger.warn(
+              `ServiceType "${stName}" not found for portfolio "${name}" — skipping`
+            )
+            continue
+          }
+          service_type_id = st.id
         }
+        // If no serviceTypeCol / empty cell → keep defaultServiceType.id
 
         const is_active = row?.['Is Active'] !== undefined
           ? String(row['Is Active']).toLowerCase() === 'true' || row['Is Active'] === true
