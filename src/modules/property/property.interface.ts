@@ -16,6 +16,8 @@ export interface ImportPropertyRow {
   propertyName: string
   portfolioName?: string
   subPortfolioName?: string
+  /** Human-readable Service Type name (e.g. "OTA"). Used when auto-creating a portfolio. */
+  serviceTypeName?: string
   isActive?: boolean
   expediaStatus?: string
   bookingStatus?: string
@@ -70,7 +72,7 @@ export interface IPropertyRepository {
   }>
   // Import helpers — all DB access for bulk-import lives in the repository
   findDefaultServiceTypeId(): Promise<string | null>
-  findOrCreatePortfolio(name: string, defaultServiceTypeId: string): Promise<{ id: string; name: string }>
+  findOrCreatePortfolio(name: string, defaultServiceTypeId: string, serviceTypeName?: string): Promise<{ id: string; name: string } | null>
   findOrCreateSubportfolio(name: string, portfolioId: string): Promise<{ id: string; name: string; portfolio_id: string }>
   findFirstPortfolio(): Promise<{ id: string; name: string } | null>
   importProperties(rows: ImportPropertyRow[]): Promise<ImportPropertiesResult>

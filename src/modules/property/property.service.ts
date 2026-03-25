@@ -532,7 +532,7 @@ export class PropertyService implements IPropertyService {
    *  - Property duplicate check / create
    *  - Credentials create / merge
    */
-  async importFromExcel(
+  importFromExcel(
     file: Express.Multer.File,
     _user: IUserWithPermissions
   ): Promise<ImportPropertiesResult> {
@@ -546,7 +546,7 @@ export class PropertyService implements IPropertyService {
     const workbook = XLSX.read(buffer, { type: 'buffer' })
     const sheetName = workbook.SheetNames[0]
     const worksheet = workbook.Sheets[sheetName]
-    const rawRows = XLSX.utils.sheet_to_json(worksheet) as Record<string, any>[]
+    const rawRows: Record<string, any>[] = XLSX.utils.sheet_to_json(worksheet)
 
     if (!rawRows || rawRows.length === 0) {
       throw new BadRequestException('Excel file is empty or invalid')
@@ -571,9 +571,13 @@ export class PropertyService implements IPropertyService {
       headers.find((h) =>
         ['sub portfolio', 'subportfolio'].includes(h.toLowerCase())
       ) || null
+    const serviceTypeCol =
+      headers.find((h) =>
+        h.toLowerCase() === 'service type' || h.toLowerCase() === 'servicetype'
+      ) || null
 
     this.logger.log(
-      `Parsing ${rawRows.length} rows. propertyCol="${propertyNameCol}", portfolioCol="${portfolioCol}", subPortfolioCol="${subPortfolioCol}"`
+      `Parsing ${rawRows.length} rows. propertyCol="${propertyNameCol}", portfolioCol="${portfolioCol}", subPortfolioCol="${subPortfolioCol}", serviceTypeCol="${serviceTypeCol}"`
     )
 
     // ── 4. Map rows → typed ImportPropertyRow (passwords encrypted here) ──
@@ -601,6 +605,9 @@ export class PropertyService implements IPropertyService {
           agodaId: r['Agoda ID'] ? Number(r['Agoda ID']) : undefined,
           webmailPassword: r['Webmail Password']
             ? this.encryptionUtil.encrypt(String(r['Webmail Password']).trim())
+            : undefined,
+          serviceTypeName: serviceTypeCol && r[serviceTypeCol]
+            ? String(r[serviceTypeCol]).trim()
             : undefined,
           credentials
         } satisfies ImportPropertyRow

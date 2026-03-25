@@ -223,22 +223,42 @@ export class PropertyRepository implements IPropertyRepository {
 
   /**
    * Finds a portfolio by name; creates it if absent.
-   * `defaultServiceTypeId` is used only when creating a new portfolio.
+   *
+   * - If portfolio already exists → return it (regardless of service type).
+   * - If `serviceTypeName` is provided → look it up by name (case-insensitive).
+   *   - Found → use its ID to create.
+   *   - NOT found → return null so the caller can skip.
+   * - If `serviceTypeName` is absent → fall back to `defaultServiceTypeId`.
    */
   async findOrCreatePortfolio(
     name: string,
-    defaultServiceTypeId: string
-  ): Promise<{ id: string; name: string }> {
+    defaultServiceTypeId: string,
+    serviceTypeName?: string
+  ): Promise<{ id: string; name: string } | null> {
     const existing = await this.prisma.portfolio.findUnique({
       where: { name },
       select: { id: true, name: true }
     })
     if (existing) return existing
 
+    let service_type_id = defaultServiceTypeId
+
+    if (serviceTypeName) {
+      const st = await this.prisma.serviceType.findFirst({
+        where: { type: { equals: serviceTypeName.trim(), mode: 'insensitive' } },
+        select: { id: true }
+      })
+      if (!st) {
+        // Named service type not found → caller must skip
+        return null
+      }
+      service_type_id = st.id
+    }
+
     return this.prisma.portfolio.create({
       data: {
         name,
-        service_type_id: defaultServiceTypeId,
+        service_type_id,
         is_active: true,
         is_commissionable: false
       },
@@ -317,9 +337,30 @@ export class PropertyRepository implements IPropertyRepository {
 
     // ── 2. Collect unique portfolio names and resolve/create ───────────────
     const uniquePortfolioNames = [...new Set(rows.map((r) => r.portfolioName).filter(Boolean))] as string[]
+    // Build a map of portfolio name → serviceTypeName (from first row carrying that portfolio)
+    const portfolioServiceTypeMap = new Map<string, string | undefined>(
+      uniquePortfolioNames.map((name) => {
+        const row = rows.find((r) => r.portfolioName === name)
+        return [name, row?.serviceTypeName]
+      })
+    )
+    const skippedPortfolios = new Set<string>()
+
     for (const name of uniquePortfolioNames) {
       const before = await this.prisma.portfolio.count({ where: { name } })
-      const portfolio = await this.findOrCreatePortfolio(name, defaultServiceTypeId)
+      const portfolio = await this.findOrCreatePortfolio(
+        name,
+        defaultServiceTypeId,
+        portfolioServiceTypeMap.get(name)
+      )
+      if (!portfolio) {
+        // Named ServiceType not found → skip this portfolio and all its properties
+        logger.warn(
+          `ServiceType "${portfolioServiceTypeMap.get(name)}" not found — skipping portfolio "${name}" and its properties`
+        )
+        skippedPortfolios.add(name)
+        continue
+      }
       portfolios.set(name, portfolio)
       if (before === 0) {
         portfoliosCreated++
