@@ -226,6 +226,19 @@ export class PropertyService implements IPropertyService {
           : { AND: [builtWhere, portfolioCondition] }
     }
 
+    if (query.portfolio_name) {
+      const portfolioNameCondition = {
+        OR: [
+          { portfolio: { name: { contains: query.portfolio_name, mode: 'insensitive' } } },
+          { subportfolio: { portfolio: { name: { contains: query.portfolio_name, mode: 'insensitive' } } } }
+        ]
+      }
+      where =
+        Object.keys(where).length === 0
+          ? portfolioNameCondition
+          : { AND: [where, portfolioNameCondition] }
+    }
+
     this.logger.debug(`Final where clause: ${JSON.stringify(where, null, 2)}`)
 
     const [data, total] = await Promise.all([

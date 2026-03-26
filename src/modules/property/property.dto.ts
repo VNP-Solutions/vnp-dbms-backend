@@ -294,6 +294,14 @@ export class PropertyQueryDto extends QueryDto {
   portfolio_id?: string
 
   @ApiPropertyOptional({
+    description: 'Filter by portfolio name (case-insensitive partial match)',
+    example: 'Portfolio A'
+  })
+  @IsOptional()
+  @IsString()
+  portfolio_name?: string
+
+  @ApiPropertyOptional({
     description: 'Filter by subportfolio ID',
     example: '507f1f77bcf86cd799439014'
   })
