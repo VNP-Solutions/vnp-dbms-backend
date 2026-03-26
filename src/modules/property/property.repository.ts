@@ -315,4 +315,45 @@ export class PropertyRepository implements IPropertyRepository {
       skippedProperties
     }
   }
+
+  async bulkDelete(ids: string[]): Promise<import('./property.interface').BulkDeleteResult> {
+    const logger = new Logger('PropertyRepository')
+    const success: Array<{ id: string; name: string }> = []
+    const skipped: Array<{ id: string; name?: string; reason: string }> = []
+
+    for (const id of ids) {
+      try {
+        const property = await this.prisma.property.findUnique({
+          where: { id },
+          select: { id: true, name: true }
+        })
+
+        if (!property) {
+          skipped.push({
+            id,
+            reason: 'Property not found'
+          })
+          continue
+        }
+
+        await this.prisma.property.delete({ where: { id } })
+        success.push({ id: property.id, name: property.name })
+        logger.log(`Property "${property.name}" (${id}) deleted successfully`)
+      } catch (err: any) {
+        logger.error(`Error deleting property ${id}: ${err.message}`)
+        skipped.push({
+          id,
+          reason: `Error: ${err.message}`
+        })
+      }
+    }
+
+    return {
+      success,
+      skipped,
+      totalProcessed: ids.length,
+      successCount: success.length,
+      skippedCount: skipped.length
+    }
+  }
 }

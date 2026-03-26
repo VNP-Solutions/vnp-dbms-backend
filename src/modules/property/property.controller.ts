@@ -23,6 +23,7 @@ import { Public } from '../auth/decorators/public.decorator'
 import { CurrentUser } from '../auth/decorators/current-user.decorator'
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
 import {
+  BulkDeletePropertyDto,
   CreatePropertyDto,
   GetPropertyCredentialDto,
   PropertyQueryDto,
@@ -172,5 +173,49 @@ export class PropertyController {
   @ApiResponse({ status: 404, description: 'Property not found' })
   remove(@Param('id') id: string, @CurrentUser() user: IUserWithPermissions) {
     return this.propertyService.remove(id, user)
+  }
+
+  @Post('bulk-delete')
+  @RequirePermission(ModuleType.PROPERTY, PermissionAction.DELETE)
+  @ApiOperation({
+    summary: 'Bulk delete properties',
+    description: 'Delete multiple properties by their IDs. Returns list of successfully deleted and skipped properties with reasons.'
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Bulk delete completed',
+    schema: {
+      type: 'object',
+      properties: {
+        success: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              name: { type: 'string' }
+            }
+          }
+        },
+        skipped: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              name: { type: 'string', nullable: true },
+              reason: { type: 'string' }
+            }
+          }
+        },
+        totalProcessed: { type: 'number' },
+        successCount: { type: 'number' },
+        skippedCount: { type: 'number' }
+      }
+    }
+  })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  bulkDelete(@Body() dto: BulkDeletePropertyDto, @CurrentUser() user: IUserWithPermissions) {
+    return this.propertyService.bulkDelete(dto.ids, user)
   }
 }

@@ -436,3 +436,15 @@ export class PropertyQueryDto extends QueryDto {
   @IsString()
   user_password?: string
 }
+
+export class BulkDeletePropertyDto {
+  @ApiProperty({
+    description: 'Array of property IDs to delete',
+    example: ['507f1f77bcf86cd799439011', '507f1f77bcf86cd799439012'],
+    type: [String]
+  })
+  @IsArray()
+  @IsString({ each: true })
+  @IsNotEmpty({ each: true })
+  ids: string[]
+}

@@ -254,8 +254,13 @@ export class PropertyService implements IPropertyService {
       }
     }
 
+    // If masked is true or undefined, replace encrypted values with asterisks
+    const dataWithMaskedCredentials = data.map(p =>
+      this.maskCredentialsForResponse(p)
+    )
+
     return {
-      data,
+      data: dataWithMaskedCredentials,
       metadata: {
         totalDocuments: total,
         currentPage,
@@ -310,6 +315,34 @@ export class PropertyService implements IPropertyService {
           }
         }
         return decrypted
+      })
+    }
+    return result
+  }
+
+  private maskCredentialsForResponse(
+    property: PropertyWithRelations
+  ): PropertyWithRelations {
+    const result = { ...property } as any
+    const prop = property as any
+    const MASK = '********'
+    
+    if (prop.qp_password) {
+      result.qp_password = MASK
+    }
+    if (prop.qp_api_key) {
+      result.qp_api_key = MASK
+    }
+    if (prop.webmail_password) {
+      result.webmail_password = MASK
+    }
+    if (prop.credentials && Array.isArray(prop.credentials)) {
+      result.credentials = (prop.credentials as any[]).map((cred: any) => {
+        const masked: any = { ...cred }
+        if (cred.expediaPassword) masked.expediaPassword = MASK
+        if (cred.agodaPassword) masked.agodaPassword = MASK
+        if (cred.bookingPassword) masked.bookingPassword = MASK
+        return masked
       })
     }
     return result
@@ -610,5 +643,56 @@ export class PropertyService implements IPropertyService {
       .filter(Boolean) as ImportPropertyRow[]
 
     return this.repo.importProperties(rows)
+  }
+
+  async bulkDelete(ids: string[], user: IUserWithPermissions): Promise<import('./property.interface').BulkDeleteResult> {
+    this.logger.log(`User ${user.email} attempting to bulk delete ${ids.length} properties`)
+
+    const accessibleIds = await this.repo.getAccessiblePropertyIds(user.id)
+    
+    const success: Array<{ id: string; name: string }> = []
+    const skipped: Array<{ id: string; name?: string; reason: string }> = []
+
+    for (const id of ids) {
+      if (accessibleIds !== 'all' && !accessibleIds.includes(id)) {
+        skipped.push({
+          id,
+          reason: 'No access to this property'
+        })
+        continue
+      }
+
+      try {
+        const property = await this.repo.findById(id)
+        
+        if (!property) {
+          skipped.push({
+            id,
+            reason: 'Property not found'
+          })
+          continue
+        }
+
+        await this.repo.delete(id)
+        success.push({ id: property.id, name: property.name })
+      } catch (err: any) {
+        this.logger.error(`Error deleting property ${id}: ${err.message}`)
+        skipped.push({
+          id,
+          name: undefined,
+          reason: `Error: ${err.message}`
+        })
+      }
+    }
+
+    this.logger.log(`Bulk delete completed: ${success.length} success, ${skipped.length} skipped`)
+
+    return {
+      success,
+      skipped,
+      totalProcessed: ids.length,
+      successCount: success.length,
+      skippedCount: skipped.length
+    }
   }
 }
