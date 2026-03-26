@@ -104,6 +104,8 @@ export class PropertyService implements IPropertyService {
     }
 
     const additionalFilters: any = {}
+    if (query.name)
+      additionalFilters.name = { contains: query.name, mode: 'insensitive' }
     if (query.subportfolio_id)
       additionalFilters.subportfolio_id = query.subportfolio_id
     if (query.previous_portfolio_id)
@@ -163,6 +165,7 @@ export class PropertyService implements IPropertyService {
     const queryConfig = {
       searchFields: ['name', 'description', 'hotel_address'],
       filterableFields: [
+        'name',
         'subportfolio_id',
         'previous_portfolio_id',
         'card_descriptor',
