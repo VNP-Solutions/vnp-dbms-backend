@@ -278,6 +278,14 @@ export class GetPropertyCredentialDto {
 
 export class PropertyQueryDto extends QueryDto {
   @ApiPropertyOptional({
+    description: 'Filter by property name (case-insensitive partial match)',
+    example: 'Hotel'
+  })
+  @IsOptional()
+  @IsString()
+  name?: string
+
+  @ApiPropertyOptional({
     description: 'Filter by portfolio ID',
     example: '507f1f77bcf86cd799439012'
   })
