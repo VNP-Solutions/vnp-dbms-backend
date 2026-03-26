@@ -7,7 +7,6 @@ import {
   IsDateString,
   IsIn,
   IsNotEmpty,
-  IsNumber,
   IsOptional,
   IsString,
   ValidateNested
@@ -406,40 +405,16 @@ export class PropertyQueryDto extends QueryDto {
   access_lost?: boolean
 
   @ApiPropertyOptional({
-    description: 'Filter by commissionable status',
-    example: true
-  })
-  @IsOptional()
-  @Transform(({ value }) => {
-    if (typeof value === 'string') {
-      if (value.toLowerCase() === 'true' || value === '1') return true
-      if (value.toLowerCase() === 'false' || value === '0') return false
-    }
-    return value
-  })
-  @IsBoolean()
-  is_commissionable?: boolean
-
-  @ApiPropertyOptional({ description: 'Filter by exact commission value', example: 10 })
-  @IsOptional()
-  @Transform(({ value }) => (value != null ? Number(value) : value))
-  @IsNumber()
-  commission?: number
-
-
-  @ApiPropertyOptional({
     description:
       'If true (default), credentials are masked/encrypted. If false, credentials are decrypted. When false, user_name and user_password may be required for validation.',
     example: true
   })
   @IsOptional()
   @Transform(({ value }) => {
-    // Handle string booleans from query params/Swagger
     if (typeof value === 'string') {
       if (value.toLowerCase() === 'true' || value === '1') return true
       if (value.toLowerCase() === 'false' || value === '0') return false
     }
-    // Return as-is if already boolean or other type
     return value
   })
   @IsBoolean()

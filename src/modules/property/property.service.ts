@@ -135,10 +135,6 @@ export class PropertyService implements IPropertyService {
     if (query.is_active !== undefined && query.is_active !== 'All') {
       additionalFilters.is_active = query.is_active
     }
-    if (query.is_commissionable !== undefined)
-      additionalFilters.is_commissionable = query.is_commissionable
-    if (query.commission != null)
-      additionalFilters.commission = query.commission
     if (query.start_date && query.end_date) {
       additionalFilters.created_at = {
         gte: new Date(query.start_date),
@@ -168,8 +164,6 @@ export class PropertyService implements IPropertyService {
         'hotel_address',
         'qp_username',
         'is_active',
-        'is_commissionable',
-        'commission',
         'expedia_id',
         'expedia_status',
         'booking_id',
@@ -528,27 +522,18 @@ export class PropertyService implements IPropertyService {
    * Service responsibilities:
    *  1. Validate the file buffer.
    *  2. Parse the Excel workbook into raw rows.
-   *  3. Detect column names (property, portfolio, sub-portfolio).
-   *  4. Map every row to a typed ImportPropertyRow, encrypting passwords inline.
-   *  5. Delegate ALL DB operations to repo.importProperties().
-   *
-   * The repository handles:
-   *  - Portfolio find-or-create
-   *  - Subportfolio find-or-create
-   *  - Property duplicate check / create
-   *  - Credentials create / merge
+   *  3. Map every row to a typed ImportPropertyRow, encrypting passwords inline.
+   *  4. Delegate ALL DB operations to repo.importProperties().
    */
   importFromExcel(
     file: Express.Multer.File,
     _user: IUserWithPermissions
   ): Promise<ImportPropertiesResult> {
-    // ── 1. Validate buffer ─────────────────────────────────────────────────
     const buffer = file.buffer || (file as any).buffer
     if (!buffer || buffer.length === 0) {
       throw new BadRequestException('File buffer is empty')
     }
 
-    // ── 2. Parse workbook ──────────────────────────────────────────────────
     const workbook = XLSX.read(buffer, { type: 'buffer' })
     const sheetName = workbook.SheetNames[0]
     const worksheet = workbook.Sheets[sheetName]
@@ -558,106 +543,59 @@ export class PropertyService implements IPropertyService {
       throw new BadRequestException('Excel file is empty or invalid')
     }
 
-    // ── 3. Detect column names ─────────────────────────────────────────────
     const headers = Object.keys(rawRows[0])
-    const propertyNameCol =
-      headers.find(
-        (h) => h.toLowerCase() === 'property name' || h.toLowerCase() === 'property'
-      ) || 'Property Name'
-
-    if (!headers.includes(propertyNameCol)) {
-      throw new BadRequestException(
-        'Excel must contain a "Property Name" or "Property" column'
-      )
+    
+    // Required columns
+    if (!headers.some(h => h.toLowerCase() === 'property name' || h.toLowerCase() === 'property')) {
+      throw new BadRequestException('Excel must contain "Property Name" column')
+    }
+    if (!headers.some(h => h.toLowerCase() === 'portfolio')) {
+      throw new BadRequestException('Excel must contain "Portfolio" column')
     }
 
-    const portfolioCol =
-      headers.find((h) => h.toLowerCase() === 'portfolio') || null
-    const subPortfolioCol =
-      headers.find((h) =>
-        ['sub portfolio', 'subportfolio'].includes(h.toLowerCase())
-      ) || null
-    const serviceTypeCol =
-      headers.find((h) =>
-        h.toLowerCase() === 'service type' || h.toLowerCase() === 'servicetype'
-      ) || null
+    this.logger.log(`Parsing ${rawRows.length} rows for property import`)
 
-    this.logger.log(
-      `Parsing ${rawRows.length} rows. propertyCol="${propertyNameCol}", portfolioCol="${portfolioCol}", subPortfolioCol="${subPortfolioCol}", serviceTypeCol="${serviceTypeCol}"`
-    )
-
-    // ── 4. Map rows → typed ImportPropertyRow (passwords encrypted here) ──
+    // Map rows to ImportPropertyRow with encryption
     const rows: ImportPropertyRow[] = rawRows
       .map((r) => {
-        const propertyName = r[propertyNameCol] ? String(r[propertyNameCol]).trim() : ''
+        const propertyName = r['Property Name'] ? String(r['Property Name']).trim() : ''
         if (!propertyName) return null
 
-        const credentials = this.buildCredentialsFromRow(r)
+        const portfolioName = r['Portfolio'] ? String(r['Portfolio']).trim() : ''
+        if (!portfolioName) return null
+
+        // Encrypt passwords
+        const encryptPassword = (val: any) => {
+          if (!val) return undefined
+          const str = String(val).trim()
+          return str ? this.encryptionUtil.encrypt(str) : undefined
+        }
 
         return {
           propertyName,
-          portfolioName: portfolioCol && r[portfolioCol]
-            ? String(r[portfolioCol]).trim()
-            : undefined,
-          subPortfolioName: subPortfolioCol && r[subPortfolioCol]
-            ? String(r[subPortfolioCol]).trim()
-            : undefined,
-          isActive: true,
-          expediaStatus: r['Expedia Status'] || 'Access Required',
-          bookingStatus: r['Booking Status'] || 'Access Required',
-          agodaStatus: r['Agoda Status'] || 'Access Required',
-          expediaId: r['Expedia ID'] ? Number(r['Expedia ID']) : undefined,
-          bookingId: r['Booking ID'] ? Number(r['Booking ID']) : undefined,
-          agodaId: r['Agoda ID'] ? Number(r['Agoda ID']) : undefined,
-          webmailPassword: r['Webmail Password']
-            ? this.encryptionUtil.encrypt(String(r['Webmail Password']).trim())
-            : undefined,
-          serviceTypeName: serviceTypeCol && r[serviceTypeCol]
-            ? String(r[serviceTypeCol]).trim()
-            : undefined,
-          credentials
+          portfolioName,
+          propertyAddress: r['Property Address'] ? String(r['Property Address']).trim() : undefined,
+          cardDescriptor: r['Card Descriptor'] ? String(r['Card Descriptor']).trim() : undefined,
+          expediaId: r['Expedia ID'] ? String(r['Expedia ID']).trim() : undefined,
+          agodaId: r['Agoda ID'] ? String(r['Agoda ID']).trim() : undefined,
+          bookingId: r['Booking ID'] ? String(r['Booking ID']).trim() : undefined,
+          expediaUsername: r['Expedia Username'] ? String(r['Expedia Username']).trim() : undefined,
+          agodaUsername: r['Agoda Username'] ? String(r['Agoda Username']).trim() : undefined,
+          bookingUsername: r['Booking Username'] ? String(r['Booking Username']).trim() : undefined,
+          expediaPassword: encryptPassword(r['Expedia Password']),
+          bookingPassword: encryptPassword(r['Booking Password']),
+          agodaPassword: encryptPassword(r['Agoda Password']),
+          portfolioContactEmail: r['Portfolio Contact Email'] ? String(r['Portfolio Contact Email']).trim() : undefined,
+          caseContactEmail: r['Case Contact Email'] ? String(r['Case Contact Email']).trim() : undefined,
+          qpUsername: r['Qp Username'] ? String(r['Qp Username']).trim() : undefined,
+          qpPassword: encryptPassword(r['Qp Password']),
+          qpApiKey: encryptPassword(r['Qp Api Key']),
+          newDomainsEmail: r['New Domains Email'] ? String(r['New Domains Email']).trim() : undefined,
+          webmailPassword: encryptPassword(r['Webmail Password'])
         } satisfies ImportPropertyRow
       })
       .filter(Boolean) as ImportPropertyRow[]
 
-    // ── 5. Delegate all DB operations to the repository ───────────────────
     return this.repo.importProperties(rows)
-  }
-
-  /**
-   * Extracts OTA credential columns from a raw Excel row.
-   * Passwords are encrypted at call time so the repository stores them safely.
-   */
-  private buildCredentialsFromRow(r: any): Record<string, any> | undefined {
-    const creds: Record<string, any> = {}
-    const map: [string, string][] = [
-      ['Expedia Username', 'expediaUsername'],
-      ['Expedia Password', 'expediaPassword'],
-      ['Agoda Username', 'agodaUsername'],
-      ['Agoda Password', 'agodaPassword'],
-      ['Booking Username', 'bookingUsername'],
-      ['Booking Password', 'bookingPassword'],
-      ['Expedia Email Associated', 'expediaEmailAssociated'],
-      ['Property Contact Email', 'propertyContactEmail'],
-      ['Portfolio Contact Email', 'portfolioContactEmail']
-    ]
-    for (const [col, key] of map) {
-      if (r[col]) {
-        const val = String(r[col]).trim()
-        if (key.endsWith('Password') && val) {
-          creds[key] = this.encryptionUtil.encrypt(val)
-        } else {
-          creds[key] = val
-        }
-      }
-    }
-    if (r['Multiple Portfolio Emails']) {
-      const emails = String(r['Multiple Portfolio Emails'])
-        .split(',')
-        .map((e) => e.trim())
-        .filter(Boolean)
-      if (emails.length) creds.multiplePortfolioEmails = emails
-    }
-    return Object.keys(creds).length > 0 ? creds : undefined
   }
 }

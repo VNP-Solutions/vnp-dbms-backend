@@ -203,270 +203,70 @@ export class PropertyRepository implements IPropertyRepository {
     }
   }
 
-  // ──────────────────────────────────────────────────────────────────────────
-  // Import helpers — all DB access for the bulk property-import flow
-  // live here, following the vnp-parser-backend thin-service convention.
-  // ──────────────────────────────────────────────────────────────────────────
-
-  /**
-   * Returns the ID of the first active ServiceType (ordered by `order` asc).
-   * Used as a fallback when creating portfolios during import.
-   */
-  async findDefaultServiceTypeId(): Promise<string | null> {
-    const st = await this.prisma.serviceType.findFirst({
-      where: { is_active: true },
-      orderBy: { order: 'asc' },
-      select: { id: true }
-    })
-    return st?.id ?? null
-  }
-
-  /**
-   * Finds a portfolio by name; creates it if absent.
-   *
-   * - If portfolio already exists → return it (regardless of service type).
-   * - If `serviceTypeName` is provided → look it up by name (case-insensitive).
-   *   - Found → use its ID to create.
-   *   - NOT found → return null so the caller can skip.
-   * - If `serviceTypeName` is absent → fall back to `defaultServiceTypeId`.
-   */
-  async findOrCreatePortfolio(
-    name: string,
-    defaultServiceTypeId: string,
-    serviceTypeName?: string
-  ): Promise<{ id: string; name: string } | null> {
-    const existing = await this.prisma.portfolio.findUnique({
-      where: { name },
-      select: { id: true, name: true }
-    })
-    if (existing) return existing
-
-    let service_type_id = defaultServiceTypeId
-
-    if (serviceTypeName) {
-      const st = await this.prisma.serviceType.findFirst({
-        where: { type: { equals: serviceTypeName.trim(), mode: 'insensitive' } },
-        select: { id: true }
-      })
-      if (!st) {
-        // Named service type not found → caller must skip
-        return null
-      }
-      service_type_id = st.id
-    }
-
-    return this.prisma.portfolio.create({
-      data: {
-        name,
-        service_type_id,
-        is_active: true,
-        is_commissionable: false
-      },
-      select: { id: true, name: true }
-    })
-  }
-
-  /**
-   * Finds a subportfolio by name + portfolioId; creates it if absent.
-   * On a Prisma unique constraint error (P2002) falls back to a lookup.
-   */
-  async findOrCreateSubportfolio(
-    name: string,
-    portfolioId: string
-  ): Promise<{ id: string; name: string; portfolio_id: string }> {
-    const existing = await this.prisma.subportfolio.findFirst({
-      where: { name, portfolio_id: portfolioId },
-      select: { id: true, name: true, portfolio_id: true }
-    })
-    if (existing) return existing
-
-    try {
-      return await this.prisma.subportfolio.create({
-        data: { name, portfolio_id: portfolioId, description: null },
-        select: { id: true, name: true, portfolio_id: true }
-      })
-    } catch (err: any) {
-      if (err.code === 'P2002') {
-        // Name is globally unique in this schema — reuse whichever exists
-        const fallback = await this.prisma.subportfolio.findUnique({
-          where: { name },
-          select: { id: true, name: true, portfolio_id: true }
-        })
-        if (fallback) return fallback
-      }
-      throw err
-    }
-  }
-
-  /** Returns the oldest portfolio in the system (used as last-resort fallback). */
-  async findFirstPortfolio(): Promise<{ id: string; name: string } | null> {
-    return this.prisma.portfolio.findFirst({
-      orderBy: { created_at: 'asc' },
-      select: { id: true, name: true }
-    })
-  }
-
   /**
    * Bulk-imports properties from pre-parsed, typed rows.
-   *
-   * Phases (mirrors the parser-backend convention):
-   *  1. Resolve / create portfolios
-   *  2. Resolve / create subportfolios
-   *  3. Create properties (skip duplicates, merge credentials on existing)
-   *  4. Create / update credentials for each property
-   *
-   * All Prisma calls are consolidated here so the service stays thin.
-   * Credential passwords arrive already encrypted from the service layer.
+   * Only creates properties if the portfolio exists. Skips if portfolio not found.
    */
   async importProperties(rows: ImportPropertyRow[]): Promise<ImportPropertiesResult> {
     const logger = new Logger(PropertyRepository.name)
 
-    let portfoliosCreated = 0
-    let subportfoliosCreated = 0
     let propertiesCreated = 0
     let credentialsCreated = 0
-    const portfolios: Map<string, { id: string; name: string }> = new Map()
-    const subportfolios: Map<string, { id: string; name: string; portfolio_id: string }> = new Map()
+    let propertiesSkipped = 0
     const createdProperties: any[] = []
+    const skippedProperties: Array<{ name: string; reason: string }> = []
 
-    // ── 1. Resolve default ServiceType once ───────────────────────────────
-    const defaultServiceTypeId = await this.findDefaultServiceTypeId()
-    if (!defaultServiceTypeId) {
-      throw new Error('No active ServiceType found. Configure one before importing.')
-    }
-
-    // ── 2. Collect unique portfolio names and resolve/create ───────────────
-    const uniquePortfolioNames = [...new Set(rows.map((r) => r.portfolioName).filter(Boolean))] as string[]
-    // Build a map of portfolio name → serviceTypeName (from first row carrying that portfolio)
-    const portfolioServiceTypeMap = new Map<string, string | undefined>(
-      uniquePortfolioNames.map((name) => {
-        const row = rows.find((r) => r.portfolioName === name)
-        return [name, row?.serviceTypeName]
-      })
-    )
-    const skippedPortfolios = new Set<string>()
-
-    for (const name of uniquePortfolioNames) {
-      const before = await this.prisma.portfolio.count({ where: { name } })
-      const portfolio = await this.findOrCreatePortfolio(
-        name,
-        defaultServiceTypeId,
-        portfolioServiceTypeMap.get(name)
-      )
-      if (!portfolio) {
-        // Named ServiceType not found → skip this portfolio and all its properties
-        logger.warn(
-          `ServiceType "${portfolioServiceTypeMap.get(name)}" not found — skipping portfolio "${name}" and its properties`
-        )
-        skippedPortfolios.add(name)
-        continue
-      }
-      portfolios.set(name, portfolio)
-      if (before === 0) {
-        portfoliosCreated++
-        logger.log(`Portfolio "${name}" created`)
-      } else {
-        logger.debug(`Portfolio "${name}" already exists, reusing`)
-      }
-    }
-
-    // ── 3. Collect unique subportfolio combos and resolve/create ──────────
-    const uniqueSubs = Array.from(
-      new Map(
-        rows
-          .filter((r) => r.subPortfolioName && r.portfolioName)
-          .map((r) => [`${r.portfolioName}::${r.subPortfolioName}`, r])
-      ).values()
-    )
-
-    for (const row of uniqueSubs) {
-      const portfolio = portfolios.get(row.portfolioName!)
-      if (!portfolio) {
-        logger.warn(`Portfolio "${row.portfolioName}" not in map for subportfolio "${row.subPortfolioName}", skipping`)
-        continue
-      }
-      const key = `${row.portfolioName}::${row.subPortfolioName}`
-      const before = await this.prisma.subportfolio.count({
-        where: { name: row.subPortfolioName!, portfolio_id: portfolio.id }
-      })
-      const sub = await this.findOrCreateSubportfolio(row.subPortfolioName!, portfolio.id)
-      subportfolios.set(key, sub)
-      if (before === 0) {
-        subportfoliosCreated++
-        logger.log(`Subportfolio "${row.subPortfolioName}" created under "${row.portfolioName}"`)
-      }
-    }
-
-    // ── 4. Process each property row ───────────────────────────────────────
     for (const row of rows) {
-      const { propertyName, portfolioName, subPortfolioName, credentials } = row
+      const { propertyName, portfolioName } = row
 
-      // Resolve portfolio id
-      let portfolioId: string
-      if (portfolioName) {
-        const p = portfolios.get(portfolioName)
-        if (!p) {
-          logger.warn(`Portfolio "${portfolioName}" not resolved for property "${propertyName}", skipping`)
-          continue
-        }
-        portfolioId = p.id
-      } else {
-        const first = await this.findFirstPortfolio()
-        if (!first) {
-          logger.warn(`No portfolio in system, cannot create property "${propertyName}", skipping`)
-          continue
-        }
-        portfolioId = first.id
+      // Find portfolio by name
+      const portfolio = await this.prisma.portfolio.findUnique({
+        where: { name: portfolioName },
+        select: { id: true, name: true }
+      })
+
+      if (!portfolio) {
+        logger.warn(`Portfolio "${portfolioName}" not found — skipping property "${propertyName}"`)
+        skippedProperties.push({
+          name: propertyName,
+          reason: `Portfolio "${portfolioName}" not found`
+        })
+        propertiesSkipped++
+        continue
       }
 
-      // Resolve subportfolio id
-      let subportfolioId: string | undefined
-      if (subPortfolioName && portfolioName) {
-        const s = subportfolios.get(`${portfolioName}::${subPortfolioName}`)
-        if (s) subportfolioId = s.id
-      }
-
-      // Duplicate check
+      // Check if property already exists
       const existingProp = await this.findByName(propertyName)
       if (existingProp) {
-        logger.debug(`Property "${propertyName}" already exists — merging credentials if any`)
-        if (credentials && Object.keys(credentials).length > 0) {
-          try {
-            const existingCreds = await this.prisma.propertyCredentials.findFirst({
-              where: { property_id: existingProp.id }
-            })
-            const credPayload = { ...credentials }
-            if (existingCreds) {
-              await this.prisma.propertyCredentials.update({
-                where: { id: existingCreds.id },
-                data: credPayload
-              })
-            } else {
-              await this.prisma.propertyCredentials.create({
-                data: { property_id: existingProp.id, ...credPayload }
-              })
-            }
-            credentialsCreated++
-          } catch (err: any) {
-            logger.error(`Error merging credentials for "${propertyName}": ${err.message}`)
-          }
-        }
+        logger.debug(`Property "${propertyName}" already exists, skipping`)
+        skippedProperties.push({
+          name: propertyName,
+          reason: 'Property already exists'
+        })
+        propertiesSkipped++
         continue
       }
 
       // Build create payload
       const propertyPayload: any = {
         name: propertyName,
-        portfolio_id: portfolioId,
-        is_active: row.isActive ?? true,
-        expedia_status: row.expediaStatus || 'Access Required',
-        booking_status: row.bookingStatus || 'Access Required',
-        agoda_status: row.agodaStatus || 'Access Required'
+        portfolio_id: portfolio.id,
+        is_active: true,
+        expedia_status: 'Access Required',
+        booking_status: 'Access Required',
+        agoda_status: 'Access Required'
       }
-      if (subportfolioId) propertyPayload.subportfolio_id = subportfolioId
-      if (row.expediaId != null) propertyPayload.expedia_id = row.expediaId
-      if (row.bookingId != null) propertyPayload.booking_id = row.bookingId
-      if (row.agodaId != null) propertyPayload.agoda_id = row.agodaId
+
+      if (row.propertyAddress) propertyPayload.hotel_address = row.propertyAddress
+      if (row.cardDescriptor) propertyPayload.card_descriptor = row.cardDescriptor
+      if (row.expediaId) propertyPayload.expedia_id = parseInt(row.expediaId) || undefined
+      if (row.agodaId) propertyPayload.agoda_id = parseInt(row.agodaId) || undefined
+      if (row.bookingId) propertyPayload.booking_id = parseInt(row.bookingId) || undefined
+      if (row.portfolioContactEmail) propertyPayload.portfolio_contact_email = row.portfolioContactEmail
+      if (row.newDomainsEmail) propertyPayload.new_domain_email = row.newDomainsEmail
+      if (row.qpUsername) propertyPayload.qp_username = row.qpUsername
+      if (row.qpPassword) propertyPayload.qp_password = row.qpPassword
+      if (row.qpApiKey) propertyPayload.qp_api_key = row.qpApiKey
       if (row.webmailPassword) propertyPayload.webmail_password = row.webmailPassword
 
       try {
@@ -481,26 +281,38 @@ export class PropertyRepository implements IPropertyRepository {
         propertiesCreated++
         logger.log(`Property "${propertyName}" created`)
 
-        if (credentials && Object.keys(credentials).length > 0) {
+        // Create credentials if provided
+        const credPayload: any = {}
+        if (row.expediaUsername) credPayload.expediaUsername = row.expediaUsername
+        if (row.agodaUsername) credPayload.agodaUsername = row.agodaUsername
+        if (row.bookingUsername) credPayload.bookingUsername = row.bookingUsername
+        if (row.expediaPassword) credPayload.expediaPassword = row.expediaPassword
+        if (row.bookingPassword) credPayload.bookingPassword = row.bookingPassword
+        if (row.agodaPassword) credPayload.agodaPassword = row.agodaPassword
+        if (row.caseContactEmail) credPayload.case_contact_email = row.caseContactEmail
+
+        if (Object.keys(credPayload).length > 0) {
           await this.prisma.propertyCredentials.create({
-            data: { property_id: created.id, ...credentials }
+            data: { property_id: created.id, ...credPayload }
           })
           credentialsCreated++
         }
       } catch (err: any) {
         logger.error(`Error creating property "${propertyName}": ${err.message}`)
-        throw err
+        skippedProperties.push({
+          name: propertyName,
+          reason: `Error: ${err.message}`
+        })
+        propertiesSkipped++
       }
     }
 
     return {
-      portfoliosCreated,
-      subportfoliosCreated,
       propertiesCreated,
       credentialsCreated,
-      portfolios: [...portfolios.values()],
-      subportfolios: [...subportfolios.values()],
-      properties: createdProperties
+      propertiesSkipped,
+      properties: createdProperties,
+      skippedProperties
     }
   }
 }
