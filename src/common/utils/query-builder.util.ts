@@ -348,29 +348,45 @@ export class QueryBuilder {
    * Parse filter value with operator support
    */
   static parseFilterValue(value: any): any {
-    // If value is an object with operator
+    // If value is an object with Prisma operators (gte, lte, gt, lt, in, contains, etc.)
     if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-      const { operator, val } = value
-      const parsedVal = this.parseValue(val || value.value)
-
-      switch (operator) {
-        case 'contains':
-          return { contains: parsedVal, mode: 'insensitive' }
-        case 'in':
-          return { in: Array.isArray(parsedVal) ? parsedVal : [parsedVal] }
-        case 'gte':
-          return { gte: parsedVal }
-        case 'lte':
-          return { lte: parsedVal }
-        case 'gt':
-          return { gt: parsedVal }
-        case 'lt':
-          return { lt: parsedVal }
-        case 'not':
-          return { not: parsedVal }
-        default:
-          return parsedVal
+      // Check if it has Prisma filter operators directly
+      const hasPrismaOperators = ['gte', 'lte', 'gt', 'lt', 'in', 'contains', 'not', 'equals'].some(
+        op => op in value
+      )
+      
+      if (hasPrismaOperators) {
+        // Return as-is, it's already a Prisma filter object
+        return value
       }
+      
+      // Check for custom operator format { operator: 'gte', val: ... }
+      const { operator, val } = value
+      if (operator) {
+        const parsedVal = this.parseValue(val || value.value)
+
+        switch (operator) {
+          case 'contains':
+            return { contains: parsedVal, mode: 'insensitive' }
+          case 'in':
+            return { in: Array.isArray(parsedVal) ? parsedVal : [parsedVal] }
+          case 'gte':
+            return { gte: parsedVal }
+          case 'lte':
+            return { lte: parsedVal }
+          case 'gt':
+            return { gt: parsedVal }
+          case 'lt':
+            return { lt: parsedVal }
+          case 'not':
+            return { not: parsedVal }
+          default:
+            return parsedVal
+        }
+      }
+      
+      // Otherwise, return the object as-is
+      return value
     }
 
     // Simple value

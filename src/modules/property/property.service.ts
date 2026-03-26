@@ -136,10 +136,18 @@ export class PropertyService implements IPropertyService {
       additionalFilters.is_active = query.is_active
     }
     if (query.start_date && query.end_date) {
+      const startDate = new Date(query.start_date)
+      startDate.setHours(0, 0, 0, 0)
+      
+      const endDate = new Date(query.end_date)
+      endDate.setHours(23, 59, 59, 999)
+      
       additionalFilters.created_at = {
-        gte: new Date(query.start_date),
-        lte: new Date(query.end_date)
+        gte: startDate,
+        lte: endDate
       }
+      
+      this.logger.debug(`Date filter applied: ${startDate.toISOString()} to ${endDate.toISOString()}`)
     }
 
     const mergedQuery = {
@@ -149,6 +157,8 @@ export class PropertyService implements IPropertyService {
         ...additionalFilters
       }
     }
+
+    this.logger.debug(`Merged query filters: ${JSON.stringify(mergedQuery.filters, null, 2)}`)
 
     const queryConfig = {
       searchFields: ['name', 'description', 'hotel_address'],
@@ -164,6 +174,7 @@ export class PropertyService implements IPropertyService {
         'hotel_address',
         'qp_username',
         'is_active',
+        'created_at',
         'expedia_id',
         'expedia_status',
         'booking_id',
@@ -211,6 +222,8 @@ export class PropertyService implements IPropertyService {
           ? portfolioCondition
           : { AND: [builtWhere, portfolioCondition] }
     }
+
+    this.logger.debug(`Final where clause: ${JSON.stringify(where, null, 2)}`)
 
     const [data, total] = await Promise.all([
       this.repo.findAll({ where, skip, take, orderBy }),
