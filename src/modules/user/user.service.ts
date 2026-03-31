@@ -219,7 +219,7 @@ export class UserService implements IUserService {
     if (query.user_role_id) {
       additionalFilters.user_role_id = query.user_role_id
     }
-    if (query.is_verified) {
+    if (query.is_verified !== undefined) {
       additionalFilters.is_verified = query.is_verified
     }
 

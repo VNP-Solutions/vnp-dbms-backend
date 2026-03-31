@@ -6,12 +6,26 @@ import {
   UpdateUserRoleDto
 } from './user-role.dto'
 
-type UserRoleWithUsers = Prisma.UserRoleGetPayload<object>
+export type UserRoleWithUserCount = UserRole & { user_count: number }
+
+type UserRoleUserSummary = Prisma.UserGetPayload<{
+  select: {
+    id: true
+    first_name: true
+    last_name: true
+    email: true
+    is_verified: true
+  }
+}>
+
+export type UserRoleDetail = UserRoleWithUserCount & {
+  users: UserRoleUserSummary[]
+}
 
 export interface IUserRoleRepository {
   create(data: CreateUserRoleDto): Promise<UserRole>
-  findAll(): Promise<UserRoleWithUsers[]>
-  findById(id: string): Promise<UserRoleWithUsers | null>
+  findAll(): Promise<UserRoleWithUserCount[]>
+  findById(id: string): Promise<UserRoleDetail | null>
   findByName(name: string): Promise<UserRole | null>
   update(id: string, data: UpdateUserRoleDto): Promise<UserRole>
   delete(id: string): Promise<UserRole>
@@ -22,8 +36,8 @@ export interface IUserRoleRepository {
 
 export interface IUserRoleService {
   create(data: CreateUserRoleDto, user: IUserWithPermissions): Promise<UserRole>
-  findAll(user: IUserWithPermissions): Promise<UserRoleWithUsers[]>
-  findOne(id: string, user: IUserWithPermissions): Promise<UserRoleWithUsers>
+  findAll(user: IUserWithPermissions): Promise<UserRoleWithUserCount[]>
+  findOne(id: string, user: IUserWithPermissions): Promise<UserRoleDetail>
   update(
     id: string,
     data: UpdateUserRoleDto,
