@@ -1,4 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
+import { Transform } from 'class-transformer'
 import { IsBoolean, IsEmail, IsNotEmpty, IsOptional, IsString } from 'class-validator'
 import { QueryDto } from '../../common/dto/query.dto'
 
@@ -139,6 +140,13 @@ export class UserQueryDto extends QueryDto {
     example: true
   })
   @IsOptional()
+  @Transform(({ value }) => {
+    if (value === undefined || value === null || value === '') return undefined
+    if (String(value).toLowerCase() === 'all') return undefined
+    if (value === true || value === 'true') return true
+    if (value === false || value === 'false') return false
+    return value
+  })
   @IsBoolean()
   is_verified?: boolean
 }

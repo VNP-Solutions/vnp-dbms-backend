@@ -18,15 +18,24 @@ export class UserRoleRepository implements IUserRoleRepository {
   }
 
   async findAll() {
-    return this.prisma.userRole.findMany({
+    const rows = await this.prisma.userRole.findMany({
       orderBy: {
         order: 'asc'
+      },
+      include: {
+        _count: {
+          select: { users: true }
+        }
       }
     })
+    return rows.map(({ _count, ...role }) => ({
+      ...role,
+      user_count: _count.users
+    }))
   }
 
   async findById(id: string) {
-    return this.prisma.userRole.findUnique({
+    const row = await this.prisma.userRole.findUnique({
       where: { id },
       include: {
         users: {
@@ -37,9 +46,18 @@ export class UserRoleRepository implements IUserRoleRepository {
             email: true,
             is_verified: true
           }
+        },
+        _count: {
+          select: { users: true }
         }
       }
     })
+    if (!row) return null
+    const { _count, ...rest } = row
+    return {
+      ...rest,
+      user_count: _count.users
+    }
   }
 
   async findByName(name: string) {

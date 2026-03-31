@@ -59,10 +59,13 @@ export class UserRoleController {
 
   @Get()
   @RequirePermission(ModuleType.USER, PermissionAction.READ)
-  @ApiOperation({ summary: 'Get all roles' })
+  @ApiOperation({
+    summary: 'Get all roles',
+    description: 'Each role includes user_count (number of users assigned to that role).'
+  })
   @ApiResponse({
     status: 200,
-    description: 'List of roles retrieved successfully'
+    description: 'List of roles retrieved successfully (includes user_count per role)'
   })
   findAll(
     @ParseQuery() _query: Record<string, any>,
@@ -73,8 +76,15 @@ export class UserRoleController {
 
   @Get(':id')
   @RequirePermission(ModuleType.USER, PermissionAction.READ, true)
-  @ApiOperation({ summary: 'Get a role by ID' })
-  @ApiResponse({ status: 200, description: 'Role retrieved successfully' })
+  @ApiOperation({
+    summary: 'Get a role by ID',
+    description:
+      'Includes assigned users and user_count (same total as users.length).'
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Role retrieved successfully (includes users and user_count)'
+  })
   @ApiResponse({ status: 404, description: 'Role not found' })
   @ApiResponse({
     status: 403,
