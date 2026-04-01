@@ -35,7 +35,9 @@ export enum ModuleType {
   AUDIT = 'audit',
   USER = 'user',
   SYSTEM_SETTINGS = 'system_settings',
-  BANK_DETAILS = 'bank_details'
+  BANK_DETAILS = 'bank_details',
+  ROLES = 'roles',
+  ACCESS_LOGS = 'access_logs'
 }
 
 export interface IPermission {
@@ -55,6 +57,8 @@ export interface IUserRoleWithPermissions {
   user_permission: IPermission | null
   system_settings_permission: IPermission | null
   bank_details_permission: IPermission | null
+  roles_permission: IPermission | null
+  access_logs_permission: IPermission | null
 }
 
 export interface IUserWithPermissions {

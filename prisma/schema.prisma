@@ -153,6 +153,8 @@ model UserRole {
   user_permission            UserPermission?
   system_settings_permission SystemSettingsPermission?
   bank_details_permission    BankDetailsPermission?
+  roles_permission           RolesPermission?
+  access_logs_permission     AccessLogsPermission?
   users                      User[]
   invitations                UserInvitation[]
   projectRoles               ProjectRole[]
@@ -192,6 +194,16 @@ type SystemSettingsPermission {
 }
 
 type BankDetailsPermission {
+  permission_level PermissionLevel
+  access_level     AccessLevel
+}
+
+type RolesPermission {
+  permission_level PermissionLevel
+  access_level     AccessLevel
+}
+
+type AccessLogsPermission {
   permission_level PermissionLevel
   access_level     AccessLevel
 }

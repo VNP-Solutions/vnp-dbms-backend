@@ -22,6 +22,8 @@ export interface IUserWithProjectRole extends IUserWithPermissions {
       user_permission: any
       system_settings_permission: any
       bank_details_permission: any
+      roles_permission: any
+      access_logs_permission: any
     }
     portfolio_ids: string[]
     subportfolio_ids: string[]
@@ -71,7 +73,9 @@ export function getEffectiveRole(
       user_permission: projectRole.user_role.user_permission,
       system_settings_permission:
         projectRole.user_role.system_settings_permission,
-      bank_details_permission: projectRole.user_role.bank_details_permission
+      bank_details_permission: projectRole.user_role.bank_details_permission,
+      roles_permission: projectRole.user_role.roles_permission,
+      access_logs_permission: projectRole.user_role.access_logs_permission
     }
   }
 

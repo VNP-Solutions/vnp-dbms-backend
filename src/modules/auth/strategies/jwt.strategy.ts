@@ -41,7 +41,9 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
         audit_permission: upr.user_role.audit_permission,
         user_permission: upr.user_role.user_permission,
         system_settings_permission: upr.user_role.system_settings_permission,
-        bank_details_permission: upr.user_role.bank_details_permission
+        bank_details_permission: upr.user_role.bank_details_permission,
+        roles_permission: upr.user_role.roles_permission,
+        access_logs_permission: upr.user_role.access_logs_permission
       },
       portfolio_ids: upr.portfolio_ids || [],
       subportfolio_ids: upr.subportfolio_ids || [],

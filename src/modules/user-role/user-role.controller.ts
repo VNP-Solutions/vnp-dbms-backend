@@ -43,7 +43,7 @@ export class UserRoleController {
   ) {}
 
   @Post()
-  @RequirePermission(ModuleType.USER, PermissionAction.CREATE)
+  @RequirePermission(ModuleType.ROLES, PermissionAction.CREATE)
   @ApiOperation({ summary: 'Create a new role' })
   @ApiResponse({ status: 201, description: 'Role created successfully' })
   @ApiResponse({
@@ -58,7 +58,7 @@ export class UserRoleController {
   }
 
   @Get()
-  @RequirePermission(ModuleType.USER, PermissionAction.READ)
+  @RequirePermission(ModuleType.ROLES, PermissionAction.READ)
   @ApiOperation({
     summary: 'Get all roles',
     description: 'Each role includes user_count (number of users assigned to that role).'
@@ -75,7 +75,7 @@ export class UserRoleController {
   }
 
   @Get(':id')
-  @RequirePermission(ModuleType.USER, PermissionAction.READ, true)
+  @RequirePermission(ModuleType.ROLES, PermissionAction.READ, true)
   @ApiOperation({
     summary: 'Get a role by ID',
     description:
@@ -95,7 +95,7 @@ export class UserRoleController {
   }
 
   @Patch(':id')
-  @RequirePermission(ModuleType.USER, PermissionAction.UPDATE, true)
+  @RequirePermission(ModuleType.ROLES, PermissionAction.UPDATE, true)
   @ApiOperation({ summary: 'Update a role' })
   @ApiResponse({ status: 200, description: 'Role updated successfully' })
   @ApiResponse({ status: 404, description: 'Role not found' })
@@ -112,7 +112,7 @@ export class UserRoleController {
   }
 
   @Post(':id/delete')
-  @RequirePermission(ModuleType.USER, PermissionAction.DELETE, true)
+  @RequirePermission(ModuleType.ROLES, PermissionAction.DELETE, true)
   @ApiOperation({ summary: 'Delete a role (requires password verification)' })
   @ApiResponse({ status: 200, description: 'Role deleted successfully' })
   @ApiResponse({ status: 404, description: 'Role not found' })
@@ -133,7 +133,7 @@ export class UserRoleController {
   }
 
   @Patch(':id/reorder')
-  @RequirePermission(ModuleType.USER, PermissionAction.UPDATE, true)
+  @RequirePermission(ModuleType.ROLES, PermissionAction.UPDATE, true)
   @ApiOperation({ summary: 'Reorder a role' })
   @ApiResponse({ status: 200, description: 'Role order updated successfully' })
   @ApiResponse({ status: 404, description: 'Role not found' })

@@ -253,6 +253,8 @@ export interface AuthResponseUserDto {
     user_permission?: { permission_level: string; access_level: string } | null
     system_settings_permission?: { permission_level: string; access_level: string } | null
     bank_details_permission?: { permission_level: string; access_level: string } | null
+    roles_permission?: { permission_level: string; access_level: string } | null
+    access_logs_permission?: { permission_level: string; access_level: string } | null
   }
   projectRoles?: Array<{
     project_type: string
