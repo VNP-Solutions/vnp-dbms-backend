@@ -198,6 +198,10 @@ export class PermissionService {
         return role.system_settings_permission ?? null
       case ModuleType.BANK_DETAILS:
         return role.bank_details_permission ?? null
+      case ModuleType.ROLES:
+        return role.roles_permission ?? null
+      case ModuleType.ACCESS_LOGS:
+        return role.access_logs_permission ?? null
       default:
         return null
     }
@@ -226,7 +230,9 @@ export class PermissionService {
       [ModuleType.AUDIT, role.audit_permission],
       [ModuleType.USER, role.user_permission],
       [ModuleType.SYSTEM_SETTINGS, role.system_settings_permission],
-      [ModuleType.BANK_DETAILS, role.bank_details_permission]
+      [ModuleType.BANK_DETAILS, role.bank_details_permission],
+      [ModuleType.ROLES, role.roles_permission],
+      [ModuleType.ACCESS_LOGS, role.access_logs_permission]
     ]
 
     for (const [module, permission] of permissions) {

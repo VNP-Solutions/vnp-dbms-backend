@@ -44,6 +44,8 @@ export type UserWithRole = Prisma.UserGetPayload<{
         user_permission: true
         system_settings_permission: true
         bank_details_permission: true
+        roles_permission: true
+        access_logs_permission: true
       }
     }
     invitedBy: {
@@ -85,6 +87,8 @@ export type UserWithDetails = Prisma.UserGetPayload<{
         user_permission: true
         system_settings_permission: true
         bank_details_permission: true
+        roles_permission: true
+        access_logs_permission: true
       }
     }
     invitedBy: {

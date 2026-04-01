@@ -204,7 +204,9 @@ export function isUserSuperAdmin(user: IUserWithPermissions): boolean {
     role.audit_permission,
     role.user_permission,
     role.system_settings_permission,
-    role.bank_details_permission
+    role.bank_details_permission,
+    role.roles_permission,
+    role.access_logs_permission
   ]
 
   return allPermissions.every(permission => isSuperAdmin(permission))
@@ -252,6 +254,10 @@ export function getModulePermission(
       return role.system_settings_permission ?? null
     case 'bank_details':
       return role.bank_details_permission ?? null
+    case 'roles':
+      return role.roles_permission ?? null
+    case 'access_logs':
+      return role.access_logs_permission ?? null
     default:
       return null
   }

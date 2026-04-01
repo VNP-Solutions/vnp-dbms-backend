@@ -51,7 +51,9 @@ export class UserRoleService implements IUserRoleService {
       audit_permission: data.audit_permission ?? null,
       user_permission: data.user_permission ?? null,
       system_settings_permission: data.system_settings_permission ?? null,
-      bank_details_permission: data.bank_details_permission ?? null
+      bank_details_permission: data.bank_details_permission ?? null,
+      roles_permission: data.roles_permission ?? null,
+      access_logs_permission: data.access_logs_permission ?? null
     }
     const warnings = this.permissionService.validateRoleConfiguration(roleToValidate)
 
@@ -64,11 +66,9 @@ export class UserRoleService implements IUserRoleService {
   }
 
   async findAll(user: IUserWithPermissions) {
-    // Check user's access level for USER module
-    // USER module doesn't support partial access, so this will return either 'all' or []
     const accessibleIds = await this.permissionService.getAccessibleResourceIds(
       user,
-      ModuleType.USER
+      ModuleType.ROLES
     )
 
     if (accessibleIds === 'all') {
@@ -129,7 +129,11 @@ export class UserRoleService implements IUserRoleService {
       bank_details_permission:
         data.bank_details_permission ??
         userRole.bank_details_permission ??
-        null
+        null,
+      roles_permission:
+        data.roles_permission ?? userRole.roles_permission ?? null,
+      access_logs_permission:
+        data.access_logs_permission ?? userRole.access_logs_permission ?? null
     }
     const warnings = this.permissionService.validateRoleConfiguration(roleToValidate)
 

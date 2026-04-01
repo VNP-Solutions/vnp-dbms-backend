@@ -45,6 +45,8 @@ interface UserWithRole {
     user_permission: { permission_level: string; access_level: string } | null
     system_settings_permission: { permission_level: string; access_level: string } | null
     bank_details_permission: { permission_level: string; access_level: string } | null
+    roles_permission: { permission_level: string; access_level: string } | null
+    access_logs_permission: { permission_level: string; access_level: string } | null
   }
   userProjectRoles?: Array<{
     id: string
@@ -66,6 +68,8 @@ interface UserWithRole {
       user_permission: { permission_level: string; access_level: string } | null
       system_settings_permission: { permission_level: string; access_level: string } | null
       bank_details_permission: { permission_level: string; access_level: string } | null
+      roles_permission: { permission_level: string; access_level: string } | null
+      access_logs_permission: { permission_level: string; access_level: string } | null
     }
     project_role: {
       id: string
@@ -467,7 +471,10 @@ export class AuthService implements IAuthService {
 
     const superAdminRole = await this.prisma.userRole.upsert({
       where: { name: SUPER_ADMIN_ROLE_NAME },
-      update: {},  // Do not overwrite if already exists
+      update: {
+        roles_permission: fullPermission,
+        access_logs_permission: fullPermission
+      },
       create: {
         name: SUPER_ADMIN_ROLE_NAME,
         description: 'Super Administrator with unrestricted access to all modules',
@@ -480,7 +487,9 @@ export class AuthService implements IAuthService {
         audit_permission: fullPermission,
         user_permission: fullPermission,
         system_settings_permission: fullPermission,
-        bank_details_permission: fullPermission
+        bank_details_permission: fullPermission,
+        roles_permission: fullPermission,
+        access_logs_permission: fullPermission
       }
     })
 

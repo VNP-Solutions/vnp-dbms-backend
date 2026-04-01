@@ -48,7 +48,9 @@ export class UserRepository implements IUserRepository {
             audit_permission: true,
             user_permission: true,
             system_settings_permission: true,
-            bank_details_permission: true
+            bank_details_permission: true,
+            roles_permission: true,
+            access_logs_permission: true
           }
         },
         invitedBy: {
@@ -98,7 +100,9 @@ export class UserRepository implements IUserRepository {
             audit_permission: true,
             user_permission: true,
             system_settings_permission: true,
-            bank_details_permission: true
+            bank_details_permission: true,
+            roles_permission: true,
+            access_logs_permission: true
           }
         },
         invitedBy: {
@@ -145,7 +149,9 @@ export class UserRepository implements IUserRepository {
             audit_permission: true,
             user_permission: true,
             system_settings_permission: true,
-            bank_details_permission: true
+            bank_details_permission: true,
+            roles_permission: true,
+            access_logs_permission: true
           }
         },
         invitedBy: {

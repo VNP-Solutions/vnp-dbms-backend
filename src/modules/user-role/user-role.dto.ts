@@ -105,6 +105,20 @@ export class CreateUserRoleDto {
   @Type(() => PermissionDto)
   @IsOptional()
   bank_details_permission?: PermissionDto
+
+  @ApiPropertyOptional({ type: PermissionDto, description: 'User roles (role templates) permission' })
+  @IsObject()
+  @ValidateNested()
+  @Type(() => PermissionDto)
+  @IsOptional()
+  roles_permission?: PermissionDto
+
+  @ApiPropertyOptional({ type: PermissionDto, description: 'Access logs permission' })
+  @IsObject()
+  @ValidateNested()
+  @Type(() => PermissionDto)
+  @IsOptional()
+  access_logs_permission?: PermissionDto
 }
 
 export class UpdateUserRoleDto extends PartialType(CreateUserRoleDto) {}
