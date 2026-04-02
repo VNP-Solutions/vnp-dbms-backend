@@ -34,6 +34,22 @@ export class CreateUserDto {
   @IsString()
   @IsNotEmpty()
   language: string
+
+  @ApiPropertyOptional({
+    example: 'Software Engineer',
+    description: 'Job title'
+  })
+  @IsString()
+  @IsOptional()
+  job_title?: string
+
+  @ApiPropertyOptional({
+    example: '+1234567890',
+    description: 'Phone number'
+  })
+  @IsString()
+  @IsOptional()
+  phone_number?: string
 }
 
 export class UpdateUserDto {
@@ -114,6 +130,22 @@ export class UpdateOwnProfileDto {
   @IsString()
   @IsOptional()
   contact_number?: string
+
+  @ApiPropertyOptional({
+    example: 'Software Engineer',
+    description: 'Job title'
+  })
+  @IsString()
+  @IsOptional()
+  job_title?: string
+
+  @ApiPropertyOptional({
+    example: '+1234567890',
+    description: 'Phone number'
+  })
+  @IsString()
+  @IsOptional()
+  phone_number?: string
 }
 
 export class AssignUserRoleDto {
