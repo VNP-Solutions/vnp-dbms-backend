@@ -27,6 +27,8 @@ export type UserWithRole = Prisma.UserGetPayload<{
     is_verified: true
     display_image: true
     contact_number: true
+    job_title: true
+    phone_number: true
     created_at: true
     updated_at: true
     invited_by_id: true
@@ -70,6 +72,8 @@ export type UserWithDetails = Prisma.UserGetPayload<{
     is_verified: true
     display_image: true
     contact_number: true
+    job_title: true
+    phone_number: true
     created_at: true
     updated_at: true
     invited_by_id: true

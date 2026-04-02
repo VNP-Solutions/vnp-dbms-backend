@@ -55,6 +55,8 @@ model User {
   password           String
   display_image      String?
   contact_number     String?
+  job_title          String?
+  phone_number       String?
   is_verified        Boolean   @default(false)
   temp_password      String?
   invitation_sent_at DateTime?
