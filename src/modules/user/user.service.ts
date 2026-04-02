@@ -54,7 +54,9 @@ export class UserService implements IUserService {
       last_name: data.last_name,
       language: data.language,
       display_image: data.display_image,
-      contact_number: data.contact_number
+      contact_number: data.contact_number,
+      job_title: data.job_title,
+      phone_number: data.phone_number
     }
 
     // Remove undefined fields
@@ -113,6 +115,10 @@ export class UserService implements IUserService {
       updateData.display_image = data.display_image
     if (data.contact_number !== undefined)
       updateData.contact_number = data.contact_number
+    if (data.job_title !== undefined)
+      updateData.job_title = data.job_title
+    if (data.phone_number !== undefined)
+      updateData.phone_number = data.phone_number
 
     return this.userRepository.update(id, updateData)
   }
