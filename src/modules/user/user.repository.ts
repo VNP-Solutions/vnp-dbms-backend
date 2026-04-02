@@ -17,60 +17,100 @@ export class UserRepository implements IUserRepository {
   ): Promise<UserWithRole[]> {
     const { where, skip, take, orderBy } = queryOptions
 
-    return this.prisma.user.findMany({
+    const users = await this.prisma.user.findMany({
       where,
       skip,
       take,
-      orderBy,
-      select: {
-        id: true,
-        first_name: true,
-        last_name: true,
-        email: true,
-        language: true,
-        user_role_id: true,
-        is_verified: true,
-        display_image: true,
-        contact_number: true,
-        job_title: true,
-        phone_number: true,
-        created_at: true,
-        updated_at: true,
-        invited_by_id: true,
-        invitation_sent_at: true,
-        role: {
-          select: {
-            id: true,
-            name: true,
-            description: true,
-            is_external: true,
-            can_access_mis: true,
-            portfolio_permission: true,
-            property_permission: true,
-            audit_permission: true,
-            user_permission: true,
-            system_settings_permission: true,
-            bank_details_permission: true,
-            roles_permission: true,
-            access_logs_permission: true
-          }
-        },
-        invitedBy: {
-          select: {
-            id: true,
-            first_name: true,
-            last_name: true,
-            email: true
-          }
-        }
-      }
+      orderBy
     })
+
+    const validRoleIds = users.map(u => u.user_role_id).filter(Boolean)
+    
+    const [roles, inviters] = await Promise.all([
+      this.prisma.userRole.findMany({
+        where: { id: { in: validRoleIds } }
+      }),
+      this.prisma.user.findMany({
+        where: { 
+          id: { 
+            in: users.map(u => u.invited_by_id).filter(Boolean) as string[] 
+          } 
+        },
+        select: {
+          id: true,
+          first_name: true,
+          last_name: true,
+          email: true
+        }
+      })
+    ])
+
+    const roleMap = new Map(roles.map(r => [r.id, r]))
+    const inviterMap = new Map(inviters.map(i => [i.id, i]))
+
+    return users
+      .filter(user => user.user_role_id && roleMap.has(user.user_role_id))
+      .map(user => {
+        const role = roleMap.get(user.user_role_id)!
+        const inviter = user.invited_by_id ? inviterMap.get(user.invited_by_id) : undefined
+
+        return {
+          id: user.id,
+          first_name: user.first_name,
+          last_name: user.last_name,
+          email: user.email,
+          language: user.language,
+          user_role_id: user.user_role_id,
+          is_verified: user.is_verified,
+          display_image: user.display_image,
+          contact_number: user.contact_number,
+          job_title: user.job_title,
+          phone_number: user.phone_number,
+          created_at: user.created_at,
+          updated_at: user.updated_at,
+          invited_by_id: user.invited_by_id,
+          invitation_sent_at: user.invitation_sent_at,
+          role: {
+            id: role.id,
+            name: role.name,
+            description: role.description,
+            is_external: role.is_external,
+            can_access_mis: role.can_access_mis,
+            portfolio_permission: role.portfolio_permission,
+            property_permission: role.property_permission,
+            audit_permission: role.audit_permission,
+            user_permission: role.user_permission,
+            system_settings_permission: role.system_settings_permission,
+            bank_details_permission: role.bank_details_permission,
+            roles_permission: role.roles_permission,
+            access_logs_permission: role.access_logs_permission
+          },
+          invitedBy: inviter || null
+        }
+      }) as UserWithRole[]
   }
 
   async count(whereClause: any, _userIds?: string[]): Promise<number> {
-    return this.prisma.user.count({
-      where: whereClause
+    const users = await this.prisma.user.findMany({
+      where: whereClause,
+      select: {
+        id: true,
+        user_role_id: true
+      }
     })
+
+    const validRoleIds = users.map(u => u.user_role_id).filter(Boolean)
+    
+    const roles = await this.prisma.userRole.findMany({
+      where: {
+        id: { in: validRoleIds }
+      },
+      select: { id: true }
+    })
+
+    const validRoleIdSet = new Set(roles.map(r => r.id))
+    
+    return users.filter(u => u.user_role_id && validRoleIdSet.has(u.user_role_id)).length
   }
 
   async findById(id: string): Promise<UserWithDetails | null> {
