@@ -30,6 +30,8 @@ export interface IAuthRepository {
     first_name: string
     last_name: string
     language: string
+    job_title?: string
+    phone_number?: string
     user_role_id: string
     password: string
     temp_password?: string

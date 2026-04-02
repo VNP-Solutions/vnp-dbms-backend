@@ -215,6 +215,8 @@ export class UserInvitationService implements IUserInvitationService {
         last_name: data.last_name,
         language: data.language || 'en',
         contact_number: data.contact_number,
+        job_title: data.job_title,
+        phone_number: data.phone_number,
         user_role_id: invitation.user_role_id,
         password: hashedPassword,
         is_verified: true,

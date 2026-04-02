@@ -187,6 +187,22 @@ export class AcceptInvitationDto {
   @IsOptional()
   @IsString()
   contact_number?: string
+
+  @ApiPropertyOptional({
+    example: 'Software Engineer',
+    description: 'Job title'
+  })
+  @IsOptional()
+  @IsString()
+  job_title?: string
+
+  @ApiPropertyOptional({
+    example: '+1234567890',
+    description: 'Phone number'
+  })
+  @IsOptional()
+  @IsString()
+  phone_number?: string
 }
 
 export class UpdateInvitationDto {
