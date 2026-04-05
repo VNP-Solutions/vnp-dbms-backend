@@ -44,6 +44,7 @@ export interface ImportPortfoliosResult {
 export interface IPortfolioService {
   create(data: CreatePortfolioDto, user: IUserWithPermissions): Promise<PortfolioWithServiceType>
   findAll(query: PortfolioQueryDto, user: IUserWithPermissions): Promise<PaginatedResult<PortfolioWithCounts>>
+  findAllCached(user: IUserWithPermissions): Promise<PortfolioWithCounts[]>
   findOne(id: string, user: IUserWithPermissions): Promise<PortfolioWithCounts>
   update(id: string, data: UpdatePortfolioDto, user: IUserWithPermissions): Promise<PortfolioWithServiceType>
   remove(id: string, user: IUserWithPermissions): Promise<{ message: string }>

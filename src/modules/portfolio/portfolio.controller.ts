@@ -86,6 +86,17 @@ export class PortfolioController {
     return this.portfolioService.findAll(query, user)
   }
 
+  @Get('all')
+  @RequirePermission(ModuleType.PORTFOLIO, PermissionAction.READ)
+  @ApiOperation({
+    summary: 'Get all portfolios (no filter, no pagination)',
+    description: 'Returns every portfolio accessible to the current user in a single array. Results are Redis-cached per user (5 min TTL) and invalidated on any write.'
+  })
+  @ApiResponse({ status: 200, description: 'Full list of portfolios' })
+  findAllCached(@CurrentUser() user: IUserWithPermissions) {
+    return this.portfolioService.findAllCached(user)
+  }
+
   @Get(':id')
   @RequirePermission(ModuleType.PORTFOLIO, PermissionAction.READ, true)
   @ApiOperation({ summary: 'Get portfolio by ID' })

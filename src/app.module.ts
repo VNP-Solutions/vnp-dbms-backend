@@ -27,6 +27,7 @@ import { SubportfolioModule } from './modules/subportfolio/subportfolio.module'
 import { UserInvitationModule } from './modules/user-invitation/user-invitation.module'
 import { UserProjectRoleModule } from './modules/user-project-role/user-project-role.module'
 import { UserRoleModule } from './modules/user-role/user-role.module'
+import { RedisModule } from './modules/redis/redis.module'
 import { UserModule } from './modules/user/user.module'
 
 @Module({
@@ -37,6 +38,7 @@ import { UserModule } from './modules/user/user.module'
       isGlobal: true,
       cache: true
     }),
+    RedisModule,
     PermissionModule,
     AuthModule,
     UserModule,

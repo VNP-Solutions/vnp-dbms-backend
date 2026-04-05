@@ -31,7 +31,72 @@
 $ yarn install
 ```
 
-## Compile and run the project
+## Environment variables
+
+Copy `.env.example` to `.env` and fill in your values:
+
+```bash
+$ cp .env.example .env
+```
+
+> When running inside Docker, set `REDIS_HOST=redis` so the app resolves the Redis container by its service name.
+
+## Docker (recommended)
+
+The project ships with a `Dockerfile` and `docker-compose.yml` that run the API and Redis together.
+
+### Start all services (API + Redis)
+
+```bash
+$ docker compose up -d
+```
+
+### Start Redis only (for local development)
+
+```bash
+$ docker compose up redis -d
+```
+
+### Stop all services
+
+```bash
+$ docker compose down
+```
+
+### Stop and remove volumes (wipes Redis data)
+
+```bash
+$ docker compose down -v
+```
+
+### Rebuild the API image after code changes
+
+```bash
+$ docker compose up -d --build api
+```
+
+### View logs
+
+```bash
+# All services
+$ docker compose logs -f
+
+# API only
+$ docker compose logs -f api
+
+# Redis only
+$ docker compose logs -f redis
+```
+
+### Connect to Redis CLI
+
+```bash
+$ docker compose exec redis redis-cli
+```
+
+---
+
+## Compile and run the project (without Docker)
 
 ```bash
 # development

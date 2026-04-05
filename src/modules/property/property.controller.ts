@@ -26,7 +26,7 @@ import {
   BulkDeletePropertyDto,
   CreatePropertyDto,
   GetPropertyCredentialDto,
-  PropertyQueryDto,
+  PropertyFilterDto,
   UpdatePropertyDto
 } from './property.dto'
 import type { IPropertyService } from './property.interface'
@@ -100,16 +100,226 @@ export class PropertyController {
     return this.propertyService.importFromExcel(file, user)
   }
 
-  @Get()
+  @Post('filter')
   @RequirePermission(ModuleType.PROPERTY, PermissionAction.READ)
   @ApiOperation({
-    summary: 'Get all properties with pagination, search, filter and sort',
+    summary: 'Get all properties with advanced filtering, pagination, search and multi-field sort',
     description:
-      'Use masked=true (default) for encrypted credentials. Use masked=false for decrypted credentials.'
+      'Use masked=true (default) for encrypted credentials. Use masked=false for decrypted credentials. Supports multiple values per filter using the "in" array. Each filter item has: name (required), in (required array of values for OR condition), sort_by (optional: "asc" or "desc" for multi-field sorting). Sorting is applied in array order - first filter with sort_by is primary sort, second is secondary, etc. Available filter fields: portfolio_id, property_id, subportfolio_id, expedia_id, booking_id, agoda_id, card_descriptor, hotel_address, new_domain_email, portfolio_contact_email, primary_case_email, expedia_status, booking_status, agoda_status, is_active.'
   })
   @ApiResponse({ status: 200, description: 'Paginated list of properties' })
-  findAll(@ParseQuery() query: PropertyQueryDto, @CurrentUser() user: IUserWithPermissions) {
-    return this.propertyService.findAll(query, user)
+  @ApiBody({
+    type: PropertyFilterDto,
+    description: 'Filter, pagination, and search parameters with multi-field sorting',
+    examples: {
+      'Basic filter': {
+        value: {
+          filters: [
+            {
+              name: 'portfolio_id',
+              sort_by: 'asc',
+              in: ['507f1f77bcf86cd799439013']
+            }
+          ],
+          page: 1,
+          limit: 10,
+          masked: true
+        }
+      },
+      'Multiple filters with multi-field sort': {
+        value: {
+          filters: [
+            {
+              name: 'portfolio_id',
+              sort_by: 'asc',
+              in: ['507f1f77bcf86cd799439013', '507f1f77bcf86cd799439014']
+            },
+            {
+              name: 'expedia_id',
+              in: ['EXP123', 'EXP456']
+            },
+            {
+              name: 'is_active',
+              sort_by: 'desc',
+              in: [true]
+            }
+          ],
+          page: 1,
+          limit: 20,
+          search: 'Hotel',
+          masked: false
+        }
+      },
+      'All available filters': {
+        value: {
+          filters: [
+            {
+              name: 'portfolio_id',
+              sort_by: 'asc',
+              in: ['507f1f77bcf86cd799439013', '507f1f77bcf86cd799439014']
+            },
+            {
+              name: 'property_id',
+              in: ['507f1f77bcf86cd799439015']
+            },
+            {
+              name: 'subportfolio_id',
+              in: ['507f1f77bcf86cd799439016']
+            },
+            {
+              name: 'expedia_id',
+              sort_by: 'desc',
+              in: ['EXP123', 'EXP456']
+            },
+            {
+              name: 'booking_id',
+              in: ['BK789', 'BK012']
+            },
+            {
+              name: 'agoda_id',
+              in: ['AG345', 'AG678']
+            },
+            {
+              name: 'card_descriptor',
+              in: ['VISA1234', 'MASTER5678']
+            },
+            {
+              name: 'hotel_address',
+              in: ['123 Main St', '456 Oak Ave']
+            },
+            {
+              name: 'new_domain_email',
+              in: ['hotel1@example.com', 'hotel2@example.com']
+            },
+            {
+              name: 'portfolio_contact_email',
+              in: ['contact1@example.com']
+            },
+            {
+              name: 'primary_case_email',
+              in: ['case@example.com']
+            },
+            {
+              name: 'expedia_status',
+              in: ['active', 'inactive']
+            },
+            {
+              name: 'booking_status',
+              in: ['confirmed']
+            },
+            {
+              name: 'agoda_status',
+              in: ['pending']
+            },
+            {
+              name: 'is_active',
+              sort_by: 'asc',
+              in: [true, false]
+            }
+          ],
+          page: 1,
+          limit: 10,
+          search: 'Hotel',
+          masked: true
+        }
+      }
+    }
+  })
+  findAllWithFilters(@Body() filterDto: PropertyFilterDto, @CurrentUser() user: IUserWithPermissions) {
+    return this.propertyService.findAllWithFilters(filterDto, user)
+  }
+
+  @Get('all')
+  @RequirePermission(ModuleType.PROPERTY, PermissionAction.READ)
+  @ApiOperation({
+    summary: 'Get all properties (no filter, no pagination)',
+    description: 'Returns every property accessible to the current user in a single array. Credentials are always masked. Results are Redis-cached per user (5 min TTL) and invalidated on any write.'
+  })
+  @ApiResponse({ status: 200, description: 'Full list of properties (credentials masked)' })
+  findAllCached(@CurrentUser() user: IUserWithPermissions) {
+    return this.propertyService.findAllCached(user)
+  }
+
+  @Get('global-filter')
+  @RequirePermission(ModuleType.PROPERTY, PermissionAction.READ)
+  @ApiOperation({
+    summary: 'Get unique filter values for global filter',
+    description: 'Returns unique values extracted from accessible portfolios and properties for populating global filter dropdowns. Data is served from Redis cache.'
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Unique filter values for global filter',
+    schema: {
+      type: 'object',
+      properties: {
+        expedia_id: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Unique Expedia IDs'
+        },
+        portfolio: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              name: { type: 'string' }
+            }
+          },
+          description: 'Unique portfolios with id and name'
+        },
+        property: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              name: { type: 'string' }
+            }
+          },
+          description: 'Unique properties with id and name'
+        },
+        booking_id: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Unique Booking.com IDs'
+        },
+        agoda_id: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Unique Agoda IDs'
+        },
+        hotel_address: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Unique hotel addresses'
+        },
+        card_descriptor: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Unique card descriptors'
+        },
+        new_domain_email: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Unique new domain emails'
+        },
+        portfolio_contact_email: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Unique portfolio contact emails'
+        },
+        case_contact_email: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Unique case contact emails'
+        }
+      }
+    }
+  })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  getAllDataForGlobalFilter(@CurrentUser() user: IUserWithPermissions) {
+    return this.propertyService.getAllDataForGlobalFilter(user)
   }
 
   @Get('dropdown')

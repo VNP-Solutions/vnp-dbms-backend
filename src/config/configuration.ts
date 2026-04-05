@@ -41,6 +41,13 @@ export interface Configuration {
     workers: number
   }
   superAdminSecret: string
+  redis: {
+    host: string
+    port: number
+    password?: string
+    /** Default TTL in seconds (converted to ms when passed to cache stores) */
+    ttl: number
+  }
 }
 
 export default (): Configuration => ({
@@ -86,5 +93,11 @@ export default (): Configuration => ({
   parallel: {
     workers: parseInt(process.env.PARALLEL_WORKERS || '8', 10)
   },
-  superAdminSecret: process.env.SUPER_ADMIN_SECRET || ''
+  superAdminSecret: process.env.SUPER_ADMIN_SECRET || '',
+  redis: {
+    host: process.env.REDIS_HOST || 'localhost',
+    port: parseInt(process.env.REDIS_PORT || '6379', 10),
+    password: process.env.REDIS_PASSWORD || undefined,
+    ttl: parseInt(process.env.REDIS_TTL || '300', 10)
+  }
 })

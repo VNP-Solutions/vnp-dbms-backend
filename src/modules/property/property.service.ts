@@ -7,17 +7,19 @@ import {
   Logger,
   NotFoundException
 } from '@nestjs/common'
+import { createHash } from 'crypto'
 import * as XLSX from 'xlsx'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
 import { EncryptionUtil } from '../../common/utils/encryption.util'
-import { QueryBuilder } from '../../common/utils/query-builder.util'
 import type { IAuthRepository } from '../auth/auth.interface'
 import { PrismaService } from '../prisma/prisma.service'
 import type { IPropertyCredentialsService } from '../property-credentials/property-credentials.interface'
+import { RedisService } from '../redis/redis.service'
+import type { PaginatedResult } from '../../common/dto/query.dto'
 import {
   CreatePropertyDto,
   GetPropertyCredentialDto,
-  PropertyQueryDto,
+  PropertyFilterDto,
   RequiredFieldType,
   UpdatePropertyDto
 } from './property.dto'
@@ -28,6 +30,11 @@ import type {
   IPropertyService,
   PropertyWithRelations
 } from './property.interface'
+import type { IPortfolioService } from '../portfolio/portfolio.interface'
+
+const CACHE_TTL_ITEM = 5 * 60 * 1000   // 5 minutes for individual records
+const CACHE_KEY = (id: string) => `property:${id}`
+const ALL_PATTERN = 'property:all:*'
 
 @Injectable()
 export class PropertyService implements IPropertyService {
@@ -40,8 +47,11 @@ export class PropertyService implements IPropertyService {
     private readonly credentialsService: IPropertyCredentialsService,
     @Inject('IAuthRepository')
     private readonly authRepository: IAuthRepository,
+    @Inject('IPortfolioService')
+    private readonly portfolioService: IPortfolioService,
     private readonly encryptionUtil: EncryptionUtil,
-    private readonly prisma: PrismaService
+    private readonly prisma: PrismaService,
+    private readonly redisService: RedisService
   ) {}
 
   async create(
@@ -85,159 +95,119 @@ export class PropertyService implements IPropertyService {
       }
     }
 
+    await this.redisService.deleteByPattern(ALL_PATTERN)
     return this.repo.findById(property.id) as Promise<PropertyWithRelations>
   }
 
-  async findAll(query: PropertyQueryDto, user: IUserWithPermissions) {
+  async findAllWithFilters(filterDto: PropertyFilterDto, user: IUserWithPermissions): Promise<PaginatedResult<PropertyWithRelations>> {
+    this.logger.log(`property:findAllWithFilters — fetching from MongoDB (no cache)`)
+
     const accessibleIds = await this.repo.getAccessiblePropertyIds(user.id)
     if (Array.isArray(accessibleIds) && accessibleIds.length === 0) {
-      const usePagination = query.page != null && query.limit != null
+      const usePagination = filterDto.page != null && filterDto.limit != null
       return {
         data: [],
         metadata: {
           totalDocuments: 0,
-          currentPage: usePagination ? query.page || 1 : 1,
+          currentPage: usePagination ? filterDto.page || 1 : 1,
           totalPages: 0,
-          limit: usePagination ? query.limit || 10 : 0
+          limit: usePagination ? filterDto.limit || 10 : 0
         }
       }
     }
 
-    const additionalFilters: any = {}
-    if (query.name)
-      additionalFilters.name = { contains: query.name, mode: 'insensitive' }
-    if (query.subportfolio_id)
-      additionalFilters.subportfolio_id = query.subportfolio_id
-    if (query.previous_portfolio_id)
-      additionalFilters.previous_portfolio_id = query.previous_portfolio_id
-    if (query.card_descriptor)
-      additionalFilters.card_descriptor = { contains: query.card_descriptor, mode: 'insensitive' }
-    if (query.next_due_date)
-      additionalFilters.next_due_date = new Date(query.next_due_date)
-    if (query.new_domain_email)
-      additionalFilters.new_domain_email = { contains: query.new_domain_email, mode: 'insensitive' }
-    if (query.primary_case_email)
-      additionalFilters.primary_case_email = { contains: query.primary_case_email, mode: 'insensitive' }
-    if (query.portfolio_contact_email)
-      additionalFilters.portfolio_contact_email = { contains: query.portfolio_contact_email, mode: 'insensitive' }
-    if (query.description)
-      additionalFilters.description = { contains: query.description, mode: 'insensitive' }
-    if (query.hotel_address)
-      additionalFilters.hotel_address = { contains: query.hotel_address, mode: 'insensitive' }
-    if (query.qp_username)
-      additionalFilters.qp_username = { contains: query.qp_username, mode: 'insensitive' }
-    if (query.expedia_id) additionalFilters.expedia_id = query.expedia_id
-    if (query.expedia_status)
-      additionalFilters.expedia_status = query.expedia_status
-    if (query.booking_id) additionalFilters.booking_id = query.booking_id
-    if (query.booking_status)
-      additionalFilters.booking_status = query.booking_status
-    if (query.agoda_id) additionalFilters.agoda_id = query.agoda_id
-    if (query.agoda_status) additionalFilters.agoda_status = query.agoda_status
-    if (query.is_active !== undefined && query.is_active !== 'All') {
-      additionalFilters.is_active = query.is_active
-    }
-    if (query.start_date && query.end_date) {
-      const startDate = new Date(query.start_date)
-      startDate.setHours(0, 0, 0, 0)
-      
-      const endDate = new Date(query.end_date)
-      endDate.setHours(23, 59, 59, 999)
-      
-      additionalFilters.created_at = {
-        gte: startDate,
-        lte: endDate
-      }
-      
-      this.logger.debug(`Date filter applied: ${startDate.toISOString()} to ${endDate.toISOString()}`)
-    }
+    const baseWhere: any = accessibleIds === 'all' ? {} : { id: { in: accessibleIds } }
+    const whereConditions: any[] = []
+    const orderByArray: any[] = []
 
-    const mergedQuery = {
-      ...query,
-      filters: {
-        ...(typeof query.filters === 'object' ? query.filters : {}),
-        ...additionalFilters
-      }
-    }
+    if (filterDto.filters && Array.isArray(filterDto.filters)) {
+      for (const filter of filterDto.filters) {
+        const { name, sort_by, in: values } = filter
 
-    this.logger.debug(`Merged query filters: ${JSON.stringify(mergedQuery.filters, null, 2)}`)
+        if (!values || values.length === 0) continue
 
-    const queryConfig = {
-      searchFields: ['name', 'description', 'hotel_address'],
-      filterableFields: [
-        'name',
-        'subportfolio_id',
-        'previous_portfolio_id',
-        'card_descriptor',
-        'next_due_date',
-        'new_domain_email',
-        'primary_case_email',
-        'portfolio_contact_email',
-        'description',
-        'hotel_address',
-        'qp_username',
-        'is_active',
-        'created_at',
-        'expedia_id',
-        'expedia_status',
-        'booking_id',
-        'booking_status',
-        'agoda_id',
-        'agoda_status'
-      ],
-      sortableFields: [
-        'name',
-        'created_at',
-        'updated_at',
-        'is_active',
-        'next_due_date'
-      ],
-      defaultSortField: 'created_at',
-      defaultSortOrder: 'desc' as const,
-      nestedFieldMap: {
-        portfolio_name: 'portfolio.name',
-        subportfolio_name: 'subportfolio.name',
-        currency_code: 'currency.code'
+        // Collect sort_by for multi-field sorting
+        if (sort_by) {
+          orderByArray.push({ [name]: sort_by })
+        }
+
+        switch (name) {
+          case 'portfolio_id':
+            whereConditions.push({
+              OR: [
+                { portfolio_id: { in: values } },
+                { subportfolio: { portfolio_id: { in: values } } }
+              ]
+            })
+            break
+          case 'property_id':
+            whereConditions.push({ id: { in: values } })
+            break
+          case 'subportfolio_id':
+            whereConditions.push({ subportfolio_id: { in: values } })
+            break
+          case 'expedia_id':
+            whereConditions.push({ expedia_id: { in: values } })
+            break
+          case 'booking_id':
+            whereConditions.push({ booking_id: { in: values } })
+            break
+          case 'agoda_id':
+            whereConditions.push({ agoda_id: { in: values } })
+            break
+          case 'card_descriptor':
+            whereConditions.push({ card_descriptor: { in: values } })
+            break
+          case 'hotel_address':
+            whereConditions.push({ hotel_address: { in: values } })
+            break
+          case 'new_domain_email':
+            whereConditions.push({ new_domain_email: { in: values } })
+            break
+          case 'portfolio_contact_email':
+            whereConditions.push({ portfolio_contact_email: { in: values } })
+            break
+          case 'primary_case_email':
+            whereConditions.push({ primary_case_email: { in: values } })
+            break
+          case 'expedia_status':
+            whereConditions.push({ expedia_status: { in: values } })
+            break
+          case 'booking_status':
+            whereConditions.push({ booking_status: { in: values } })
+            break
+          case 'agoda_status':
+            whereConditions.push({ agoda_status: { in: values } })
+            break
+          case 'is_active':
+            if (values.length > 0) {
+              whereConditions.push({ is_active: { in: values } })
+            }
+            break
+        }
       }
     }
 
-    const baseWhere: any =
-      accessibleIds === 'all' ? {} : { id: { in: accessibleIds } }
+    // Use multi-field sorting if provided, otherwise default to created_at desc
+    const orderBy = orderByArray.length > 0 ? orderByArray : { created_at: 'desc' }
 
-    const {
-      where: builtWhere,
-      skip,
-      take,
-      orderBy,
-      usePagination
-    } = QueryBuilder.buildPrismaQuery(mergedQuery, queryConfig, baseWhere)
-
-    let where = builtWhere
-    if (query.portfolio_id) {
-      const portfolioCondition = {
+    if (filterDto.search) {
+      whereConditions.push({
         OR: [
-          { portfolio_id: query.portfolio_id },
-          { subportfolio: { portfolio_id: query.portfolio_id } }
+          { name: { contains: filterDto.search, mode: 'insensitive' } },
+          { description: { contains: filterDto.search, mode: 'insensitive' } },
+          { hotel_address: { contains: filterDto.search, mode: 'insensitive' } }
         ]
-      }
-      where =
-        Object.keys(builtWhere).length === 0
-          ? portfolioCondition
-          : { AND: [builtWhere, portfolioCondition] }
+      })
     }
 
-    if (query.portfolio_name) {
-      const portfolioNameCondition = {
-        OR: [
-          { portfolio: { name: { contains: query.portfolio_name, mode: 'insensitive' } } },
-          { subportfolio: { portfolio: { name: { contains: query.portfolio_name, mode: 'insensitive' } } } }
-        ]
-      }
-      where =
-        Object.keys(where).length === 0
-          ? portfolioNameCondition
-          : { AND: [where, portfolioNameCondition] }
-    }
+    const where = whereConditions.length > 0 
+      ? { AND: [baseWhere, ...whereConditions] }
+      : baseWhere
+
+    const usePagination = filterDto.page != null && filterDto.limit != null
+    const skip = usePagination ? ((filterDto.page || 1) - 1) * (filterDto.limit || 10) : undefined
+    const take = usePagination ? filterDto.limit || 10 : undefined
 
     this.logger.debug(`Final where clause: ${JSON.stringify(where, null, 2)}`)
 
@@ -247,13 +217,10 @@ export class PropertyService implements IPropertyService {
     ])
 
     const totalPages = usePagination ? Math.ceil(total / (take || 10)) || 1 : 1
-    const currentPage = usePagination ? query.page || 1 : 1
+    const currentPage = usePagination ? filterDto.page || 1 : 1
     const limit = usePagination ? take || 10 : data.length
 
-    this.logger.debug(`masked value: ${JSON.stringify(query.masked)}, type: ${typeof query.masked}`)
-
-    const shouldDecrypt = query.masked === false
-    this.logger.debug(`shouldDecrypt: ${shouldDecrypt}`)
+    const shouldDecrypt = filterDto.masked === false
 
     if (shouldDecrypt) {
       const dataWithDecryptedCredentials = data.map(p =>
@@ -270,7 +237,6 @@ export class PropertyService implements IPropertyService {
       }
     }
 
-    // If masked is true or undefined, replace encrypted values with asterisks
     const dataWithMaskedCredentials = data.map(p =>
       this.maskCredentialsForResponse(p)
     )
@@ -372,8 +338,19 @@ export class PropertyService implements IPropertyService {
     if (Array.isArray(accessibleIds) && !accessibleIds.includes(id)) {
       throw new NotFoundException('Property not found')
     }
+
+    const cacheKey = CACHE_KEY(id)
+    const cached = await this.redisService.get<PropertyWithRelations>(cacheKey)
+    if (cached) {
+      this.logger.log(`[CACHE HIT] property:findOne — served from Redis (key: ${cacheKey})`)
+      return cached
+    }
+    this.logger.log(`[CACHE MISS] property:findOne — fetching from MongoDB (key: ${cacheKey})`)
+
     const property = await this.repo.findById(id)
     if (!property) throw new NotFoundException('Property not found')
+
+    await this.redisService.set(cacheKey, property, CACHE_TTL_ITEM)
     return property
   }
 
@@ -428,12 +405,20 @@ export class PropertyService implements IPropertyService {
       }
     }
 
+    await Promise.all([
+      this.redisService.del(CACHE_KEY(id)),
+      this.redisService.deleteByPattern(ALL_PATTERN)
+    ])
     return this.repo.findById(id) as Promise<PropertyWithRelations>
   }
 
   async remove(id: string, user: IUserWithPermissions) {
     await this.findOne(id, user)
     await this.repo.delete(id)
+    await Promise.all([
+      this.redisService.del(CACHE_KEY(id)),
+      this.redisService.deleteByPattern(ALL_PATTERN)
+    ])
     return { message: 'Property deleted successfully' }
   }
 
@@ -587,7 +572,7 @@ export class PropertyService implements IPropertyService {
    *  3. Map every row to a typed ImportPropertyRow, encrypting passwords inline.
    *  4. Delegate ALL DB operations to repo.importProperties().
    */
-  importFromExcel(
+  async importFromExcel(
     file: Express.Multer.File,
     _user: IUserWithPermissions
   ): Promise<ImportPropertiesResult> {
@@ -658,7 +643,9 @@ export class PropertyService implements IPropertyService {
       })
       .filter(Boolean) as ImportPropertyRow[]
 
-    return this.repo.importProperties(rows)
+    const result = await this.repo.importProperties(rows)
+    await this.redisService.deleteByPattern(ALL_PATTERN)
+    return result
   }
 
   async bulkDelete(ids: string[], user: IUserWithPermissions): Promise<import('./property.interface').BulkDeleteResult> {
@@ -703,6 +690,13 @@ export class PropertyService implements IPropertyService {
 
     this.logger.log(`Bulk delete completed: ${success.length} success, ${skipped.length} skipped`)
 
+    if (success.length > 0) {
+      await Promise.all([
+        ...success.map(({ id }) => this.redisService.del(CACHE_KEY(id))),
+        this.redisService.deleteByPattern(ALL_PATTERN)
+      ])
+    }
+
     return {
       success,
       skipped,
@@ -710,5 +704,88 @@ export class PropertyService implements IPropertyService {
       successCount: success.length,
       skippedCount: skipped.length
     }
+  }
+
+  async findAllCached(user: IUserWithPermissions): Promise<PropertyWithRelations[]> {
+    const cacheKey = `property:all:${user.id}`
+    const cached = await this.redisService.get<PropertyWithRelations[]>(cacheKey)
+    if (cached) {
+      this.logger.log(`[CACHE HIT] property:findAllCached — served from Redis (key: ${cacheKey})`)
+      return cached
+    }
+    this.logger.log(`[CACHE MISS] property:findAllCached — fetching from MongoDB (key: ${cacheKey})`)
+
+    const accessibleIds = await this.repo.getAccessiblePropertyIds(user.id)
+    if (Array.isArray(accessibleIds) && accessibleIds.length === 0) {
+      return []
+    }
+
+    const where = accessibleIds === 'all' ? {} : { id: { in: accessibleIds } }
+    const data = await this.repo.findAll({ where, orderBy: { created_at: 'desc' } })
+
+    const masked = data.map(p => this.maskCredentialsForResponse(p))
+    // TTL 0 = no expiry; invalidated explicitly on every write operation
+    await this.redisService.set(cacheKey, masked, 0)
+    return masked
+  }
+
+  async getAllDataForGlobalFilter(user: IUserWithPermissions) {
+    const [portfolios, properties] = await Promise.all([
+      this.portfolioService.findAllCached(user),
+      this.findAllCached(user)
+    ])
+
+    const uniqueExpediaIds = new Set<string>()
+    const portfolioMap = new Map<string, { id: string; name: string }>()
+    const propertyMap = new Map<string, { id: string; name: string }>()
+    const uniqueBookingIds = new Set<string>()
+    const uniqueAgodaIds = new Set<string>()
+    const uniqueHotelAddresses = new Set<string>()
+    const uniqueCardDescriptors = new Set<string>()
+    const uniqueNewDomainEmails = new Set<string>()
+    const uniquePortfolioContactEmails = new Set<string>()
+    const uniqueCaseContactEmails = new Set<string>()
+
+    portfolios.forEach((portfolio: any) => {
+      if (portfolio.id && portfolio.name) {
+        portfolioMap.set(portfolio.id, { id: portfolio.id, name: portfolio.name })
+      }
+      if (portfolio.contact_email) uniquePortfolioContactEmails.add(portfolio.contact_email)
+      if (portfolio.portfolio_contact_email) uniquePortfolioContactEmails.add(portfolio.portfolio_contact_email)
+    })
+
+    properties.forEach((property: any) => {
+      if (property.expedia_id) uniqueExpediaIds.add(property.expedia_id)
+      if (property.booking_id) uniqueBookingIds.add(property.booking_id)
+      if (property.agoda_id) uniqueAgodaIds.add(property.agoda_id)
+      if (property.id && property.name) {
+        propertyMap.set(property.id, { id: property.id, name: property.name })
+      }
+      if (property.hotel_address) uniqueHotelAddresses.add(property.hotel_address)
+      if (property.card_descriptor) uniqueCardDescriptors.add(property.card_descriptor)
+      if (property.new_domain_email) uniqueNewDomainEmails.add(property.new_domain_email)
+      if (property.portfolio_contact_email) uniquePortfolioContactEmails.add(property.portfolio_contact_email)
+      if (property.primary_case_email) uniqueCaseContactEmails.add(property.primary_case_email)
+      if (property.portfolio?.id && property.portfolio?.name) {
+        portfolioMap.set(property.portfolio.id, { id: property.portfolio.id, name: property.portfolio.name })
+      }
+    })
+
+    return {
+      expedia_id: Array.from(uniqueExpediaIds).sort(),
+      portfolio: Array.from(portfolioMap.values()).sort((a, b) => a.name.localeCompare(b.name)),
+      property: Array.from(propertyMap.values()).sort((a, b) => a.name.localeCompare(b.name)),
+      booking_id: Array.from(uniqueBookingIds).sort(),
+      agoda_id: Array.from(uniqueAgodaIds).sort(),
+      hotel_address: Array.from(uniqueHotelAddresses).sort(),
+      card_descriptor: Array.from(uniqueCardDescriptors).sort(),
+      new_domain_email: Array.from(uniqueNewDomainEmails).sort(),
+      portfolio_contact_email: Array.from(uniquePortfolioContactEmails).sort(),
+      case_contact_email: Array.from(uniqueCaseContactEmails).sort()
+    }
+  }
+
+  private hashQuery(query: object): string {
+    return createHash('sha256').update(JSON.stringify(query)).digest('hex').substring(0, 16)
   }
 }

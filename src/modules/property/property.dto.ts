@@ -7,6 +7,7 @@ import {
   IsDateString,
   IsIn,
   IsNotEmpty,
+  IsNumber,
   IsOptional,
   IsString,
   ValidateNested
@@ -463,4 +464,156 @@ export class BulkDeletePropertyDto {
   @IsString({ each: true })
   @IsNotEmpty({ each: true })
   ids: string[]
+}
+
+export class PropertyFilterItem {
+  @ApiProperty({
+    description: 'Name of the field to filter',
+    example: 'portfolio_id',
+    enum: [
+      'portfolio_id',
+      'property_id',
+      'subportfolio_id',
+      'expedia_id',
+      'booking_id',
+      'agoda_id',
+      'card_descriptor',
+      'hotel_address',
+      'new_domain_email',
+      'portfolio_contact_email',
+      'primary_case_email',
+      'expedia_status',
+      'booking_status',
+      'agoda_status',
+      'is_active'
+    ]
+  })
+  @IsString()
+  @IsNotEmpty()
+  name: string
+
+  @ApiPropertyOptional({
+    description: 'Sort order for this field (applied in array order for multi-field sorting)',
+    example: 'asc',
+    enum: ['asc', 'desc']
+  })
+  @IsOptional()
+  @IsIn(['asc', 'desc'])
+  sort_by?: 'asc' | 'desc'
+
+  @ApiProperty({
+    description: 'Array of values to filter by (OR condition)',
+    example: ['507f1f77bcf86cd799439013', '507f1f77bcf86cd799439014'],
+    type: [String]
+  })
+  @IsArray()
+  @IsNotEmpty()
+  in: (string | number | boolean)[]
+}
+
+export class PropertyFilterDto {
+  @ApiPropertyOptional({
+    description: 'Array of filter items. Each filter supports multiple values (OR condition) and optional sort_by. Sorting is applied in array order for multi-field sorting. Available fields: portfolio_id, property_id, subportfolio_id, expedia_id, booking_id, agoda_id, card_descriptor, hotel_address, new_domain_email, portfolio_contact_email, primary_case_email, expedia_status, booking_status, agoda_status, is_active',
+    type: [PropertyFilterItem],
+    example: [
+      {
+        name: 'portfolio_id',
+        sort_by: 'asc',
+        in: ['507f1f77bcf86cd799439013', '507f1f77bcf86cd799439014']
+      },
+      {
+        name: 'property_id',
+        in: ['507f1f77bcf86cd799439015']
+      },
+      {
+        name: 'expedia_id',
+        sort_by: 'desc',
+        in: ['EXP123', 'EXP456']
+      },
+      {
+        name: 'booking_id',
+        in: ['BK789', 'BK012']
+      },
+      {
+        name: 'agoda_id',
+        in: ['AG345', 'AG678']
+      },
+      {
+        name: 'card_descriptor',
+        in: ['VISA1234', 'MASTER5678']
+      },
+      {
+        name: 'hotel_address',
+        in: ['123 Main St', '456 Oak Ave']
+      },
+      {
+        name: 'new_domain_email',
+        in: ['hotel1@example.com', 'hotel2@example.com']
+      },
+      {
+        name: 'portfolio_contact_email',
+        in: ['contact1@example.com']
+      },
+      {
+        name: 'primary_case_email',
+        in: ['case@example.com']
+      },
+      {
+        name: 'expedia_status',
+        in: ['active', 'inactive']
+      },
+      {
+        name: 'booking_status',
+        in: ['confirmed']
+      },
+      {
+        name: 'agoda_status',
+        in: ['pending']
+      },
+      {
+        name: 'is_active',
+        sort_by: 'asc',
+        in: [true, false]
+      }
+    ]
+  })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => PropertyFilterItem)
+  filters?: PropertyFilterItem[]
+
+  @ApiPropertyOptional({
+    description: 'Page number for pagination',
+    example: 1
+  })
+  @IsOptional()
+  @IsNumber()
+  @Type(() => Number)
+  page?: number
+
+  @ApiPropertyOptional({
+    description: 'Number of items per page',
+    example: 10
+  })
+  @IsOptional()
+  @IsNumber()
+  @Type(() => Number)
+  limit?: number
+
+  @ApiPropertyOptional({
+    description: 'Search term for text fields (searches across name, description, hotel_address)',
+    example: 'Hotel'
+  })
+  @IsOptional()
+  @IsString()
+  search?: string
+
+  @ApiPropertyOptional({
+    description: 'If true (default), credentials are masked. If false, credentials are decrypted.',
+    example: true
+  })
+  @IsOptional()
+  @IsBoolean()
+  masked?: boolean
 }

@@ -1,0 +1,50 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vnp-api
+    ports:
+      - "${PORT:-8080}:8080"
+    env_file:
+      - .env
+    environment:
+      # Override REDIS_HOST so the API resolves Redis by its Docker service name,
+      # regardless of what REDIS_HOST is set to in .env (which may be 'localhost' for local dev)
+      - REDIS_HOST=redis
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - vnp-network
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: vnp-redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - vnp-network
+    restart: unless-stopped
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      ${REDIS_PASSWORD:+--requirepass ${REDIS_PASSWORD}}
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  redis_data:
+    driver: local
+
+networks:
+  vnp-network:
+    driver: bridge
