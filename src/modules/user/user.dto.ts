@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
-import { Transform } from 'class-transformer'
-import { IsBoolean, IsEmail, IsNotEmpty, IsOptional, IsString } from 'class-validator'
+import { Transform, Type } from 'class-transformer'
+import { IsBoolean, IsDate, IsEmail, IsNotEmpty, IsOptional, IsString } from 'class-validator'
 import { QueryDto } from '../../common/dto/query.dto'
 
 export class CreateUserDto {
@@ -197,6 +197,42 @@ export class UserQueryDto extends QueryDto {
   })
   @IsBoolean()
   is_verified?: boolean
+
+  @ApiPropertyOptional({
+    description: 'Filter by creation date from (YYYY-MM-DD format)',
+    example: '2024-01-01'
+  })
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
+  created_from?: Date
+
+  @ApiPropertyOptional({
+    description: 'Filter by creation date to (YYYY-MM-DD format)',
+    example: '2024-12-31'
+  })
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
+  created_to?: Date
+
+  @ApiPropertyOptional({
+    description: 'Filter by update date from (YYYY-MM-DD format)',
+    example: '2024-01-01'
+  })
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
+  updated_from?: Date
+
+  @ApiPropertyOptional({
+    description: 'Filter by update date to (YYYY-MM-DD format)',
+    example: '2024-12-31'
+  })
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
+  updated_to?: Date
 }
 
 export class DeleteUserDto {

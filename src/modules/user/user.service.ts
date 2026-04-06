@@ -229,6 +229,28 @@ export class UserService implements IUserService {
       additionalFilters.is_verified = query.is_verified
     }
 
+    // Date range filters for created_at
+    if (query.created_from || query.created_to) {
+      additionalFilters.created_at = {}
+      if (query.created_from) {
+        additionalFilters.created_at.gte = query.created_from
+      }
+      if (query.created_to) {
+        additionalFilters.created_at.lte = query.created_to
+      }
+    }
+
+    // Date range filters for updated_at
+    if (query.updated_from || query.updated_to) {
+      additionalFilters.updated_at = {}
+      if (query.updated_from) {
+        additionalFilters.updated_at.gte = query.updated_from
+      }
+      if (query.updated_to) {
+        additionalFilters.updated_at.lte = query.updated_to
+      }
+    }
+
     // Merge with existing filters
     const mergedQuery = {
       ...query,
