@@ -120,6 +120,34 @@ export class UserController {
     description: 'Filter by verification status (true/false)',
     example: true
   })
+  @ApiQuery({
+    name: 'created_from',
+    required: false,
+    type: String,
+    description: 'Filter by creation date from (YYYY-MM-DD format)',
+    example: '2024-01-01'
+  })
+  @ApiQuery({
+    name: 'created_to',
+    required: false,
+    type: String,
+    description: 'Filter by creation date to (YYYY-MM-DD format)',
+    example: '2024-12-31'
+  })
+  @ApiQuery({
+    name: 'updated_from',
+    required: false,
+    type: String,
+    description: 'Filter by update date from (YYYY-MM-DD format)',
+    example: '2024-01-01'
+  })
+  @ApiQuery({
+    name: 'updated_to',
+    required: false,
+    type: String,
+    description: 'Filter by update date to (YYYY-MM-DD format)',
+    example: '2024-12-31'
+  })
   @ApiResponse({
     status: 200,
     description: 'Paginated list of users retrieved successfully'
