@@ -11,6 +11,7 @@ import {
 import {
   ApiBearerAuth,
   ApiOperation,
+  ApiQuery,
   ApiResponse,
   ApiTags
 } from '@nestjs/swagger'
@@ -69,6 +70,55 @@ export class UserController {
   @ApiOperation({
     summary:
       'Get all users accessible to the current user with pagination, search, filter, and sort'
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (starts from 1)',
+    example: 1
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Number of items per page',
+    example: 10
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    type: String,
+    description: 'Search term to query across first_name, last_name, and email',
+    example: 'john'
+  })
+  @ApiQuery({
+    name: 'sortBy',
+    required: false,
+    type: String,
+    description: 'Field to sort by',
+    example: 'created_at'
+  })
+  @ApiQuery({
+    name: 'sortOrder',
+    required: false,
+    enum: ['asc', 'desc'],
+    description: 'Sort order',
+    example: 'desc'
+  })
+  @ApiQuery({
+    name: 'user_role_id',
+    required: false,
+    type: String,
+    description: 'Filter by user role ID (can be comma-separated for multiple)',
+    example: '507f1f77bcf86cd799439011'
+  })
+  @ApiQuery({
+    name: 'is_verified',
+    required: false,
+    type: Boolean,
+    description: 'Filter by verification status (true/false)',
+    example: true
   })
   @ApiResponse({
     status: 200,
