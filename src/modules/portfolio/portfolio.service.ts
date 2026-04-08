@@ -6,10 +6,13 @@ import {
   Logger,
   NotFoundException
 } from '@nestjs/common'
+import { createHash } from 'crypto'
 import * as XLSX from 'xlsx'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
 import { QueryBuilder } from '../../common/utils/query-builder.util'
+import { RedisService } from '../redis/redis.service'
 import { PrismaService } from '../prisma/prisma.service'
+import type { PaginatedResult } from '../../common/dto/query.dto'
 import { CreatePortfolioDto, PortfolioQueryDto, UpdatePortfolioDto } from './portfolio.dto'
 import type {
   ImportPortfoliosResult,
@@ -18,6 +21,10 @@ import type {
   PortfolioWithCounts
 } from './portfolio.interface'
 
+const CACHE_TTL_ITEM = 5 * 60 * 1000   // 5 minutes for individual records
+const CACHE_KEY = (id: string) => `portfolio:${id}`
+const ALL_PATTERN = 'portfolio:all:*'
+
 @Injectable()
 export class PortfolioService implements IPortfolioService {
   private readonly logger = new Logger(PortfolioService.name)
@@ -25,16 +32,21 @@ export class PortfolioService implements IPortfolioService {
   constructor(
     @Inject('IPortfolioRepository')
     private readonly portfolioRepository: IPortfolioRepository,
-    private readonly prisma: PrismaService
+    private readonly prisma: PrismaService,
+    private readonly redisService: RedisService
   ) {}
 
   async create(data: CreatePortfolioDto, _user: IUserWithPermissions) {
     const existing = await this.portfolioRepository.findByName(data.name)
     if (existing) throw new ConflictException('Portfolio with this name already exists')
-    return this.portfolioRepository.create(data)
+    const portfolio = await this.portfolioRepository.create(data)
+    await this.redisService.deleteByPattern(ALL_PATTERN)
+    return portfolio
   }
 
-  async findAll(query: PortfolioQueryDto, user: IUserWithPermissions) {
+  async findAll(query: PortfolioQueryDto, user: IUserWithPermissions): Promise<PaginatedResult<PortfolioWithCounts>> {
+    this.logger.log(`portfolio:findAll — fetching from MongoDB (no cache)`)
+
     const accessibleIds = await this.portfolioRepository.getAccessiblePortfolioIds(user.id)
     if (Array.isArray(accessibleIds) && accessibleIds.length === 0) {
       const usePagination = query.page != null && query.limit != null
@@ -94,6 +106,7 @@ export class PortfolioService implements IPortfolioService {
     const totalPages = usePagination ? Math.ceil(total / (take || 10)) || 1 : 1
     const currentPage = usePagination ? (query.page || 1) : 1
     const limit = usePagination ? (take || 10) : data.length
+    
     return {
       data,
       metadata: {
@@ -110,8 +123,19 @@ export class PortfolioService implements IPortfolioService {
     if (Array.isArray(accessibleIds) && !accessibleIds.includes(id)) {
       throw new NotFoundException('Portfolio not found')
     }
+
+    const cacheKey = CACHE_KEY(id)
+    const cached = await this.redisService.get<PortfolioWithCounts>(cacheKey)
+    if (cached) {
+      this.logger.log(`[CACHE HIT] portfolio:findOne — served from Redis (key: ${cacheKey})`)
+      return cached
+    }
+    this.logger.log(`[CACHE MISS] portfolio:findOne — fetching from MongoDB (key: ${cacheKey})`)
+
     const portfolio = await this.portfolioRepository.findById(id)
     if (!portfolio) throw new NotFoundException('Portfolio not found')
+
+    await this.redisService.set(cacheKey, portfolio, CACHE_TTL_ITEM)
     return portfolio
   }
 
@@ -120,7 +144,12 @@ export class PortfolioService implements IPortfolioService {
     if (!existing) {
       throw new NotFoundException('Portfolio not found')
     }
-    return this.portfolioRepository.update(id, data)
+    const updated = await this.portfolioRepository.update(id, data)
+    await Promise.all([
+      this.redisService.del(CACHE_KEY(id)),
+      this.redisService.deleteByPattern(ALL_PATTERN)
+    ])
+    return updated
   }
 
   async remove(id: string, user: IUserWithPermissions) {
@@ -132,6 +161,10 @@ export class PortfolioService implements IPortfolioService {
       )
     }
     await this.portfolioRepository.delete(id)
+    await Promise.all([
+      this.redisService.del(CACHE_KEY(id)),
+      this.redisService.deleteByPattern(ALL_PATTERN)
+    ])
     return { message: 'Portfolio deleted successfully' }
   }
 
@@ -286,6 +319,33 @@ export class PortfolioService implements IPortfolioService {
       }
     }
 
+    await this.redisService.deleteByPattern(ALL_PATTERN)
     return { portfoliosCreated, portfolios, skipped_portfolios }
+  }
+
+  async findAllCached(user: IUserWithPermissions): Promise<PortfolioWithCounts[]> {
+    const cacheKey = `portfolio:all:${user.id}`
+    const cached = await this.redisService.get<PortfolioWithCounts[]>(cacheKey)
+    if (cached) {
+      this.logger.log(`[CACHE HIT] portfolio:findAllCached — served from Redis (key: ${cacheKey})`)
+      return cached
+    }
+    this.logger.log(`[CACHE MISS] portfolio:findAllCached — fetching from MongoDB (key: ${cacheKey})`)
+
+    const accessibleIds = await this.portfolioRepository.getAccessiblePortfolioIds(user.id)
+    if (Array.isArray(accessibleIds) && accessibleIds.length === 0) {
+      return []
+    }
+
+    const where = accessibleIds === 'all' ? {} : { id: { in: accessibleIds } }
+    const data = await this.portfolioRepository.findAll({ where, orderBy: { created_at: 'desc' } })
+
+    // TTL 0 = no expiry; invalidated explicitly on every write operation
+    await this.redisService.set(cacheKey, data, 0)
+    return data
+  }
+
+  private hashQuery(query: object): string {
+    return createHash('sha256').update(JSON.stringify(query)).digest('hex').substring(0, 16)
   }
 }

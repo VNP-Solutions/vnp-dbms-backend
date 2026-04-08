@@ -83,4 +83,25 @@ export class ConfigurationSchema {
   @IsString()
   @IsNotEmpty()
   INVITATION_REDIRECT_URL?: string
+
+  @IsOptional()
+  @IsString()
+  REDIS_HOST?: string
+
+  @IsOptional()
+  @Transform(({ value }: { value: string }) => parseInt(value, 10))
+  @IsNumber()
+  @Min(1)
+  @Max(65535)
+  REDIS_PORT?: number
+
+  @IsOptional()
+  @IsString()
+  REDIS_PASSWORD?: string
+
+  @IsOptional()
+  @Transform(({ value }: { value: string }) => parseInt(value, 10))
+  @IsNumber()
+  @Min(1)
+  REDIS_TTL?: number
 }

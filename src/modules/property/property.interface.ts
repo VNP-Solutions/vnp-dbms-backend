@@ -1,7 +1,7 @@
 import { Property } from '@prisma/client'
 import { PaginatedResult } from '../../common/dto/query.dto'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
-import { CreatePropertyDto, PropertyQueryDto, UpdatePropertyDto } from './property.dto'
+import { CreatePropertyDto, PropertyFilterDto, UpdatePropertyDto } from './property.dto'
 
 export type PropertyWithRelations = Property & {
   portfolio: { id: string; name: string }
@@ -51,6 +51,19 @@ export interface BulkDeleteResult {
   skippedCount: number
 }
 
+export interface AllDataForGlobalFilterResponse {
+  expedia_id: string[]
+  portfolio: Array<{ id: string; name: string }>
+  property: Array<{ id: string; name: string }>
+  booking_id: string[]
+  agoda_id: string[]
+  hotel_address: string[]
+  card_descriptor: string[]
+  new_domain_email: string[]
+  portfolio_contact_email: string[]
+  case_contact_email: string[]
+}
+
 export interface IPropertyRepository {
   create(data: CreatePropertyDto): Promise<PropertyWithRelations>
   findAll(queryOptions: { where: any; skip?: number; take?: number; orderBy?: any }): Promise<PropertyWithRelations[]>
@@ -72,7 +85,8 @@ export interface IPropertyRepository {
 
 export interface IPropertyService {
   create(data: CreatePropertyDto, user: IUserWithPermissions): Promise<PropertyWithRelations>
-  findAll(query: PropertyQueryDto, user: IUserWithPermissions): Promise<PaginatedResult<PropertyWithRelations>>
+  findAllWithFilters(filterDto: PropertyFilterDto, user: IUserWithPermissions): Promise<PaginatedResult<PropertyWithRelations>>
+  findAllCached(user: IUserWithPermissions): Promise<PropertyWithRelations[]>
   findOne(id: string, user: IUserWithPermissions): Promise<PropertyWithRelations>
   update(id: string, data: UpdatePropertyDto, user: IUserWithPermissions): Promise<PropertyWithRelations>
   remove(id: string, user: IUserWithPermissions): Promise<{ message: string }>
@@ -93,4 +107,5 @@ export interface IPropertyService {
     file: Express.Multer.File,
     user: IUserWithPermissions
   ): Promise<ImportPropertiesResult>
+  getAllDataForGlobalFilter(user: IUserWithPermissions): Promise<AllDataForGlobalFilterResponse>
 }
