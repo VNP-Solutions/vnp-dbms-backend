@@ -105,7 +105,7 @@ export class PropertyController {
   @ApiOperation({
     summary: 'Get all properties with advanced filtering, pagination, search and multi-field sort',
     description:
-      'Use masked=true (default) for encrypted credentials. Use masked=false for decrypted credentials. Supports multiple values per filter using the "in" array. Each filter item has: name (required), in (required array of values for OR condition), sort_by (optional: "asc" or "desc" for multi-field sorting). Sorting is applied in array order - first filter with sort_by is primary sort, second is secondary, etc. Available filter fields: portfolio_id, property_id, subportfolio_id, expedia_id, booking_id, agoda_id, card_descriptor, hotel_address, new_domain_email, portfolio_contact_email, primary_case_email, expedia_status, booking_status, agoda_status, is_active, created_at, updated_at. For is_active: use in:[true] for active only, in:[false] for inactive only, in:[true,false] or in:["All"] for both. For sort-only fields (created_at, updated_at): use in:[] with sort_by. Additional filters: start_date and end_date for created_at date range (YYYY-MM-DD format), search for text search across name, description, hotel_address.'
+      'Use masked=true (default) for encrypted credentials. Use masked=false for decrypted credentials. Use is_active (true/false/All) for filtering active status. Supports multiple values per filter using the "in" array. Each filter item has: name (required), in (required array of values for OR condition), sort_by (optional: "asc" or "desc" for multi-field sorting). Sorting is applied in array order - first filter with sort_by is primary sort, second is secondary, etc. Available filter fields: portfolio_id, property_id, subportfolio_id, expedia_id, booking_id, agoda_id, card_descriptor, hotel_address, new_domain_email, portfolio_contact_email, primary_case_email, expedia_status, booking_status, agoda_status, created_at, updated_at. For sort-only fields (created_at, updated_at): use in:[] with sort_by. Additional filters: start_date and end_date for created_at date range (YYYY-MM-DD format), search for text search across name, description, hotel_address.'
   })
   @ApiResponse({ status: 200, description: 'Paginated list of properties' })
   @ApiBody({
@@ -137,13 +137,9 @@ export class PropertyController {
             {
               name: 'expedia_id',
               in: ['EXP123', 'EXP456']
-            },
-            {
-              name: 'is_active',
-              sort_by: 'desc',
-              in: [true]
             }
           ],
+          is_active: true,
           page: 1,
           limit: 20,
           search: 'Hotel',
@@ -156,12 +152,9 @@ export class PropertyController {
             {
               name: 'portfolio_id',
               in: ['507f1f77bcf86cd799439013']
-            },
-            {
-              name: 'is_active',
-              in: ['All']
             }
           ],
+          is_active: 'All',
           page: 1,
           limit: 10,
           masked: true
@@ -183,12 +176,8 @@ export class PropertyController {
       },
       'With date range filter': {
         value: {
-          filters: [
-            {
-              name: 'is_active',
-              in: [true]
-            }
-          ],
+          filters: [],
+          is_active: true,
           start_date: '2024-01-01',
           end_date: '2024-12-31',
           page: 1,
@@ -257,13 +246,9 @@ export class PropertyController {
             {
               name: 'agoda_status',
               in: ['pending']
-            },
-            {
-              name: 'is_active',
-              sort_by: 'asc',
-              in: [true, false]
             }
           ],
+          is_active: true,
           start_date: '2024-01-01',
           end_date: '2024-12-31',
           page: 1,

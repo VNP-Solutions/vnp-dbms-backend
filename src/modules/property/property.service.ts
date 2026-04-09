@@ -219,23 +219,13 @@ export class PropertyService implements IPropertyService {
           case 'agoda_status':
             whereConditions.push({ agoda_status: { in: values } })
             break
-          case 'is_active': {
-            // Filter out "All" or "all" values, and only apply filter if there are valid boolean values
-            const validActiveValues = values.filter(v => 
-              v !== 'All' && v !== 'all' && v !== null && v !== undefined
-            )
-            // If "All" is included or no valid values remain, don't add any filter (returns both true and false)
-            if (validActiveValues.length > 0 && validActiveValues.length < values.length && values.some(v => String(v).toLowerCase() === 'all')) {
-              // "All" was explicitly included, so skip the filter
-              break
-            }
-            if (validActiveValues.length > 0) {
-              whereConditions.push({ is_active: { in: validActiveValues } })
-            }
-            break
-          }
         }
       }
+    }
+
+    // Handle is_active as a root-level filter (like masked)
+    if (filterDto.is_active !== undefined) {
+      whereConditions.push({ is_active: filterDto.is_active })
     }
 
     // Use multi-field sorting if provided, otherwise default to created_at desc
