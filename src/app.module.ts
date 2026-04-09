@@ -29,6 +29,7 @@ import { UserProjectRoleModule } from './modules/user-project-role/user-project-
 import { UserRoleModule } from './modules/user-role/user-role.module'
 import { RedisModule } from './modules/redis/redis.module'
 import { UserModule } from './modules/user/user.module'
+import { ActivityLogModule } from './modules/activity-log/activity-log.module'
 
 @Module({
   imports: [
@@ -54,7 +55,8 @@ import { UserModule } from './modules/user/user.module'
     PropertyCredentialsModule,
     ServiceTypeModule,
     CurrencyModule,
-    ExternalApiModule
+    ExternalApiModule,
+    ActivityLogModule
   ],
   controllers: [AppController],
   providers: [
