@@ -30,6 +30,8 @@ import { UserRoleModule } from './modules/user-role/user-role.module'
 import { RedisModule } from './modules/redis/redis.module'
 import { UserModule } from './modules/user/user.module'
 import { ActivityLogModule } from './modules/activity-log/activity-log.module'
+import { ActivityLogService } from './modules/activity-log/activity-log.service'
+import { ActivityLogRepository } from './modules/activity-log/activity-log.repository'
 
 @Module({
   imports: [
