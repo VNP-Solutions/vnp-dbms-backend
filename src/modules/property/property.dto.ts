@@ -4,6 +4,7 @@ import { Transform, Type } from 'class-transformer'
 import {
   IsArray,
   IsBoolean,
+  IsDate,
   IsDateString,
   IsIn,
   IsNotEmpty,
@@ -502,7 +503,7 @@ export class PropertyFilterItem {
   sort_by?: 'asc' | 'desc'
 
   @ApiProperty({
-    description: 'Array of values to filter by (OR condition)',
+    description: 'Array of values to filter by (OR condition). For is_active field: use [true] for active only, [false] for inactive only, [true, false] or ["All"] for both',
     example: ['507f1f77bcf86cd799439013', '507f1f77bcf86cd799439014'],
     type: [String]
   })
@@ -513,7 +514,7 @@ export class PropertyFilterItem {
 
 export class PropertyFilterDto {
   @ApiPropertyOptional({
-    description: 'Array of filter items. Each filter supports multiple values (OR condition) and optional sort_by. Sorting is applied in array order for multi-field sorting. Available fields: portfolio_id, property_id, subportfolio_id, expedia_id, booking_id, agoda_id, card_descriptor, hotel_address, new_domain_email, portfolio_contact_email, primary_case_email, expedia_status, booking_status, agoda_status, is_active',
+    description: 'Array of filter items. Each filter supports multiple values (OR condition) and optional sort_by. Sorting is applied in array order for multi-field sorting. Available fields: portfolio_id, property_id, subportfolio_id, expedia_id, booking_id, agoda_id, card_descriptor, hotel_address, new_domain_email, portfolio_contact_email, primary_case_email, expedia_status, booking_status, agoda_status, is_active. For is_active: use in:[true] for active only, in:[false] for inactive only, in:[true,false] or in:["All"] for both',
     type: [PropertyFilterItem],
     example: [
       {
@@ -608,6 +609,24 @@ export class PropertyFilterDto {
   @IsOptional()
   @IsString()
   search?: string
+
+  @ApiPropertyOptional({
+    description: 'Filter by creation date from (YYYY-MM-DD format)',
+    example: '2024-01-01'
+  })
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
+  start_date?: Date
+
+  @ApiPropertyOptional({
+    description: 'Filter by creation date to (YYYY-MM-DD format)',
+    example: '2024-12-31'
+  })
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
+  end_date?: Date
 
   @ApiPropertyOptional({
     description: 'If true (default), credentials are masked. If false, credentials are decrypted.',

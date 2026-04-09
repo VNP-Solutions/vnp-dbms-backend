@@ -9,13 +9,14 @@ import {
 } from '@nestjs/common'
 import { createHash } from 'crypto'
 import * as XLSX from 'xlsx'
+import type { PaginatedResult } from '../../common/dto/query.dto'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
 import { EncryptionUtil } from '../../common/utils/encryption.util'
 import type { IAuthRepository } from '../auth/auth.interface'
+import type { IPortfolioService } from '../portfolio/portfolio.interface'
 import { PrismaService } from '../prisma/prisma.service'
 import type { IPropertyCredentialsService } from '../property-credentials/property-credentials.interface'
 import { RedisService } from '../redis/redis.service'
-import type { PaginatedResult } from '../../common/dto/query.dto'
 import {
   CreatePropertyDto,
   GetPropertyCredentialDto,
@@ -30,9 +31,8 @@ import type {
   IPropertyService,
   PropertyWithRelations
 } from './property.interface'
-import type { IPortfolioService } from '../portfolio/portfolio.interface'
 
-const CACHE_TTL_ITEM = 5 * 60 * 1000   // 5 minutes for individual records
+const CACHE_TTL_ITEM = 5 * 60 * 1000 // 5 minutes for individual records
 const CACHE_KEY = (id: string) => `property:${id}`
 const ALL_PATTERN = 'property:all:*'
 
@@ -99,8 +99,13 @@ export class PropertyService implements IPropertyService {
     return this.repo.findById(property.id) as Promise<PropertyWithRelations>
   }
 
-  async findAllWithFilters(filterDto: PropertyFilterDto, user: IUserWithPermissions): Promise<PaginatedResult<PropertyWithRelations>> {
-    this.logger.log(`property:findAllWithFilters — fetching from MongoDB (no cache)`)
+  async findAllWithFilters(
+    filterDto: PropertyFilterDto,
+    user: IUserWithPermissions
+  ): Promise<PaginatedResult<PropertyWithRelations>> {
+    this.logger.log(
+      `property:findAllWithFilters — fetching from MongoDB (no cache)`
+    )
 
     const accessibleIds = await this.repo.getAccessiblePropertyIds(user.id)
     if (Array.isArray(accessibleIds) && accessibleIds.length === 0) {
@@ -116,7 +121,8 @@ export class PropertyService implements IPropertyService {
       }
     }
 
-    const baseWhere: any = accessibleIds === 'all' ? {} : { id: { in: accessibleIds } }
+    const baseWhere: any =
+      accessibleIds === 'all' ? {} : { id: { in: accessibleIds } }
     const whereConditions: any[] = []
     const orderByArray: any[] = []
 
@@ -146,15 +152,39 @@ export class PropertyService implements IPropertyService {
           case 'subportfolio_id':
             whereConditions.push({ subportfolio_id: { in: values } })
             break
-          case 'expedia_id':
-            whereConditions.push({ expedia_id: { in: values } })
+          case 'expedia_id': {
+            // Convert to numbers as expedia_id is Int in Prisma schema
+            const numericValues = values.map(v => {
+              const num = Number(v)
+              return isNaN(num) ? null : num
+            }).filter(v => v !== null)
+            if (numericValues.length > 0) {
+              whereConditions.push({ expedia_id: { in: numericValues } })
+            }
             break
-          case 'booking_id':
-            whereConditions.push({ booking_id: { in: values } })
+          }
+          case 'booking_id': {
+            // Convert to numbers as booking_id is Int in Prisma schema
+            const numericValues = values.map(v => {
+              const num = Number(v)
+              return isNaN(num) ? null : num
+            }).filter(v => v !== null)
+            if (numericValues.length > 0) {
+              whereConditions.push({ booking_id: { in: numericValues } })
+            }
             break
-          case 'agoda_id':
-            whereConditions.push({ agoda_id: { in: values } })
+          }
+          case 'agoda_id': {
+            // Convert to numbers as agoda_id is Int in Prisma schema
+            const numericValues = values.map(v => {
+              const num = Number(v)
+              return isNaN(num) ? null : num
+            }).filter(v => v !== null)
+            if (numericValues.length > 0) {
+              whereConditions.push({ agoda_id: { in: numericValues } })
+            }
             break
+          }
           case 'card_descriptor':
             whereConditions.push({ card_descriptor: { in: values } })
             break
@@ -179,17 +209,40 @@ export class PropertyService implements IPropertyService {
           case 'agoda_status':
             whereConditions.push({ agoda_status: { in: values } })
             break
-          case 'is_active':
-            if (values.length > 0) {
-              whereConditions.push({ is_active: { in: values } })
+          case 'is_active': {
+            // Filter out "All" or "all" values, and only apply filter if there are valid boolean values
+            const validActiveValues = values.filter(v => 
+              v !== 'All' && v !== 'all' && v !== null && v !== undefined
+            )
+            // If "All" is included or no valid values remain, don't add any filter (returns both true and false)
+            if (validActiveValues.length > 0 && validActiveValues.length < values.length && values.some(v => String(v).toLowerCase() === 'all')) {
+              // "All" was explicitly included, so skip the filter
+              break
+            }
+            if (validActiveValues.length > 0) {
+              whereConditions.push({ is_active: { in: validActiveValues } })
             }
             break
+          }
         }
       }
     }
 
     // Use multi-field sorting if provided, otherwise default to created_at desc
-    const orderBy = orderByArray.length > 0 ? orderByArray : { created_at: 'desc' }
+    const orderBy =
+      orderByArray.length > 0 ? orderByArray : { created_at: 'desc' }
+
+    // Date range filters for created_at
+    if (filterDto.start_date || filterDto.end_date) {
+      const dateFilter: any = {}
+      if (filterDto.start_date) {
+        dateFilter.gte = filterDto.start_date
+      }
+      if (filterDto.end_date) {
+        dateFilter.lte = filterDto.end_date
+      }
+      whereConditions.push({ created_at: dateFilter })
+    }
 
     if (filterDto.search) {
       whereConditions.push({
@@ -201,12 +254,15 @@ export class PropertyService implements IPropertyService {
       })
     }
 
-    const where = whereConditions.length > 0 
-      ? { AND: [baseWhere, ...whereConditions] }
-      : baseWhere
+    const where =
+      whereConditions.length > 0
+        ? { AND: [baseWhere, ...whereConditions] }
+        : baseWhere
 
     const usePagination = filterDto.page != null && filterDto.limit != null
-    const skip = usePagination ? ((filterDto.page || 1) - 1) * (filterDto.limit || 10) : undefined
+    const skip = usePagination
+      ? ((filterDto.page || 1) - 1) * (filterDto.limit || 10)
+      : undefined
     const take = usePagination ? filterDto.limit || 10 : undefined
 
     this.logger.debug(`Final where clause: ${JSON.stringify(where, null, 2)}`)
@@ -308,7 +364,7 @@ export class PropertyService implements IPropertyService {
     const result = { ...property } as any
     const prop = property as any
     const MASK = '********'
-    
+
     if (prop.qp_password) {
       result.qp_password = MASK
     }
@@ -342,10 +398,14 @@ export class PropertyService implements IPropertyService {
     const cacheKey = CACHE_KEY(id)
     const cached = await this.redisService.get<PropertyWithRelations>(cacheKey)
     if (cached) {
-      this.logger.log(`[CACHE HIT] property:findOne — served from Redis (key: ${cacheKey})`)
+      this.logger.log(
+        `[CACHE HIT] property:findOne — served from Redis (key: ${cacheKey})`
+      )
       return cached
     }
-    this.logger.log(`[CACHE MISS] property:findOne — fetching from MongoDB (key: ${cacheKey})`)
+    this.logger.log(
+      `[CACHE MISS] property:findOne — fetching from MongoDB (key: ${cacheKey})`
+    )
 
     const property = await this.repo.findById(id)
     if (!property) throw new NotFoundException('Property not found')
@@ -591,9 +651,14 @@ export class PropertyService implements IPropertyService {
     }
 
     const headers = Object.keys(rawRows[0])
-    
+
     // Required columns
-    if (!headers.some(h => h.toLowerCase() === 'property name' || h.toLowerCase() === 'property')) {
+    if (
+      !headers.some(
+        h =>
+          h.toLowerCase() === 'property name' || h.toLowerCase() === 'property'
+      )
+    ) {
       throw new BadRequestException('Excel must contain "Property Name" column')
     }
     if (!headers.some(h => h.toLowerCase() === 'portfolio')) {
@@ -604,11 +669,15 @@ export class PropertyService implements IPropertyService {
 
     // Map rows to ImportPropertyRow with encryption
     const rows: ImportPropertyRow[] = rawRows
-      .map((r) => {
-        const propertyName = r['Property Name'] ? String(r['Property Name']).trim() : ''
+      .map(r => {
+        const propertyName = r['Property Name']
+          ? String(r['Property Name']).trim()
+          : ''
         if (!propertyName) return null
 
-        const portfolioName = r['Portfolio'] ? String(r['Portfolio']).trim() : ''
+        const portfolioName = r['Portfolio']
+          ? String(r['Portfolio']).trim()
+          : ''
         if (!portfolioName) return null
 
         // Encrypt passwords
@@ -621,23 +690,45 @@ export class PropertyService implements IPropertyService {
         return {
           propertyName,
           portfolioName,
-          propertyAddress: r['Property Address'] ? String(r['Property Address']).trim() : undefined,
-          cardDescriptor: r['Card Descriptor'] ? String(r['Card Descriptor']).trim() : undefined,
-          expediaId: r['Expedia ID'] ? String(r['Expedia ID']).trim() : undefined,
+          propertyAddress: r['Property Address']
+            ? String(r['Property Address']).trim()
+            : undefined,
+          cardDescriptor: r['Card Descriptor']
+            ? String(r['Card Descriptor']).trim()
+            : undefined,
+          expediaId: r['Expedia ID']
+            ? String(r['Expedia ID']).trim()
+            : undefined,
           agodaId: r['Agoda ID'] ? String(r['Agoda ID']).trim() : undefined,
-          bookingId: r['Booking ID'] ? String(r['Booking ID']).trim() : undefined,
-          expediaUsername: r['Expedia Username'] ? String(r['Expedia Username']).trim() : undefined,
-          agodaUsername: r['Agoda Username'] ? String(r['Agoda Username']).trim() : undefined,
-          bookingUsername: r['Booking Username'] ? String(r['Booking Username']).trim() : undefined,
+          bookingId: r['Booking ID']
+            ? String(r['Booking ID']).trim()
+            : undefined,
+          expediaUsername: r['Expedia Username']
+            ? String(r['Expedia Username']).trim()
+            : undefined,
+          agodaUsername: r['Agoda Username']
+            ? String(r['Agoda Username']).trim()
+            : undefined,
+          bookingUsername: r['Booking Username']
+            ? String(r['Booking Username']).trim()
+            : undefined,
           expediaPassword: encryptPassword(r['Expedia Password']),
           bookingPassword: encryptPassword(r['Booking Password']),
           agodaPassword: encryptPassword(r['Agoda Password']),
-          portfolioContactEmail: r['Portfolio Contact Email'] ? String(r['Portfolio Contact Email']).trim() : undefined,
-          caseContactEmail: r['Case Contact Email'] ? String(r['Case Contact Email']).trim() : undefined,
-          qpUsername: r['Qp Username'] ? String(r['Qp Username']).trim() : undefined,
+          portfolioContactEmail: r['Portfolio Contact Email']
+            ? String(r['Portfolio Contact Email']).trim()
+            : undefined,
+          caseContactEmail: r['Case Contact Email']
+            ? String(r['Case Contact Email']).trim()
+            : undefined,
+          qpUsername: r['Qp Username']
+            ? String(r['Qp Username']).trim()
+            : undefined,
           qpPassword: encryptPassword(r['Qp Password']),
           qpApiKey: encryptPassword(r['Qp Api Key']),
-          newDomainsEmail: r['New Domains Email'] ? String(r['New Domains Email']).trim() : undefined,
+          newDomainsEmail: r['New Domains Email']
+            ? String(r['New Domains Email']).trim()
+            : undefined,
           webmailPassword: encryptPassword(r['Webmail Password'])
         } satisfies ImportPropertyRow
       })
@@ -648,11 +739,16 @@ export class PropertyService implements IPropertyService {
     return result
   }
 
-  async bulkDelete(ids: string[], user: IUserWithPermissions): Promise<import('./property.interface').BulkDeleteResult> {
-    this.logger.log(`User ${user.email} attempting to bulk delete ${ids.length} properties`)
+  async bulkDelete(
+    ids: string[],
+    user: IUserWithPermissions
+  ): Promise<import('./property.interface').BulkDeleteResult> {
+    this.logger.log(
+      `User ${user.email} attempting to bulk delete ${ids.length} properties`
+    )
 
     const accessibleIds = await this.repo.getAccessiblePropertyIds(user.id)
-    
+
     const success: Array<{ id: string; name: string }> = []
     const skipped: Array<{ id: string; name?: string; reason: string }> = []
 
@@ -667,7 +763,7 @@ export class PropertyService implements IPropertyService {
 
       try {
         const property = await this.repo.findById(id)
-        
+
         if (!property) {
           skipped.push({
             id,
@@ -688,7 +784,9 @@ export class PropertyService implements IPropertyService {
       }
     }
 
-    this.logger.log(`Bulk delete completed: ${success.length} success, ${skipped.length} skipped`)
+    this.logger.log(
+      `Bulk delete completed: ${success.length} success, ${skipped.length} skipped`
+    )
 
     if (success.length > 0) {
       await Promise.all([
@@ -706,14 +804,21 @@ export class PropertyService implements IPropertyService {
     }
   }
 
-  async findAllCached(user: IUserWithPermissions): Promise<PropertyWithRelations[]> {
+  async findAllCached(
+    user: IUserWithPermissions
+  ): Promise<PropertyWithRelations[]> {
     const cacheKey = `property:all:${user.id}`
-    const cached = await this.redisService.get<PropertyWithRelations[]>(cacheKey)
+    const cached =
+      await this.redisService.get<PropertyWithRelations[]>(cacheKey)
     if (cached) {
-      this.logger.log(`[CACHE HIT] property:findAllCached — served from Redis (key: ${cacheKey})`)
+      this.logger.log(
+        `[CACHE HIT] property:findAllCached — served from Redis (key: ${cacheKey})`
+      )
       return cached
     }
-    this.logger.log(`[CACHE MISS] property:findAllCached — fetching from MongoDB (key: ${cacheKey})`)
+    this.logger.log(
+      `[CACHE MISS] property:findAllCached — fetching from MongoDB (key: ${cacheKey})`
+    )
 
     const accessibleIds = await this.repo.getAccessiblePropertyIds(user.id)
     if (Array.isArray(accessibleIds) && accessibleIds.length === 0) {
@@ -721,7 +826,10 @@ export class PropertyService implements IPropertyService {
     }
 
     const where = accessibleIds === 'all' ? {} : { id: { in: accessibleIds } }
-    const data = await this.repo.findAll({ where, orderBy: { created_at: 'desc' } })
+    const data = await this.repo.findAll({
+      where,
+      orderBy: { created_at: 'desc' }
+    })
 
     const masked = data.map(p => this.maskCredentialsForResponse(p))
     // TTL 0 = no expiry; invalidated explicitly on every write operation
@@ -748,10 +856,15 @@ export class PropertyService implements IPropertyService {
 
     portfolios.forEach((portfolio: any) => {
       if (portfolio.id && portfolio.name) {
-        portfolioMap.set(portfolio.id, { id: portfolio.id, name: portfolio.name })
+        portfolioMap.set(portfolio.id, {
+          id: portfolio.id,
+          name: portfolio.name
+        })
       }
-      if (portfolio.contact_email) uniquePortfolioContactEmails.add(portfolio.contact_email)
-      if (portfolio.portfolio_contact_email) uniquePortfolioContactEmails.add(portfolio.portfolio_contact_email)
+      if (portfolio.contact_email)
+        uniquePortfolioContactEmails.add(portfolio.contact_email)
+      if (portfolio.portfolio_contact_email)
+        uniquePortfolioContactEmails.add(portfolio.portfolio_contact_email)
     })
 
     properties.forEach((property: any) => {
@@ -761,20 +874,32 @@ export class PropertyService implements IPropertyService {
       if (property.id && property.name) {
         propertyMap.set(property.id, { id: property.id, name: property.name })
       }
-      if (property.hotel_address) uniqueHotelAddresses.add(property.hotel_address)
-      if (property.card_descriptor) uniqueCardDescriptors.add(property.card_descriptor)
-      if (property.new_domain_email) uniqueNewDomainEmails.add(property.new_domain_email)
-      if (property.portfolio_contact_email) uniquePortfolioContactEmails.add(property.portfolio_contact_email)
-      if (property.primary_case_email) uniqueCaseContactEmails.add(property.primary_case_email)
+      if (property.hotel_address)
+        uniqueHotelAddresses.add(property.hotel_address)
+      if (property.card_descriptor)
+        uniqueCardDescriptors.add(property.card_descriptor)
+      if (property.new_domain_email)
+        uniqueNewDomainEmails.add(property.new_domain_email)
+      if (property.portfolio_contact_email)
+        uniquePortfolioContactEmails.add(property.portfolio_contact_email)
+      if (property.primary_case_email)
+        uniqueCaseContactEmails.add(property.primary_case_email)
       if (property.portfolio?.id && property.portfolio?.name) {
-        portfolioMap.set(property.portfolio.id, { id: property.portfolio.id, name: property.portfolio.name })
+        portfolioMap.set(property.portfolio.id, {
+          id: property.portfolio.id,
+          name: property.portfolio.name
+        })
       }
     })
 
     return {
       expedia_id: Array.from(uniqueExpediaIds).sort(),
-      portfolio: Array.from(portfolioMap.values()).sort((a, b) => a.name.localeCompare(b.name)),
-      property: Array.from(propertyMap.values()).sort((a, b) => a.name.localeCompare(b.name)),
+      portfolio: Array.from(portfolioMap.values()).sort((a, b) =>
+        a.name.localeCompare(b.name)
+      ),
+      property: Array.from(propertyMap.values()).sort((a, b) =>
+        a.name.localeCompare(b.name)
+      ),
       booking_id: Array.from(uniqueBookingIds).sort(),
       agoda_id: Array.from(uniqueAgodaIds).sort(),
       hotel_address: Array.from(uniqueHotelAddresses).sort(),
@@ -786,6 +911,9 @@ export class PropertyService implements IPropertyService {
   }
 
   private hashQuery(query: object): string {
-    return createHash('sha256').update(JSON.stringify(query)).digest('hex').substring(0, 16)
+    return createHash('sha256')
+      .update(JSON.stringify(query))
+      .digest('hex')
+      .substring(0, 16)
   }
 }
