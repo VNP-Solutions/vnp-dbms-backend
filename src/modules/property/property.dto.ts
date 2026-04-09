@@ -469,7 +469,7 @@ export class BulkDeletePropertyDto {
 
 export class PropertyFilterItem {
   @ApiProperty({
-    description: 'Name of the field to filter',
+    description: 'Name of the field to filter or sort',
     example: 'portfolio_id',
     enum: [
       'portfolio_id',
@@ -486,7 +486,9 @@ export class PropertyFilterItem {
       'expedia_status',
       'booking_status',
       'agoda_status',
-      'is_active'
+      'is_active',
+      'created_at',
+      'updated_at'
     ]
   })
   @IsString()
@@ -503,7 +505,7 @@ export class PropertyFilterItem {
   sort_by?: 'asc' | 'desc'
 
   @ApiProperty({
-    description: 'Array of values to filter by (OR condition). For is_active field: use [true] for active only, [false] for inactive only, [true, false] or ["All"] for both',
+    description: 'Array of values to filter by (OR condition). For is_active field: use [true] for active only, [false] for inactive only, [true, false] or ["All"] for both. For sort-only fields like created_at or updated_at, you can pass an empty array []',
     example: ['507f1f77bcf86cd799439013', '507f1f77bcf86cd799439014'],
     type: [String]
   })
@@ -514,7 +516,7 @@ export class PropertyFilterItem {
 
 export class PropertyFilterDto {
   @ApiPropertyOptional({
-    description: 'Array of filter items. Each filter supports multiple values (OR condition) and optional sort_by. Sorting is applied in array order for multi-field sorting. Available fields: portfolio_id, property_id, subportfolio_id, expedia_id, booking_id, agoda_id, card_descriptor, hotel_address, new_domain_email, portfolio_contact_email, primary_case_email, expedia_status, booking_status, agoda_status, is_active. For is_active: use in:[true] for active only, in:[false] for inactive only, in:[true,false] or in:["All"] for both',
+    description: 'Array of filter items. Each filter supports multiple values (OR condition) and optional sort_by. Sorting is applied in array order for multi-field sorting. Available fields: portfolio_id, property_id, subportfolio_id, expedia_id, booking_id, agoda_id, card_descriptor, hotel_address, new_domain_email, portfolio_contact_email, primary_case_email, expedia_status, booking_status, agoda_status, is_active, created_at, updated_at. For is_active: use in:[true] for active only, in:[false] for inactive only, in:[true,false] or in:["All"] for both. For sort-only (created_at, updated_at): use in:[] with sort_by',
     type: [PropertyFilterItem],
     example: [
       {

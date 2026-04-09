@@ -130,12 +130,22 @@ export class PropertyService implements IPropertyService {
       for (const filter of filterDto.filters) {
         const { name, sort_by, in: values } = filter
 
-        if (!values || values.length === 0) continue
-
-        // Collect sort_by for multi-field sorting
+        // Collect sort_by for multi-field sorting (independent of filter values)
         if (sort_by) {
-          orderByArray.push({ [name]: sort_by })
+          // Handle special cases for relation fields
+          if (name === 'portfolio_id') {
+            // Sort by the actual portfolio_id field, not the relation
+            orderByArray.push({ portfolio_id: sort_by })
+          } else if (name === 'subportfolio_id') {
+            // Sort by the actual subportfolio_id field, not the relation
+            orderByArray.push({ subportfolio_id: sort_by })
+          } else {
+            orderByArray.push({ [name]: sort_by })
+          }
         }
+
+        // Skip filter logic if no values provided, but keep sort_by
+        if (!values || values.length === 0) continue
 
         switch (name) {
           case 'portfolio_id':
