@@ -7,6 +7,7 @@ import { ActivityLogService } from './activity-log.service'
 @Module({
   controllers: [ActivityLogController],
   providers: [
+    ActivityLogService,
     {
       provide: 'IActivityLogService',
       useClass: ActivityLogService
