@@ -36,6 +36,12 @@ export class RedisService {
         return
       }
 
+      // Check if client is open/connected
+      if (!(client as any).isOpen) {
+        this.logger.warn('Redis client is closed — skipping pattern invalidation')
+        return
+      }
+
       // Actual Redis key format: {ns}::{ns}:{key}
       // Keyv adds  "{ns}:"  → "@keyv/redis" adds  "{ns}::"  on top
       const fullPattern = `${CACHE_NAMESPACE}::${CACHE_NAMESPACE}:${pattern}`
