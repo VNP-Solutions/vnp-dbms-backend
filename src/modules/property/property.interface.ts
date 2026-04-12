@@ -87,6 +87,7 @@ export interface IPropertyService {
   create(data: CreatePropertyDto, user: IUserWithPermissions): Promise<PropertyWithRelations>
   findAllWithFilters(filterDto: PropertyFilterDto, user: IUserWithPermissions): Promise<PaginatedResult<PropertyWithRelations>>
   findAllCached(user: IUserWithPermissions): Promise<PropertyWithRelations[]>
+  refreshCache(user: IUserWithPermissions): Promise<{ message: string }>
   findOne(id: string, user: IUserWithPermissions): Promise<PropertyWithRelations>
   update(id: string, data: UpdatePropertyDto, user: IUserWithPermissions): Promise<PropertyWithRelations>
   remove(id: string, user: IUserWithPermissions): Promise<{ message: string }>

@@ -33,6 +33,7 @@ import type {
 } from './property.interface'
 
 const CACHE_TTL_ITEM = 5 * 60 * 1000 // 5 minutes for individual records
+const CACHE_TTL_ALL = 60 * 60 * 1000 // 1 hour for all properties cache
 const CACHE_KEY = (id: string) => `property:${id}`
 const ALL_PATTERN = 'property:all:*'
 
@@ -218,6 +219,30 @@ export class PropertyService implements IPropertyService {
             break
           case 'agoda_status':
             whereConditions.push({ agoda_status: { in: values } })
+            break
+          case 'case_management_contact':
+            whereConditions.push({ case_management_contact: { in: values } })
+            break
+          case 'access_contact':
+            whereConditions.push({ access_contact: { in: values } })
+            break
+          case 'reporting_contact':
+            whereConditions.push({ reporting_contact: { in: values } })
+            break
+          case 'expedia_processor':
+            whereConditions.push({ expedia_processor: { in: values } })
+            break
+          case 'booking_processor':
+            whereConditions.push({ booking_processor: { in: values } })
+            break
+          case 'agoda_processor':
+            whereConditions.push({ agoda_processor: { in: values } })
+            break
+          case 'fp_mid':
+            whereConditions.push({ fp_mid: { in: values } })
+            break
+          case 'stripe_account_email':
+            whereConditions.push({ stripe_account_email: { in: values } })
             break
         }
       }
@@ -832,9 +857,27 @@ export class PropertyService implements IPropertyService {
     })
 
     const masked = data.map(p => this.maskCredentialsForResponse(p))
-    // TTL 0 = no expiry; invalidated explicitly on every write operation
-    await this.redisService.set(cacheKey, masked, 0)
+    // TTL 1 hour = auto-refresh cache every hour
+    await this.redisService.set(cacheKey, masked, CACHE_TTL_ALL)
     return masked
+  }
+
+  async refreshCache(user: IUserWithPermissions) {
+    this.logger.log(
+      `[MANUAL CACHE REFRESH] Clearing all property cache keys (requested by user: ${user.id})`
+    )
+
+    // Delete all property cache keys (all users and individual items)
+    await this.redisService.deleteByPattern(ALL_PATTERN)
+    await this.redisService.deleteByPattern('property:*')
+
+    this.logger.log(
+      `[MANUAL CACHE REFRESH] Successfully cleared all property cache keys`
+    )
+
+    return {
+      message: 'Cache refreshed successfully. All users will get fresh data on next request.'
+    }
   }
 
   async getAllDataForGlobalFilter(user: IUserWithPermissions) {
@@ -853,6 +896,14 @@ export class PropertyService implements IPropertyService {
     const uniqueNewDomainEmails = new Set<string>()
     const uniquePortfolioContactEmails = new Set<string>()
     const uniqueCaseContactEmails = new Set<string>()
+    const uniqueCaseManagementContacts = new Set<string>()
+    const uniqueAccessContacts = new Set<string>()
+    const uniqueReportingContacts = new Set<string>()
+    const uniqueExpediaProcessors = new Set<string>()
+    const uniqueBookingProcessors = new Set<string>()
+    const uniqueAgodaProcessors = new Set<string>()
+    const uniqueFpMids = new Set<string>()
+    const uniqueStripeAccountEmails = new Set<string>()
 
     portfolios.forEach((portfolio: any) => {
       if (portfolio.id && portfolio.name) {
@@ -884,6 +935,22 @@ export class PropertyService implements IPropertyService {
         uniquePortfolioContactEmails.add(property.portfolio_contact_email)
       if (property.primary_case_email)
         uniqueCaseContactEmails.add(property.primary_case_email)
+      if (property.case_management_contact)
+        uniqueCaseManagementContacts.add(property.case_management_contact)
+      if (property.access_contact)
+        uniqueAccessContacts.add(property.access_contact)
+      if (property.reporting_contact)
+        uniqueReportingContacts.add(property.reporting_contact)
+      if (property.expedia_processor)
+        uniqueExpediaProcessors.add(property.expedia_processor)
+      if (property.booking_processor)
+        uniqueBookingProcessors.add(property.booking_processor)
+      if (property.agoda_processor)
+        uniqueAgodaProcessors.add(property.agoda_processor)
+      if (property.fp_mid)
+        uniqueFpMids.add(property.fp_mid)
+      if (property.stripe_account_email)
+        uniqueStripeAccountEmails.add(property.stripe_account_email)
       if (property.portfolio?.id && property.portfolio?.name) {
         portfolioMap.set(property.portfolio.id, {
           id: property.portfolio.id,
@@ -906,7 +973,15 @@ export class PropertyService implements IPropertyService {
       card_descriptor: Array.from(uniqueCardDescriptors).sort(),
       new_domain_email: Array.from(uniqueNewDomainEmails).sort(),
       portfolio_contact_email: Array.from(uniquePortfolioContactEmails).sort(),
-      case_contact_email: Array.from(uniqueCaseContactEmails).sort()
+      case_contact_email: Array.from(uniqueCaseContactEmails).sort(),
+      case_management_contact: Array.from(uniqueCaseManagementContacts).sort(),
+      access_contact: Array.from(uniqueAccessContacts).sort(),
+      reporting_contact: Array.from(uniqueReportingContacts).sort(),
+      expedia_processor: Array.from(uniqueExpediaProcessors).sort(),
+      booking_processor: Array.from(uniqueBookingProcessors).sort(),
+      agoda_processor: Array.from(uniqueAgodaProcessors).sort(),
+      fp_mid: Array.from(uniqueFpMids).sort(),
+      stripe_account_email: Array.from(uniqueStripeAccountEmails).sort()
     }
   }
 

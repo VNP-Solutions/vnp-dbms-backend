@@ -105,7 +105,7 @@ export class PropertyController {
   @ApiOperation({
     summary: 'Get all properties with advanced filtering, pagination, search and multi-field sort',
     description:
-      'Use masked=true (default) for encrypted credentials. Use masked=false for decrypted credentials. Use is_active (true/false/All) for filtering active status. Supports multiple values per filter using the "in" array. Each filter item has: name (required), in (required array of values for OR condition), sort_by (optional: "asc" or "desc" for multi-field sorting). Sorting is applied in array order - first filter with sort_by is primary sort, second is secondary, etc. Available filter fields: portfolio_id, property_id, subportfolio_id, expedia_id, booking_id, agoda_id, card_descriptor, hotel_address, new_domain_email, portfolio_contact_email, primary_case_email, expedia_status, booking_status, agoda_status, created_at, updated_at. For sort-only fields (created_at, updated_at): use in:[] with sort_by. Additional filters: start_date and end_date for created_at date range (YYYY-MM-DD format), search for text search across name, description, hotel_address.'
+      'Use masked=true (default) for encrypted credentials. Use masked=false for decrypted credentials. Use is_active (true/false/All) for filtering active status. Supports multiple values per filter using the "in" array. Each filter item has: name (required), in (required array of values for OR condition), sort_by (optional: "asc" or "desc" for multi-field sorting). Sorting is applied in array order - first filter with sort_by is primary sort, second is secondary, etc. Available filter fields: portfolio_id, property_id, subportfolio_id, expedia_id, booking_id, agoda_id, card_descriptor, hotel_address, new_domain_email, portfolio_contact_email, primary_case_email, expedia_status, booking_status, agoda_status, case_management_contact, access_contact, reporting_contact, expedia_processor, booking_processor, agoda_processor, fp_mid, stripe_account_email, created_at, updated_at. For sort-only fields (created_at, updated_at): use in:[] with sort_by. Additional filters: start_date and end_date for created_at date range (YYYY-MM-DD format), search for text search across name, description, hotel_address.'
   })
   @ApiResponse({ status: 200, description: 'Paginated list of properties' })
   @ApiBody({
@@ -186,6 +186,31 @@ export class PropertyController {
           masked: true
         }
       },
+      'New contact and processor fields': {
+        value: {
+          filters: [
+            {
+              name: 'case_management_contact',
+              in: ['case-mgmt@hotel.com']
+            },
+            {
+              name: 'expedia_processor',
+              in: ['John Doe']
+            },
+            {
+              name: 'fp_mid',
+              in: ['1234567890']
+            },
+            {
+              name: 'stripe_account_email',
+              in: ['stripe@hotel.com']
+            }
+          ],
+          page: 1,
+          limit: 10,
+          masked: true
+        }
+      },
       'All available filters': {
         value: {
           filters: [
@@ -246,6 +271,38 @@ export class PropertyController {
             {
               name: 'agoda_status',
               in: ['pending']
+            },
+            {
+              name: 'case_management_contact',
+              in: ['case-mgmt@hotel.com']
+            },
+            {
+              name: 'access_contact',
+              in: ['access@hotel.com']
+            },
+            {
+              name: 'reporting_contact',
+              in: ['reports@hotel.com']
+            },
+            {
+              name: 'expedia_processor',
+              in: ['John Doe', 'Jane Smith']
+            },
+            {
+              name: 'booking_processor',
+              in: ['Bob Wilson']
+            },
+            {
+              name: 'agoda_processor',
+              in: ['Alice Johnson']
+            },
+            {
+              name: 'fp_mid',
+              in: ['1234567890', '0987654321']
+            },
+            {
+              name: 'stripe_account_email',
+              in: ['stripe@hotel.com', 'payment@hotel.com']
             }
           ],
           is_active: true,
@@ -267,11 +324,32 @@ export class PropertyController {
   @RequirePermission(ModuleType.PROPERTY, PermissionAction.READ)
   @ApiOperation({
     summary: 'Get all properties (no filter, no pagination)',
-    description: 'Returns every property accessible to the current user in a single array. Credentials are always masked. Results are Redis-cached per user (5 min TTL) and invalidated on any write.'
+    description: 'Returns every property accessible to the current user in a single array. Credentials are always masked. Results are Redis-cached per user (1 hour TTL) and invalidated on any write.'
   })
   @ApiResponse({ status: 200, description: 'Full list of properties (credentials masked)' })
   findAllCached(@CurrentUser() user: IUserWithPermissions) {
     return this.propertyService.findAllCached(user)
+  }
+
+  @Post('refresh-cache')
+  @RequirePermission(ModuleType.PROPERTY, PermissionAction.READ)
+  @ApiOperation({
+    summary: 'Manually refresh Redis cache for properties',
+    description: 'Clears all property-related Redis cache keys and forces a fresh fetch from the database. Use this to ensure all users get the latest data immediately.'
+  })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Cache refreshed successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string' }
+      }
+    }
+  })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  refreshCache(@CurrentUser() user: IUserWithPermissions) {
+    return this.propertyService.refreshCache(user)
   }
 
   @Get('global-filter')
@@ -347,6 +425,46 @@ export class PropertyController {
           type: 'array',
           items: { type: 'string' },
           description: 'Unique case contact emails'
+        },
+        case_management_contact: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Unique case management contacts'
+        },
+        access_contact: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Unique access contacts'
+        },
+        reporting_contact: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Unique reporting contacts'
+        },
+        expedia_processor: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Unique Expedia processors'
+        },
+        booking_processor: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Unique Booking processors'
+        },
+        agoda_processor: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Unique Agoda processors'
+        },
+        fp_mid: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Unique FP MIDs'
+        },
+        stripe_account_email: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Unique Stripe account emails'
         }
       }
     }
