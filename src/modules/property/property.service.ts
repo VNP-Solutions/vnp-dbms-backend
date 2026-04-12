@@ -238,6 +238,12 @@ export class PropertyService implements IPropertyService {
           case 'agoda_processor':
             whereConditions.push({ agoda_processor: { in: values } })
             break
+          case 'from':
+            whereConditions.push({ from: { in: values } })
+            break
+          case 'to':
+            whereConditions.push({ to: { in: values } })
+            break
           case 'fp_mid':
             whereConditions.push({ fp_mid: { in: values } })
             break
@@ -904,6 +910,8 @@ export class PropertyService implements IPropertyService {
     const uniqueAgodaProcessors = new Set<string>()
     const uniqueFpMids = new Set<string>()
     const uniqueStripeAccountEmails = new Set<string>()
+    const uniqueFromDates = new Set<string>()
+    const uniqueToDates = new Set<string>()
 
     portfolios.forEach((portfolio: any) => {
       if (portfolio.id && portfolio.name) {
@@ -951,6 +959,10 @@ export class PropertyService implements IPropertyService {
         uniqueFpMids.add(property.fp_mid)
       if (property.stripe_account_email)
         uniqueStripeAccountEmails.add(property.stripe_account_email)
+      if (property.from)
+        uniqueFromDates.add(property.from)
+      if (property.to)
+        uniqueToDates.add(property.to)
       if (property.portfolio?.id && property.portfolio?.name) {
         portfolioMap.set(property.portfolio.id, {
           id: property.portfolio.id,
@@ -981,7 +993,9 @@ export class PropertyService implements IPropertyService {
       booking_processor: Array.from(uniqueBookingProcessors).sort(),
       agoda_processor: Array.from(uniqueAgodaProcessors).sort(),
       fp_mid: Array.from(uniqueFpMids).sort(),
-      stripe_account_email: Array.from(uniqueStripeAccountEmails).sort()
+      stripe_account_email: Array.from(uniqueStripeAccountEmails).sort(),
+      from: Array.from(uniqueFromDates).sort(),
+      to: Array.from(uniqueToDates).sort()
     }
   }
 
