@@ -199,6 +199,22 @@ export class CreatePropertyDto {
   @IsOptional()
   agoda_processor?: string
 
+  @ApiPropertyOptional({ 
+    description: 'From date (YYYY-MM-DD format)',
+    example: '2024-01-01'
+  })
+  @IsString()
+  @IsOptional()
+  from?: string
+
+  @ApiPropertyOptional({ 
+    description: 'To date (YYYY-MM-DD format)',
+    example: '2024-12-31'
+  })
+  @IsString()
+  @IsOptional()
+  to?: string
+
   @ApiPropertyOptional({ description: 'QP Username' })
   @IsString()
   @IsOptional()
@@ -532,6 +548,8 @@ export class PropertyFilterItem {
       'expedia_processor',
       'booking_processor',
       'agoda_processor',
+      'from',
+      'to',
       'fp_mid',
       'stripe_account_email',
       'created_at',
@@ -563,7 +581,7 @@ export class PropertyFilterItem {
 
 export class PropertyFilterDto {
   @ApiPropertyOptional({
-    description: 'Array of filter items. Each filter supports multiple values (OR condition) and optional sort_by. Sorting is applied in array order for multi-field sorting. Available fields: portfolio_id, property_id, subportfolio_id, expedia_id, booking_id, agoda_id, card_descriptor, hotel_address, new_domain_email, portfolio_contact_email, primary_case_email, expedia_status, booking_status, agoda_status, case_management_contact, access_contact, reporting_contact, expedia_processor, booking_processor, agoda_processor, fp_mid, stripe_account_email, created_at, updated_at. For sort-only fields (created_at, updated_at): use in:[] with sort_by',
+    description: 'Array of filter items. Each filter supports multiple values (OR condition) and optional sort_by. Sorting is applied in array order for multi-field sorting. Available fields: portfolio_id, property_id, subportfolio_id, expedia_id, booking_id, agoda_id, card_descriptor, hotel_address, new_domain_email, portfolio_contact_email, primary_case_email, expedia_status, booking_status, agoda_status, case_management_contact, access_contact, reporting_contact, expedia_processor, booking_processor, agoda_processor, from, to, fp_mid, stripe_account_email, created_at, updated_at. For sort-only fields (created_at, updated_at): use in:[] with sort_by',
     type: [PropertyFilterItem],
     example: [
       {

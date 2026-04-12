@@ -326,6 +326,10 @@ model Property {
   booking_processor String?
   agoda_processor   String?
 
+  // Date Range Fields
+  from String?
+  to   String?
+
   // QP Credentials (encrypted)
   qp_username String?
   qp_password String?

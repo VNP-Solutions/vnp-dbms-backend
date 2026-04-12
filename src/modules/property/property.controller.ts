@@ -105,7 +105,7 @@ export class PropertyController {
   @ApiOperation({
     summary: 'Get all properties with advanced filtering, pagination, search and multi-field sort',
     description:
-      'Use masked=true (default) for encrypted credentials. Use masked=false for decrypted credentials. Use is_active (true/false/All) for filtering active status. Supports multiple values per filter using the "in" array. Each filter item has: name (required), in (required array of values for OR condition), sort_by (optional: "asc" or "desc" for multi-field sorting). Sorting is applied in array order - first filter with sort_by is primary sort, second is secondary, etc. Available filter fields: portfolio_id, property_id, subportfolio_id, expedia_id, booking_id, agoda_id, card_descriptor, hotel_address, new_domain_email, portfolio_contact_email, primary_case_email, expedia_status, booking_status, agoda_status, case_management_contact, access_contact, reporting_contact, expedia_processor, booking_processor, agoda_processor, fp_mid, stripe_account_email, created_at, updated_at. For sort-only fields (created_at, updated_at): use in:[] with sort_by. Additional filters: start_date and end_date for created_at date range (YYYY-MM-DD format), search for text search across name, description, hotel_address.'
+      'Use masked=true (default) for encrypted credentials. Use masked=false for decrypted credentials. Use is_active (true/false/All) for filtering active status. Supports multiple values per filter using the "in" array. Each filter item has: name (required), in (required array of values for OR condition), sort_by (optional: "asc" or "desc" for multi-field sorting). Sorting is applied in array order - first filter with sort_by is primary sort, second is secondary, etc. Available filter fields: portfolio_id, property_id, subportfolio_id, expedia_id, booking_id, agoda_id, card_descriptor, hotel_address, new_domain_email, portfolio_contact_email, primary_case_email, expedia_status, booking_status, agoda_status, case_management_contact, access_contact, reporting_contact, expedia_processor, booking_processor, agoda_processor, from, to, fp_mid, stripe_account_email, created_at, updated_at. For sort-only fields (created_at, updated_at): use in:[] with sort_by. Additional filters: start_date and end_date for created_at date range (YYYY-MM-DD format), search for text search across name, description, hotel_address.'
   })
   @ApiResponse({ status: 200, description: 'Paginated list of properties' })
   @ApiBody({
@@ -196,6 +196,14 @@ export class PropertyController {
             {
               name: 'expedia_processor',
               in: ['John Doe']
+            },
+            {
+              name: 'from',
+              in: ['2024-01-01', '2024-02-01']
+            },
+            {
+              name: 'to',
+              in: ['2024-12-31']
             },
             {
               name: 'fp_mid',
@@ -465,6 +473,16 @@ export class PropertyController {
           type: 'array',
           items: { type: 'string' },
           description: 'Unique Stripe account emails'
+        },
+        from: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Unique from dates'
+        },
+        to: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Unique to dates'
         }
       }
     }
