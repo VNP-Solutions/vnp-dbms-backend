@@ -316,10 +316,22 @@ model Property {
   description            String?
   hotel_address      String?
 
+  // Contact Information
+  case_management_contact String?
+  access_contact          String?
+  reporting_contact       String?
+
+  // OTA Processors
+  expedia_processor String?
+  booking_processor String?
+  agoda_processor   String?
+
   // QP Credentials (encrypted)
   qp_username String?
   qp_password String?
   qp_api_key  String?
+  fp_mid               String?
+  stripe_account_email String?
 
   // OTA Integration Fields
   expedia_id     Int?
