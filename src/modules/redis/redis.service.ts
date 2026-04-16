@@ -38,7 +38,7 @@ export class RedisService {
 
       // Check if client is open/connected
       if (!(client as any).isOpen) {
-        this.logger.warn('Redis client is closed — skipping pattern invalidation')
+        this.logger.warn('Redis client is not connected — skipping pattern invalidation')
         return
       }
 

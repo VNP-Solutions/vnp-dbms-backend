@@ -29,6 +29,19 @@ export interface ImportPropertyRow {
   qpApiKey?: string
   newDomainsEmail?: string
   webmailPassword?: string
+  expediaStatus?: string
+  bookingStatus?: string
+  agodaStatus?: string
+  caseManagementContact?: string
+  accessContact?: string
+  reportingContact?: string
+  expediaProcessor?: string
+  bookingProcessor?: string
+  agodaProcessor?: string
+  from?: string
+  to?: string
+  fpMid?: string
+  stripeAccountEmail?: string
 }
 
 export interface ImportPropertiesResult {
