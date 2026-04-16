@@ -199,15 +199,25 @@ export class PortfolioService implements IPortfolioService {
       (h) => h.toLowerCase().includes('service') && h.toLowerCase().includes('type')
     ) || 'Service Type'
 
-    const defaultServiceType = await this.prisma.serviceType.findFirst({
-      where: { is_active: true },
-      orderBy: { order: 'asc' }
+    // Find or create default "OTA" service type
+    let defaultServiceType = await this.prisma.serviceType.findFirst({
+      where: { type: { equals: 'OTA', mode: 'insensitive' } }
     })
 
     if (!defaultServiceType) {
-      throw new BadRequestException(
-        'No active Service Type found in system. Please configure it first.'
-      )
+      this.logger.log('Default "OTA" service type not found, creating it...')
+      const maxOrder = await this.prisma.serviceType.findFirst({
+        orderBy: { order: 'desc' },
+        select: { order: true }
+      })
+      defaultServiceType = await this.prisma.serviceType.create({
+        data: {
+          type: 'OTA',
+          is_active: true,
+          order: (maxOrder?.order ?? 0) + 1
+        }
+      })
+      this.logger.log('Default "OTA" service type created successfully')
     }
 
     let portfoliosCreated = 0
@@ -247,23 +257,29 @@ export class PortfolioService implements IPortfolioService {
         let service_type_id = defaultServiceType.id
 
         // Service type column value is always a human-readable name (e.g. "OTA").
-        // Never try to match it as an ObjectId.
+        // If provided but doesn't exist, create it.
         if (row?.[serviceTypeCol]) {
           const stName = String(row[serviceTypeCol]).trim()
-          const st = await this.prisma.serviceType.findFirst({
+          let st = await this.prisma.serviceType.findFirst({
             where: { type: { equals: stName, mode: 'insensitive' } }
           })
           if (!st) {
-            // Name provided but doesn't match any ServiceType → skip this portfolio
-            this.logger.warn(
-              `ServiceType "${stName}" not found for portfolio "${name}" — skipping`
+            // Name provided but doesn't exist → create it
+            this.logger.log(
+              `ServiceType "${stName}" not found for portfolio "${name}" — creating it`
             )
-            skipped_portfolios.push({
-              row_no,
-              portfolio_name: name,
-              reason: `ServiceType "${stName}" not found`
+            const maxOrder = await this.prisma.serviceType.findFirst({
+              orderBy: { order: 'desc' },
+              select: { order: true }
             })
-            continue
+            st = await this.prisma.serviceType.create({
+              data: {
+                type: stName,
+                is_active: true,
+                order: (maxOrder?.order ?? 0) + 1
+              }
+            })
+            this.logger.log(`ServiceType "${stName}" created successfully`)
           }
           service_type_id = st.id
         }

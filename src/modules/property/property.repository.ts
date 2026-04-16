@@ -215,7 +215,7 @@ export class PropertyRepository implements IPropertyRepository {
 
   /**
    * Bulk-imports properties from pre-parsed, typed rows.
-   * Only creates properties if the portfolio exists. Skips if portfolio not found.
+   * Auto-creates portfolios if they don't exist.
    */
   async importProperties(rows: ImportPropertyRow[]): Promise<ImportPropertiesResult> {
     const logger = new Logger(PropertyRepository.name)
@@ -229,20 +229,57 @@ export class PropertyRepository implements IPropertyRepository {
     for (const row of rows) {
       const { propertyName, portfolioName } = row
 
-      // Find portfolio by name
-      const portfolio = await this.prisma.portfolio.findUnique({
+      // Find or create portfolio by name
+      let portfolio = await this.prisma.portfolio.findUnique({
         where: { name: portfolioName },
         select: { id: true, name: true }
       })
 
       if (!portfolio) {
-        logger.warn(`Portfolio "${portfolioName}" not found — skipping property "${propertyName}"`)
-        skippedProperties.push({
-          name: propertyName,
-          reason: `Portfolio "${portfolioName}" not found`
+        logger.log(`Portfolio "${portfolioName}" not found — creating it`)
+        
+        // Find or create default "OTA" ServiceType
+        let defaultServiceType = await this.prisma.serviceType.findFirst({
+          where: { type: { equals: 'OTA', mode: 'insensitive' } }
         })
-        propertiesSkipped++
-        continue
+
+        if (!defaultServiceType) {
+          logger.log('Default "OTA" service type not found, creating it...')
+          const maxOrder = await this.prisma.serviceType.findFirst({
+            orderBy: { order: 'desc' },
+            select: { order: true }
+          })
+          defaultServiceType = await this.prisma.serviceType.create({
+            data: {
+              type: 'OTA',
+              is_active: true,
+              order: (maxOrder?.order ?? 0) + 1
+            }
+          })
+          logger.log('Default "OTA" service type created successfully')
+        }
+
+        // Create the portfolio
+        try {
+          portfolio = await this.prisma.portfolio.create({
+            data: {
+              name: portfolioName,
+              service_type_id: defaultServiceType.id,
+              is_active: true,
+              is_commissionable: false
+            },
+            select: { id: true, name: true }
+          })
+          logger.log(`Portfolio "${portfolioName}" created successfully`)
+        } catch (err: any) {
+          logger.error(`Error creating portfolio "${portfolioName}": ${err.message}`)
+          skippedProperties.push({
+            name: propertyName,
+            reason: `Error creating portfolio: ${err.message}`
+          })
+          propertiesSkipped++
+          continue
+        }
       }
 
       // Check if property already exists
@@ -261,10 +298,7 @@ export class PropertyRepository implements IPropertyRepository {
       const propertyPayload: any = {
         name: propertyName,
         portfolio_id: portfolio.id,
-        is_active: true,
-        expedia_status: 'Access Required',
-        booking_status: 'Access Required',
-        agoda_status: 'Access Required'
+        is_active: true
       }
 
       if (row.propertyAddress) propertyPayload.hotel_address = row.propertyAddress
@@ -278,6 +312,23 @@ export class PropertyRepository implements IPropertyRepository {
       if (row.qpPassword) propertyPayload.qp_password = row.qpPassword
       if (row.qpApiKey) propertyPayload.qp_api_key = row.qpApiKey
       if (row.webmailPassword) propertyPayload.webmail_password = row.webmailPassword
+      if (row.expediaStatus) propertyPayload.expedia_status = row.expediaStatus
+      if (row.bookingStatus) propertyPayload.booking_status = row.bookingStatus
+      if (row.agodaStatus) propertyPayload.agoda_status = row.agodaStatus
+      if (row.caseManagementContact) propertyPayload.case_management_contact = row.caseManagementContact
+      if (row.accessContact) propertyPayload.access_contact = row.accessContact
+      if (row.reportingContact) propertyPayload.reporting_contact = row.reportingContact
+      if (row.expediaProcessor) propertyPayload.expedia_processor = row.expediaProcessor
+      if (row.bookingProcessor) propertyPayload.booking_processor = row.bookingProcessor
+      if (row.agodaProcessor) propertyPayload.agoda_processor = row.agodaProcessor
+      if (row.from) propertyPayload.from = row.from
+      if (row.to) propertyPayload.to = row.to
+      if (row.fpMid) propertyPayload.fp_mid = row.fpMid
+      if (row.stripeAccountEmail) propertyPayload.stripe_account_email = row.stripeAccountEmail
+      
+      if (!propertyPayload.expedia_status) propertyPayload.expedia_status = 'Access Required'
+      if (!propertyPayload.booking_status) propertyPayload.booking_status = 'Access Required'
+      if (!propertyPayload.agoda_status) propertyPayload.agoda_status = 'Access Required'
 
       try {
         const created = await this.prisma.property.create({

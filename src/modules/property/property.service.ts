@@ -760,7 +760,46 @@ export class PropertyService implements IPropertyService {
           newDomainsEmail: r['New Domains Email']
             ? String(r['New Domains Email']).trim()
             : undefined,
-          webmailPassword: encryptPassword(r['Webmail Password'])
+          webmailPassword: encryptPassword(r['Webmail Password']),
+          expediaStatus: r['Expedia Status']
+            ? String(r['Expedia Status']).trim()
+            : undefined,
+          bookingStatus: r['Booking Status']
+            ? String(r['Booking Status']).trim()
+            : undefined,
+          agodaStatus: r['Agoda Status']
+            ? String(r['Agoda Status']).trim()
+            : undefined,
+          caseManagementContact: r['Case Management Contact']
+            ? String(r['Case Management Contact']).trim()
+            : undefined,
+          accessContact: r['Access Contact']
+            ? String(r['Access Contact']).trim()
+            : undefined,
+          reportingContact: r['Reporting Contact']
+            ? String(r['Reporting Contact']).trim()
+            : undefined,
+          expediaProcessor: r['Expedia Processor']
+            ? String(r['Expedia Processor']).trim()
+            : undefined,
+          bookingProcessor: r['Booking Processor']
+            ? String(r['Booking Processor']).trim()
+            : undefined,
+          agodaProcessor: r['Agoda Processor']
+            ? String(r['Agoda Processor']).trim()
+            : undefined,
+          from: r['From']
+            ? String(r['From']).trim()
+            : undefined,
+          to: r['To']
+            ? String(r['To']).trim()
+            : undefined,
+          fpMid: r['FP MID']
+            ? String(r['FP MID']).trim()
+            : undefined,
+          stripeAccountEmail: r['Stripe Account Email']
+            ? String(r['Stripe Account Email']).trim()
+            : undefined
         } satisfies ImportPropertyRow
       })
       .filter(Boolean) as ImportPropertyRow[]
@@ -870,15 +909,18 @@ export class PropertyService implements IPropertyService {
 
   async refreshCache(user: IUserWithPermissions) {
     this.logger.log(
-      `[MANUAL CACHE REFRESH] Clearing all property cache keys (requested by user: ${user.id})`
+      `[MANUAL CACHE REFRESH] Clearing all cache keys (requested by user: ${user.id})`
     )
 
     // Delete all property cache keys (all users and individual items)
     await this.redisService.deleteByPattern(ALL_PATTERN)
     await this.redisService.deleteByPattern('property:*')
+    
+    // Delete all portfolio cache keys (portfolios are used in global filter)
+    await this.redisService.deleteByPattern('portfolio:*')
 
     this.logger.log(
-      `[MANUAL CACHE REFRESH] Successfully cleared all property cache keys`
+      `[MANUAL CACHE REFRESH] Successfully cleared all property and portfolio cache keys`
     )
 
     return {

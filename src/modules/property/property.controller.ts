@@ -72,7 +72,7 @@ export class PropertyController {
   @ApiOperation({
     summary: 'Bulk import properties from Excel',
     description:
-      'Upload an Excel file to import properties, portfolios, and subportfolios. Required: Property Name (or Property). Optional: Portfolio, Sub Portfolio, Address, Currency, Expedia ID/Status, Booking ID/Status, Agoda ID/Status. Credential columns: Expedia Username, Expedia Password, Agoda Username, Agoda Password, Booking Username, Booking Password, Expedia Email Associated, Property Contact Email, Portfolio Contact Email, Multiple Portfolio Emails.'
+      'Upload an Excel file to import properties with all fields. Required: Property Name (or Property), Portfolio (auto-creates if doesn\'t exist with default "OTA" ServiceType). Optional: Sub Portfolio, Property Address, Card Descriptor, Currency, Expedia ID/Status, Booking ID/Status, Agoda ID/Status, Case Management Contact, Access Contact, Reporting Contact, Expedia Processor, Booking Processor, Agoda Processor, From, To, FP MID, Stripe Account Email. Credential columns: Expedia Username, Expedia Password, Agoda Username, Agoda Password, Booking Username, Booking Password, Expedia Email Associated, Property Contact Email, Portfolio Contact Email, Multiple Portfolio Emails, Case Contact Email, New Domains Email, Qp Username, Qp Password, Qp Api Key, Webmail Password.'
   })
   @ApiBody({
     schema: {
@@ -342,8 +342,8 @@ export class PropertyController {
   @Post('refresh-cache')
   @RequirePermission(ModuleType.PROPERTY, PermissionAction.READ)
   @ApiOperation({
-    summary: 'Manually refresh Redis cache for properties',
-    description: 'Clears all property-related Redis cache keys and forces a fresh fetch from the database. Use this to ensure all users get the latest data immediately.'
+    summary: 'Manually refresh Redis cache',
+    description: 'Clears all property and portfolio Redis cache keys and forces a fresh fetch from the database. Use this to ensure all users get the latest data immediately after database changes (e.g., after deleting portfolios).'
   })
   @ApiResponse({ 
     status: 200, 
