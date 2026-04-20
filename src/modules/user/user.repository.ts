@@ -291,4 +291,68 @@ export class UserRepository implements IUserRepository {
       where: { id: roleId }
     })
   }
+
+  async addUserAccess(
+    userId: string,
+    portfolioIds: string[],
+    propertyIds: string[]
+  ): Promise<void> {
+    const existingAccess = await this.prisma.userAccessedProperty.findFirst({
+      where: { user_id: userId }
+    })
+
+    if (existingAccess) {
+      const mergedPortfolioIds = [
+        ...new Set([...(existingAccess.portfolio_id || []), ...portfolioIds])
+      ]
+      const mergedPropertyIds = [
+        ...new Set([...(existingAccess.property_id || []), ...propertyIds])
+      ]
+
+      await this.prisma.userAccessedProperty.update({
+        where: { id: existingAccess.id },
+        data: {
+          portfolio_id: mergedPortfolioIds,
+          property_id: mergedPropertyIds
+        }
+      })
+    } else {
+      await this.prisma.userAccessedProperty.create({
+        data: {
+          user_id: userId,
+          portfolio_id: portfolioIds,
+          property_id: propertyIds
+        }
+      })
+    }
+  }
+
+  async revokeUserAccess(
+    userId: string,
+    portfolioIds: string[],
+    propertyIds: string[]
+  ): Promise<void> {
+    const existingAccess = await this.prisma.userAccessedProperty.findFirst({
+      where: { user_id: userId }
+    })
+
+    if (!existingAccess) {
+      return
+    }
+
+    const updatedPortfolioIds = (existingAccess.portfolio_id || []).filter(
+      id => !portfolioIds.includes(id)
+    )
+    const updatedPropertyIds = (existingAccess.property_id || []).filter(
+      id => !propertyIds.includes(id)
+    )
+
+    await this.prisma.userAccessedProperty.update({
+      where: { id: existingAccess.id },
+      data: {
+        portfolio_id: updatedPortfolioIds,
+        property_id: updatedPropertyIds
+      }
+    })
+  }
 }

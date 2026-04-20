@@ -1,6 +1,14 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import { Transform, Type } from 'class-transformer'
-import { IsBoolean, IsDate, IsEmail, IsNotEmpty, IsOptional, IsString } from 'class-validator'
+import {
+  IsArray,
+  IsBoolean,
+  IsDate,
+  IsEmail,
+  IsNotEmpty,
+  IsOptional,
+  IsString
+} from 'class-validator'
 import { QueryDto } from '../../common/dto/query.dto'
 
 export class CreateUserDto {
@@ -172,6 +180,24 @@ export class AssignUserRoleDto {
   @IsString()
   @IsNotEmpty()
   role_id: string
+}
+
+export class ManageUserAccessDto {
+  @ApiPropertyOptional({
+    example: ['507f1f77bcf86cd799439011', '507f1f77bcf86cd799439012'],
+    description: 'Array of portfolio IDs to add/revoke'
+  })
+  @IsArray()
+  @IsOptional()
+  portfolio_ids?: string[]
+
+  @ApiPropertyOptional({
+    example: ['507f1f77bcf86cd799439013', '507f1f77bcf86cd799439014'],
+    description: 'Array of property IDs to add/revoke'
+  })
+  @IsArray()
+  @IsOptional()
+  property_ids?: string[]
 }
 
 export class UserQueryDto extends QueryDto {
