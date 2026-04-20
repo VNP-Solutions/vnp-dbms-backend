@@ -15,6 +15,7 @@ import { PrismaService } from '../prisma/prisma.service'
 import {
   AssignUserRoleDto,
   DeleteUserDto,
+  ManageUserAccessDto,
   UpdateOwnProfileDto,
   UpdateUserDto,
   UserQueryDto
@@ -163,6 +164,110 @@ export class UserService implements IUserService {
 
     // Update the role
     return this.userRepository.updateRole(id, data.role_id)
+  }
+
+  async addAccess(
+    id: string,
+    data: ManageUserAccessDto,
+    currentUser: IUserWithPermissions
+  ): Promise<{ message: string }> {
+    if (!isUserSuperAdmin(currentUser)) {
+      throw new ForbiddenException('Only super admins can manage user access')
+    }
+
+    const user = await this.userRepository.findById(id)
+
+    if (!user) {
+      throw new NotFoundException('User not found')
+    }
+
+    if (
+      (!data.portfolio_ids || data.portfolio_ids.length === 0) &&
+      (!data.property_ids || data.property_ids.length === 0)
+    ) {
+      throw new BadRequestException(
+        'Please provide at least one portfolio_id or property_id to add'
+      )
+    }
+
+    const portfolioAccess = user.role?.portfolio_permission?.access_level
+    const propertyAccess = user.role?.property_permission?.access_level
+
+    if (data.portfolio_ids && data.portfolio_ids.length > 0) {
+      if (portfolioAccess !== 'partial') {
+        throw new BadRequestException(
+          `Cannot add portfolio access. User's role has '${portfolioAccess}' access level for portfolios. Only 'partial' access level supports access lists.`
+        )
+      }
+    }
+
+    if (data.property_ids && data.property_ids.length > 0) {
+      if (propertyAccess !== 'partial') {
+        throw new BadRequestException(
+          `Cannot add property access. User's role has '${propertyAccess}' access level for properties. Only 'partial' access level supports access lists.`
+        )
+      }
+    }
+
+    await this.userRepository.addUserAccess(
+      id,
+      data.portfolio_ids || [],
+      data.property_ids || []
+    )
+
+    return { message: 'User access added successfully' }
+  }
+
+  async revokeAccess(
+    id: string,
+    data: ManageUserAccessDto,
+    currentUser: IUserWithPermissions
+  ): Promise<{ message: string }> {
+    if (!isUserSuperAdmin(currentUser)) {
+      throw new ForbiddenException('Only super admins can manage user access')
+    }
+
+    const user = await this.userRepository.findById(id)
+
+    if (!user) {
+      throw new NotFoundException('User not found')
+    }
+
+    if (
+      (!data.portfolio_ids || data.portfolio_ids.length === 0) &&
+      (!data.property_ids || data.property_ids.length === 0)
+    ) {
+      throw new BadRequestException(
+        'Please provide at least one portfolio_id or property_id to revoke'
+      )
+    }
+
+    const portfolioAccess = user.role?.portfolio_permission?.access_level
+    const propertyAccess = user.role?.property_permission?.access_level
+
+    if (data.portfolio_ids && data.portfolio_ids.length > 0) {
+      if (portfolioAccess !== 'partial') {
+        throw new BadRequestException(
+          `Cannot revoke portfolio access. User's role has '${portfolioAccess}' access level for portfolios. Only 'partial' access level uses access lists.`
+        )
+      }
+    }
+
+    if (data.property_ids && data.property_ids.length > 0) {
+      if (propertyAccess !== 'partial') {
+        throw new BadRequestException(
+          `Cannot revoke property access. User's role has '${propertyAccess}' access level for properties. Only 'partial' access level uses access lists.`
+        )
+      }
+    }
+
+    await this.userRepository.revokeUserAccess(
+      id,
+      data.portfolio_ids || [],
+      data.property_ids || []
+    )
+
+    return { message: 'User access revoked successfully' }
   }
 
   async remove(

@@ -4,6 +4,7 @@ import { IUserWithPermissions } from '../../common/interfaces/permission.interfa
 import {
   AssignUserRoleDto,
   DeleteUserDto,
+  ManageUserAccessDto,
   UpdateOwnProfileDto,
   UpdateUserDto,
   UserQueryDto
@@ -159,6 +160,16 @@ export interface IUserRepository {
   updateRole(id: string, roleId: string): Promise<UserWithRole>
   delete(id: string): Promise<User>
   findRoleById(roleId: string): Promise<any>
+  addUserAccess(
+    userId: string,
+    portfolioIds: string[],
+    propertyIds: string[]
+  ): Promise<void>
+  revokeUserAccess(
+    userId: string,
+    portfolioIds: string[],
+    propertyIds: string[]
+  ): Promise<void>
 }
 
 export interface IUserService {
@@ -185,6 +196,16 @@ export interface IUserService {
   remove(
     id: string,
     data: DeleteUserDto,
+    user: IUserWithPermissions
+  ): Promise<{ message: string }>
+  addAccess(
+    id: string,
+    data: ManageUserAccessDto,
+    user: IUserWithPermissions
+  ): Promise<{ message: string }>
+  revokeAccess(
+    id: string,
+    data: ManageUserAccessDto,
     user: IUserWithPermissions
   ): Promise<{ message: string }>
 }
