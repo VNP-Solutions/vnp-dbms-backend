@@ -42,6 +42,11 @@ export interface IAuthRepository {
   updateUserPassword(userId: string, password: string): Promise<void>
   clearTempPassword(userId: string): Promise<void>
   updateInvitationSentAt(userId: string): Promise<void>
+  createUserAccessedProperties(
+    userId: string,
+    portfolioIds: string[],
+    propertyIds: string[]
+  ): Promise<void>
 }
 
 export interface IAuthService {

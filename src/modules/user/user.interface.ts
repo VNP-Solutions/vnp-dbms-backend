@@ -103,13 +103,56 @@ export type UserWithDetails = Prisma.UserGetPayload<{
         email: true
       }
     }
+    userAccessedProperties: {
+      select: {
+        property_id: true
+      }
+    }
   }
 }>
+
+export type UserWithAccessedProperties = UserWithDetails & {
+  userAccessedProperties: Array<{
+    id: string
+    name: string
+    portfolio: {
+      id: string
+      name: string
+    }
+  }>
+  userAccessedPortfolios: Array<{
+    id: string
+    name: string
+    serviceType: {
+      id: string
+      type: string
+    }
+  }>
+}
 
 export interface IUserRepository {
   findAll(queryOptions: any, userIds?: string[]): Promise<UserWithRole[]>
   count(whereClause: any, userIds?: string[]): Promise<number>
   findById(id: string): Promise<UserWithDetails | null>
+  findUserWithAccessibleResources(id: string): Promise<{
+    user: UserWithDetails
+    properties: Array<{
+      id: string
+      name: string
+      portfolio: {
+        id: string
+        name: string
+      }
+    }>
+    portfolios: Array<{
+      id: string
+      name: string
+      serviceType: {
+        id: string
+        type: string
+      }
+    }>
+  } | null>
   update(id: string, data: Partial<User>): Promise<UserWithRole>
   updateRole(id: string, roleId: string): Promise<UserWithRole>
   delete(id: string): Promise<User>
@@ -126,7 +169,7 @@ export interface IUserService {
     userId: string,
     data: UpdateOwnProfileDto
   ): Promise<UserWithRole>
-  findOne(id: string, user: IUserWithPermissions): Promise<UserWithDetails>
+  findOne(id: string, user: IUserWithPermissions): Promise<UserWithAccessedProperties>
   update(
     id: string,
     data: UpdateUserDto,

@@ -91,4 +91,18 @@ export class AuthRepository implements IAuthRepository {
       data: { invitation_sent_at: new Date() }
     })
   }
+
+  async createUserAccessedProperties(
+    userId: string,
+    portfolioIds: string[],
+    propertyIds: string[]
+  ): Promise<void> {
+    await this.prisma.userAccessedProperty.create({
+      data: {
+        user_id: userId,
+        portfolio_id: portfolioIds,
+        property_id: propertyIds
+      }
+    })
+  }
 }

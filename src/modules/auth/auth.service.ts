@@ -179,7 +179,7 @@ export class AuthService implements IAuthService {
       infer: true
     })!
 
-    await this.authRepository.createUser({
+    const newUser = await this.authRepository.createUser({
       email: data.email,
       first_name: data.first_name,
       last_name: data.last_name,
@@ -193,6 +193,16 @@ export class AuthService implements IAuthService {
       invited_by_id: inviterId,
       invitation_sent_at: new Date()
     })
+
+    // Create UserAccessedProperty if portfolio_ids or property_ids are provided
+    if ((data.portfolio_ids && data.portfolio_ids.length > 0) || 
+        (data.property_ids && data.property_ids.length > 0)) {
+      await this.authRepository.createUserAccessedProperties(
+        newUser.id,
+        data.portfolio_ids || [],
+        data.property_ids || []
+      )
+    }
 
     // Fetch role details to get is_external flag
     const role = await this.prisma.userRole.findUnique({

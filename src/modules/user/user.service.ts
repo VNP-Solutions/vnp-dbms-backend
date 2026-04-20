@@ -70,11 +70,13 @@ export class UserService implements IUserService {
   }
 
   async findOne(id: string, currentUser: IUserWithPermissions) {
-    const user = await this.userRepository.findById(id)
+    const result = await this.userRepository.findUserWithAccessibleResources(id)
 
-    if (!user) {
+    if (!result || !result.user) {
       throw new NotFoundException('User not found')
     }
+
+    const { user, properties, portfolios } = result
 
     // Check if user has permission to view this user
     const accessibleIds = await this.permissionService.getAccessibleResourceIds(
@@ -86,7 +88,14 @@ export class UserService implements IUserService {
       throw new ForbiddenException('You do not have access to this user')
     }
 
-    return user
+    // Remove the raw userAccessedProperties and return with formatted data
+    const { userAccessedProperties: _, ...userWithoutAccessProps } = user as any
+
+    return {
+      ...userWithoutAccessProps,
+      userAccessedProperties: properties,
+      userAccessedPortfolios: portfolios
+    }
   }
 
   async update(
