@@ -156,11 +156,75 @@ export class UserRepository implements IUserRepository {
             last_name: true,
             email: true
           }
+        },
+        userAccessedProperties: {
+          select: {
+            property_id: true,
+            portfolio_id: true
+          }
         }
       }
     })
 
     return user
+  }
+
+  async findUserWithAccessibleResources(id: string) {
+    const user = await this.findById(id)
+    
+    if (!user) {
+      return null
+    }
+
+    // Extract property and portfolio IDs
+    const propertyIds = (user as any).userAccessedProperties?.flatMap(
+      (access: any) => access.property_id
+    ) || []
+    const portfolioIds = (user as any).userAccessedProperties?.flatMap(
+      (access: any) => access.portfolio_id
+    ) || []
+
+    // Fetch properties and portfolios in parallel using Prisma
+    const [properties, portfolios] = await Promise.all([
+      propertyIds.length > 0 
+        ? this.prisma.property.findMany({
+            where: { id: { in: propertyIds } },
+            select: {
+              id: true,
+              name: true,
+              portfolio: {
+                select: {
+                  id: true,
+                  name: true
+                }
+              }
+            },
+            orderBy: { name: 'asc' }
+          })
+        : [],
+      portfolioIds.length > 0
+        ? this.prisma.portfolio.findMany({
+            where: { id: { in: portfolioIds } },
+            select: {
+              id: true,
+              name: true,
+              serviceType: {
+                select: {
+                  id: true,
+                  type: true
+                }
+              }
+            },
+            orderBy: { name: 'asc' }
+          })
+        : []
+    ])
+
+    return {
+      user,
+      properties,
+      portfolios
+    }
   }
 
   async update(id: string, data: Partial<User>): Promise<UserWithRole> {

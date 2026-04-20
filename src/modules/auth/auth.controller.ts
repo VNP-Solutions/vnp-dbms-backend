@@ -74,8 +74,11 @@ export class AuthController {
   @Public(false)
   @HttpCode(HttpStatus.CREATED)
   @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Invite a new user (requires authentication and user permission level = all)' })
-  @ApiResponse({ status: 201, description: 'User invited successfully' })
+  @ApiOperation({ 
+    summary: 'Invite a new user (requires authentication and user permission level = all)', 
+    description: 'Invite a new user and optionally grant access to specific portfolios and properties. If portfolio_ids or property_ids are provided, a UserAccessedProperty record will be created for the user.'
+  })
+  @ApiResponse({ status: 201, description: 'User invited successfully with access permissions created' })
   @ApiResponse({ status: 403, description: 'Forbidden - insufficient permission to invite users' })
   async inviteUser(
     @Body() body: InviteUserDto,
