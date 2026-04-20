@@ -93,8 +93,10 @@ export class UserService implements IUserService {
 
     return {
       ...userWithoutAccessProps,
-      userAccessedProperties: properties,
-      userAccessedPortfolios: portfolios
+      userAccessProperties: {
+        portfolios,
+        properties
+      }
     }
   }
 

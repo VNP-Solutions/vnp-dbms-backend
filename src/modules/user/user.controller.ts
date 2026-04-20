@@ -165,8 +165,11 @@ export class UserController {
 
   @Get(':id')
   @RequirePermission(ModuleType.USER, PermissionAction.READ, true)
-  @ApiOperation({ summary: 'Get a user by ID with their accessible properties and portfolios' })
-  @ApiResponse({ status: 200, description: 'User retrieved successfully with userAccessedProperties and userAccessedPortfolios arrays' })
+  @ApiOperation({ summary: 'Get a user by ID with their accessible portfolios and properties' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'User retrieved successfully with userAccessProperties object containing portfolios and properties arrays' 
+  })
   @ApiResponse({ status: 404, description: 'User not found' })
   @ApiResponse({
     status: 403,
