@@ -112,22 +112,24 @@ export type UserWithDetails = Prisma.UserGetPayload<{
 }>
 
 export type UserWithAccessedProperties = UserWithDetails & {
-  userAccessedProperties: Array<{
-    id: string
-    name: string
-    portfolio: {
+  userAccessProperties: {
+    portfolios: Array<{
       id: string
       name: string
-    }
-  }>
-  userAccessedPortfolios: Array<{
-    id: string
-    name: string
-    serviceType: {
+      serviceType: {
+        id: string
+        type: string
+      }
+    }>
+    properties: Array<{
       id: string
-      type: string
-    }
-  }>
+      name: string
+      portfolio: {
+        id: string
+        name: string
+      }
+    }>
+  }
 }
 
 export interface IUserRepository {
