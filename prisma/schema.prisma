@@ -44,6 +44,18 @@ enum AccessLevel {
   none
 }
 
+enum OtaBillingType {
+  VCC
+  DB
+  EBS
+}
+
+enum OtaIntegrationFrequency {
+  REGULAR
+  ONE_TIME
+  STOP
+}
+
 model User {
   id                 String    @id @default(auto()) @map("_id") @db.ObjectId
   first_name         String
@@ -229,6 +241,7 @@ model ServiceType {
   is_active  Boolean
   order      Int         @default(0)
   portfolios Portfolio[]
+  properties Property[]
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -303,47 +316,84 @@ model Property {
   next_due_date         DateTime?
   portfolio_id          String        @db.ObjectId
   portfolio             Portfolio     @relation(fields: [portfolio_id], references: [id], onDelete: Cascade)
+  service_type_id       String?       @db.ObjectId
+  serviceType           ServiceType?  @relation(fields: [service_type_id], references: [id], onDelete: SetNull)
   subportfolio_id       String?       @db.ObjectId
   subportfolio          Subportfolio? @relation(fields: [subportfolio_id], references: [id], onDelete: SetNull)
   previous_portfolio_id String?       @db.ObjectId
   show_in_portfolio     String[]      @default([]) @db.ObjectId
 
-  new_domain_email       String?
-  others_case_emails     String[] @default([])
-  primary_case_email     String?
-  portfolio_contact_email String?
-  webmail_password       String?
-  description            String?
-  hotel_address      String?
+  new_domain_email          String?
+  others_case_emails        String[] @default([])
+  primary_case_email        String?
+  portfolio_contact_email   String?
+  portfolio_contact         String?
+  webmail_password          String?
+  description               String?
+  descriptor                String?
+  hotel_address             String?
+  property_identifier       String?
 
   // Contact Information
   case_management_contact String?
   access_contact          String?
   reporting_contact       String?
 
-  // OTA Processors
+  // OTA Processors (QuantumPay, Stripe, FreedomPay — validated in API)
   expedia_processor String?
   booking_processor String?
   agoda_processor   String?
 
-  // Date Range Fields
+  // Date Range Fields (legacy)
   from String?
   to   String?
 
-  // QP Credentials (encrypted)
-  qp_username String?
-  qp_password String?
-  qp_api_key  String?
+  // QP / FP Credentials (passwords encrypted at application layer)
+  qp_username          String?
+  qp_password          String?
+  qp_api_key           String?
   fp_mid               String?
+  fp_username          String?
+  fp_password          String?
   stripe_account_email String?
 
   // OTA Integration Fields
-  expedia_id     Int?
-  expedia_status String?
-  booking_id     Int?
-  booking_status String?
-  agoda_id       Int?
-  agoda_status   String?
+  expedia_id      Int?
+  expedia_status  String?
+  booking_id      Int?
+  booking_status  String?
+  agoda_id        Int?
+  agoda_status    String?
+
+  // Expedia integration detail
+  expedia_billing_type OtaBillingType?
+  expedia_service_type String?
+  expedia_frequency    OtaIntegrationFrequency?
+  expedia_access_level Boolean?
+  expedia_from         String?
+  expedia_to           String?
+  expedia_scheduler    Boolean?
+  expedia_duration     Int?
+
+  // Booking.com integration detail
+  booking_billing_type OtaBillingType?
+  booking_service_type String?
+  booking_frequency    OtaIntegrationFrequency?
+  booking_access_level Boolean?
+  booking_from         String?
+  booking_to           String?
+  booking_scheduler    Boolean?
+  booking_duration     Int?
+
+  // Agoda integration detail
+  agoda_billing_type OtaBillingType?
+  agoda_service_type String?
+  agoda_frequency    OtaIntegrationFrequency?
+  agoda_access_level Boolean?
+  agoda_from         String?
+  agoda_to           String?
+  agoda_scheduler    Boolean?
+  agoda_duration     Int?
 
   userFeatureAccessPermissions UserFeatureAccessPermission[]
   credentials                  PropertyCredentials[]
@@ -352,6 +402,7 @@ model Property {
   updated_at DateTime @updatedAt
 
   @@index([portfolio_id])
+  @@index([service_type_id])
   @@index([subportfolio_id])
   @@index([is_active])
   @@index([next_due_date])
@@ -434,6 +485,13 @@ model PropertyCredentials {
   agodaPassword           String?
   bookingUsername         String?
   bookingPassword         String?
+  expediaSecondaryUsername   String?
+  expediaSecondaryPassword   String?
+  bookingSecondaryUsername   String?
+  bookingSecondaryPassword   String?
+  agodaSecondaryUsername     String?
+  agodaSecondaryPassword     String?
+  needAnotherDomain          Boolean?
   expediaEmailAssociated  String?
   propertyContactEmail    String?
   portfolioContactEmail   String?

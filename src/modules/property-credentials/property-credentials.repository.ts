@@ -36,6 +36,21 @@ export class PropertyCredentialsRepository implements IPropertyCredentialsReposi
       if (credentialsData.bookingPassword) {
         encryptedData.bookingPassword = this.encryptPassword(credentialsData.bookingPassword)
       }
+      if (credentialsData.expediaSecondaryPassword) {
+        encryptedData.expediaSecondaryPassword = this.encryptPassword(
+          credentialsData.expediaSecondaryPassword
+        )
+      }
+      if (credentialsData.bookingSecondaryPassword) {
+        encryptedData.bookingSecondaryPassword = this.encryptPassword(
+          credentialsData.bookingSecondaryPassword
+        )
+      }
+      if (credentialsData.agodaSecondaryPassword) {
+        encryptedData.agodaSecondaryPassword = this.encryptPassword(
+          credentialsData.agodaSecondaryPassword
+        )
+      }
 
       return await this.prisma.propertyCredentials.create({
         data: {
@@ -113,6 +128,30 @@ export class PropertyCredentialsRepository implements IPropertyCredentialsReposi
       delete encryptedData.bookingPassword
     }
 
+    if (data.expediaSecondaryPassword) {
+      encryptedData.expediaSecondaryPassword = this.encryptPassword(
+        data.expediaSecondaryPassword
+      )
+    } else if (data.expediaSecondaryPassword === '') {
+      delete encryptedData.expediaSecondaryPassword
+    }
+
+    if (data.bookingSecondaryPassword) {
+      encryptedData.bookingSecondaryPassword = this.encryptPassword(
+        data.bookingSecondaryPassword
+      )
+    } else if (data.bookingSecondaryPassword === '') {
+      delete encryptedData.bookingSecondaryPassword
+    }
+
+    if (data.agodaSecondaryPassword) {
+      encryptedData.agodaSecondaryPassword = this.encryptPassword(
+        data.agodaSecondaryPassword
+      )
+    } else if (data.agodaSecondaryPassword === '') {
+      delete encryptedData.agodaSecondaryPassword
+    }
+
     delete encryptedData.property_id
 
     return this.prisma.propertyCredentials.update({
@@ -154,6 +193,39 @@ export class PropertyCredentialsRepository implements IPropertyCredentialsReposi
         encryptedCredentials.bookingPassword = this.encryptPassword(data.credentials.bookingPassword)
       } else {
         delete encryptedCredentials.bookingPassword
+      }
+
+      if (
+        data.credentials.expediaSecondaryPassword &&
+        data.credentials.expediaSecondaryPassword.trim() !== ''
+      ) {
+        encryptedCredentials.expediaSecondaryPassword = this.encryptPassword(
+          data.credentials.expediaSecondaryPassword
+        )
+      } else {
+        delete encryptedCredentials.expediaSecondaryPassword
+      }
+
+      if (
+        data.credentials.bookingSecondaryPassword &&
+        data.credentials.bookingSecondaryPassword.trim() !== ''
+      ) {
+        encryptedCredentials.bookingSecondaryPassword = this.encryptPassword(
+          data.credentials.bookingSecondaryPassword
+        )
+      } else {
+        delete encryptedCredentials.bookingSecondaryPassword
+      }
+
+      if (
+        data.credentials.agodaSecondaryPassword &&
+        data.credentials.agodaSecondaryPassword.trim() !== ''
+      ) {
+        encryptedCredentials.agodaSecondaryPassword = this.encryptPassword(
+          data.credentials.agodaSecondaryPassword
+        )
+      } else {
+        delete encryptedCredentials.agodaSecondaryPassword
       }
 
       Object.keys(encryptedCredentials).forEach((key) => {

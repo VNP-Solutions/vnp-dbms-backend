@@ -5,7 +5,8 @@ import { CreatePropertyDto, PropertyFilterDto, UpdatePropertyDto } from './prope
 
 export type PropertyWithRelations = Property & {
   portfolio: { id: string; name: string }
-  subportfolio: { id: string; name: string } | null
+  subportfolio: { id: string; name: string; portfolio_id: string } | null
+  serviceType?: { id: string; type: string } | null
 }
 
 export interface ImportPropertyRow {
@@ -68,6 +69,8 @@ export interface AllDataForGlobalFilterResponse {
   expedia_id: string[]
   portfolio: Array<{ id: string; name: string }>
   property: Array<{ id: string; name: string }>
+  portfolio_id: string[]
+  subportfolio: Array<{ id: string; name: string; portfolio_id: string }>
   booking_id: string[]
   agoda_id: string[]
   hotel_address: string[]
@@ -75,6 +78,57 @@ export interface AllDataForGlobalFilterResponse {
   new_domain_email: string[]
   portfolio_contact_email: string[]
   case_contact_email: string[]
+  case_management_contact: string[]
+  access_contact: string[]
+  reporting_contact: string[]
+  description: string[]
+  expedia_status: string[]
+  booking_status: string[]
+  agoda_status: string[]
+  expedia_processor: string[]
+  booking_processor: string[]
+  agoda_processor: string[]
+  fp_mid: string[]
+  stripe_account_email: string[]
+  from: string[]
+  to: string[]
+  property_identifier: string[]
+  portfolio_contact: string[]
+  descriptor: string[]
+  service_type: Array<{ id: string; type: string }>
+  service_type_id: string[]
+  fp_username: string[]
+  qp_username: string[]
+  previous_portfolio_id: string[]
+  next_due_date: string[]
+  expedia_billing_type: string[]
+  expedia_service_type: string[]
+  expedia_frequency: string[]
+  expedia_from: string[]
+  expedia_to: string[]
+  expedia_duration: string[]
+  expedia_access_level: string[]
+  expedia_scheduler: string[]
+  booking_billing_type: string[]
+  booking_service_type: string[]
+  booking_frequency: string[]
+  booking_from: string[]
+  booking_to: string[]
+  booking_duration: string[]
+  booking_access_level: string[]
+  booking_scheduler: string[]
+  agoda_billing_type: string[]
+  agoda_service_type: string[]
+  agoda_frequency: string[]
+  agoda_from: string[]
+  agoda_to: string[]
+  agoda_duration: string[]
+  agoda_access_level: string[]
+  agoda_scheduler: string[]
+  need_another_domain: string[]
+  expedia_secondary_username: string[]
+  booking_secondary_username: string[]
+  agoda_secondary_username: string[]
 }
 
 export interface IPropertyRepository {

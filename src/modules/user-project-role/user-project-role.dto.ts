@@ -206,3 +206,25 @@ export class GetUserProjectRolesQueryDto {
   @IsOptional()
   is_active?: boolean
 }
+
+export class ManageUserProjectRoleAccessDto {
+  @ApiPropertyOptional({
+    type: [String],
+    example: ['507f1f77bcf86cd799439035', '507f1f77bcf86cd799439036'],
+    description: 'Array of portfolio IDs to add/revoke'
+  })
+  @IsArray()
+  @IsMongoId({ each: true })
+  @IsOptional()
+  portfolio_ids?: string[]
+
+  @ApiPropertyOptional({
+    type: [String],
+    example: ['507f1f77bcf86cd799439037', '507f1f77bcf86cd799439038'],
+    description: 'Array of property IDs to add/revoke'
+  })
+  @IsArray()
+  @IsMongoId({ each: true })
+  @IsOptional()
+  property_ids?: string[]
+}

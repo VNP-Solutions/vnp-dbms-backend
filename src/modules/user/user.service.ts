@@ -77,7 +77,7 @@ export class UserService implements IUserService {
       throw new NotFoundException('User not found')
     }
 
-    const { user, properties, portfolios } = result
+    const { user, properties, portfolios, userProjectRoles } = result
 
     // Check if user has permission to view this user
     const accessibleIds = await this.permissionService.getAccessibleResourceIds(
@@ -89,14 +89,15 @@ export class UserService implements IUserService {
       throw new ForbiddenException('You do not have access to this user')
     }
 
-    // Remove the raw userAccessedProperties and return with formatted data
-    const { userAccessedProperties: _, ...userWithoutAccessProps } = user as any
+    // Remove the raw userAccessedProperties and userProjectRoles and return with formatted data
+    const { userAccessedProperties: _, userProjectRoles: __, ...userWithoutAccessProps } = user as any
 
     return {
       ...userWithoutAccessProps,
       userAccessProperties: {
         portfolios,
-        properties
+        properties,
+        userProjectRoles
       }
     }
   }

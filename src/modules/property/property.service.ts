@@ -68,6 +68,7 @@ export class PropertyService implements IPropertyService {
       qp_username,
       qp_password,
       qp_api_key,
+      fp_password,
       ...propertyData
     } = data
 
@@ -77,6 +78,8 @@ export class PropertyService implements IPropertyService {
       encryptedData.qp_password = this.encryptionUtil.encrypt(qp_password)
     if (qp_api_key)
       encryptedData.qp_api_key = this.encryptionUtil.encrypt(qp_api_key)
+    if (fp_password)
+      encryptedData.fp_password = this.encryptionUtil.encrypt(fp_password)
     if (encryptedData.webmail_password)
       encryptedData.webmail_password = this.encryptionUtil.encrypt(
         encryptedData.webmail_password
@@ -250,6 +253,120 @@ export class PropertyService implements IPropertyService {
           case 'stripe_account_email':
             whereConditions.push({ stripe_account_email: { in: values } })
             break
+          case 'service_type_id':
+            whereConditions.push({ service_type_id: { in: values } })
+            break
+          case 'property_identifier':
+            whereConditions.push({ property_identifier: { in: values } })
+            break
+          case 'portfolio_contact':
+            whereConditions.push({ portfolio_contact: { in: values } })
+            break
+          case 'descriptor':
+            whereConditions.push({ descriptor: { in: values } })
+            break
+          case 'fp_username':
+            whereConditions.push({ fp_username: { in: values } })
+            break
+          case 'expedia_billing_type':
+            whereConditions.push({ expedia_billing_type: { in: values } })
+            break
+          case 'expedia_service_type':
+            whereConditions.push({ expedia_service_type: { in: values } })
+            break
+          case 'expedia_frequency':
+            whereConditions.push({ expedia_frequency: { in: values } })
+            break
+          case 'expedia_access_level': {
+            const bools = this.booleanValuesForInClause(values)
+            if (bools.length)
+              whereConditions.push({ expedia_access_level: { in: bools } })
+            break
+          }
+          case 'expedia_from':
+            whereConditions.push({ expedia_from: { in: values } })
+            break
+          case 'expedia_to':
+            whereConditions.push({ expedia_to: { in: values } })
+            break
+          case 'expedia_scheduler': {
+            const bools = this.booleanValuesForInClause(values)
+            if (bools.length)
+              whereConditions.push({ expedia_scheduler: { in: bools } })
+            break
+          }
+          case 'expedia_duration': {
+            const nums = this.intValuesForInClause(values)
+            if (nums.length)
+              whereConditions.push({ expedia_duration: { in: nums } })
+            break
+          }
+          case 'booking_billing_type':
+            whereConditions.push({ booking_billing_type: { in: values } })
+            break
+          case 'booking_service_type':
+            whereConditions.push({ booking_service_type: { in: values } })
+            break
+          case 'booking_frequency':
+            whereConditions.push({ booking_frequency: { in: values } })
+            break
+          case 'booking_access_level': {
+            const bools = this.booleanValuesForInClause(values)
+            if (bools.length)
+              whereConditions.push({ booking_access_level: { in: bools } })
+            break
+          }
+          case 'booking_from':
+            whereConditions.push({ booking_from: { in: values } })
+            break
+          case 'booking_to':
+            whereConditions.push({ booking_to: { in: values } })
+            break
+          case 'booking_scheduler': {
+            const bools = this.booleanValuesForInClause(values)
+            if (bools.length)
+              whereConditions.push({ booking_scheduler: { in: bools } })
+            break
+          }
+          case 'booking_duration': {
+            const nums = this.intValuesForInClause(values)
+            if (nums.length)
+              whereConditions.push({ booking_duration: { in: nums } })
+            break
+          }
+          case 'agoda_billing_type':
+            whereConditions.push({ agoda_billing_type: { in: values } })
+            break
+          case 'agoda_service_type':
+            whereConditions.push({ agoda_service_type: { in: values } })
+            break
+          case 'agoda_frequency':
+            whereConditions.push({ agoda_frequency: { in: values } })
+            break
+          case 'agoda_access_level': {
+            const bools = this.booleanValuesForInClause(values)
+            if (bools.length)
+              whereConditions.push({ agoda_access_level: { in: bools } })
+            break
+          }
+          case 'agoda_from':
+            whereConditions.push({ agoda_from: { in: values } })
+            break
+          case 'agoda_to':
+            whereConditions.push({ agoda_to: { in: values } })
+            break
+          case 'agoda_scheduler': {
+            const bools = this.booleanValuesForInClause(values)
+            if (bools.length)
+              whereConditions.push({ agoda_scheduler: { in: bools } })
+            break
+          }
+          case 'agoda_duration': {
+            const nums = this.intValuesForInClause(values)
+            if (nums.length)
+              whereConditions.push({ agoda_duration: { in: nums } })
+            break
+          }
         }
       }
     }
@@ -280,7 +397,20 @@ export class PropertyService implements IPropertyService {
         OR: [
           { name: { contains: filterDto.search, mode: 'insensitive' } },
           { description: { contains: filterDto.search, mode: 'insensitive' } },
-          { hotel_address: { contains: filterDto.search, mode: 'insensitive' } }
+          { hotel_address: { contains: filterDto.search, mode: 'insensitive' } },
+          {
+            property_identifier: {
+              contains: filterDto.search,
+              mode: 'insensitive'
+            }
+          },
+          {
+            portfolio_contact: {
+              contains: filterDto.search,
+              mode: 'insensitive'
+            }
+          },
+          { descriptor: { contains: filterDto.search, mode: 'insensitive' } }
         ]
       })
     }
@@ -367,13 +497,23 @@ export class PropertyService implements IPropertyService {
         result.webmail_password = prop.webmail_password
       }
     }
+    if (prop.fp_password) {
+      try {
+        result.fp_password = this.encryptionUtil.decrypt(prop.fp_password)
+      } catch {
+        result.fp_password = prop.fp_password
+      }
+    }
     if (prop.credentials && Array.isArray(prop.credentials)) {
       result.credentials = (prop.credentials as any[]).map((cred: any) => {
         const decrypted: any = { ...cred }
         for (const field of [
           'expediaPassword',
           'agodaPassword',
-          'bookingPassword'
+          'bookingPassword',
+          'expediaSecondaryPassword',
+          'bookingSecondaryPassword',
+          'agodaSecondaryPassword'
         ]) {
           if (cred[field]) {
             try {
@@ -405,12 +545,21 @@ export class PropertyService implements IPropertyService {
     if (prop.webmail_password) {
       result.webmail_password = MASK
     }
+    if (prop.fp_password) {
+      result.fp_password = MASK
+    }
     if (prop.credentials && Array.isArray(prop.credentials)) {
       result.credentials = (prop.credentials as any[]).map((cred: any) => {
         const masked: any = { ...cred }
         if (cred.expediaPassword) masked.expediaPassword = MASK
         if (cred.agodaPassword) masked.agodaPassword = MASK
         if (cred.bookingPassword) masked.bookingPassword = MASK
+        if (cred.expediaSecondaryPassword)
+          masked.expediaSecondaryPassword = MASK
+        if (cred.bookingSecondaryPassword)
+          masked.bookingSecondaryPassword = MASK
+        if (cred.agodaSecondaryPassword)
+          masked.agodaSecondaryPassword = MASK
         return masked
       })
     }
@@ -463,6 +612,7 @@ export class PropertyService implements IPropertyService {
       qp_username,
       qp_password,
       qp_api_key,
+      fp_password,
       webmail_password,
       ...propertyData
     } = data
@@ -473,6 +623,8 @@ export class PropertyService implements IPropertyService {
       encryptedData.qp_password = this.encryptionUtil.encrypt(qp_password)
     if (qp_api_key)
       encryptedData.qp_api_key = this.encryptionUtil.encrypt(qp_api_key)
+    if (fp_password)
+      encryptedData.fp_password = this.encryptionUtil.encrypt(fp_password)
     if (webmail_password)
       encryptedData.webmail_password =
         this.encryptionUtil.encrypt(webmail_password)
@@ -954,6 +1106,52 @@ export class PropertyService implements IPropertyService {
     const uniqueStripeAccountEmails = new Set<string>()
     const uniqueFromDates = new Set<string>()
     const uniqueToDates = new Set<string>()
+    const serviceTypeMap = new Map<string, { id: string; type: string }>()
+    const uniquePropertyIdentifiers = new Set<string>()
+    const uniquePortfolioContacts = new Set<string>()
+    const uniqueDescriptors = new Set<string>()
+    const uniqueFpUsernames = new Set<string>()
+    const uniqueExpediaBillingTypes = new Set<string>()
+    const uniqueExpediaServiceTypes = new Set<string>()
+    const uniqueExpediaFrequencies = new Set<string>()
+    const uniqueExpediaFroms = new Set<string>()
+    const uniqueExpediaTos = new Set<string>()
+    const uniqueExpediaDurations = new Set<string>()
+    const uniqueBookingBillingTypes = new Set<string>()
+    const uniqueBookingServiceTypes = new Set<string>()
+    const uniqueBookingFrequencies = new Set<string>()
+    const uniqueBookingFroms = new Set<string>()
+    const uniqueBookingTos = new Set<string>()
+    const uniqueBookingDurations = new Set<string>()
+    const uniqueAgodaBillingTypes = new Set<string>()
+    const uniqueAgodaServiceTypes = new Set<string>()
+    const uniqueAgodaFrequencies = new Set<string>()
+    const uniqueAgodaFroms = new Set<string>()
+    const uniqueAgodaTos = new Set<string>()
+    const uniqueAgodaDurations = new Set<string>()
+    const portfolioIdSet = new Set<string>()
+    const subportfolioMap = new Map<
+      string,
+      { id: string; name: string; portfolio_id: string }
+    >()
+    const uniqueServiceTypeIds = new Set<string>()
+    const uniqueDescriptions = new Set<string>()
+    const uniqueExpediaStatuses = new Set<string>()
+    const uniqueBookingStatuses = new Set<string>()
+    const uniqueAgodaStatuses = new Set<string>()
+    const uniqueQpUsernames = new Set<string>()
+    const uniquePreviousPortfolioIds = new Set<string>()
+    const uniqueNextDueDates = new Set<string>()
+    const uniqueExpediaAccessLevels = new Set<string>()
+    const uniqueExpediaSchedulers = new Set<string>()
+    const uniqueBookingAccessLevels = new Set<string>()
+    const uniqueBookingSchedulers = new Set<string>()
+    const uniqueAgodaAccessLevels = new Set<string>()
+    const uniqueAgodaSchedulers = new Set<string>()
+    const uniqueNeedAnotherDomain = new Set<string>()
+    const uniqueExpediaSecondaryUsernames = new Set<string>()
+    const uniqueBookingSecondaryUsernames = new Set<string>()
+    const uniqueAgodaSecondaryUsernames = new Set<string>()
 
     portfolios.forEach((portfolio: any) => {
       if (portfolio.id && portfolio.name) {
@@ -969,11 +1167,21 @@ export class PropertyService implements IPropertyService {
     })
 
     properties.forEach((property: any) => {
+      if (property.portfolio_id) portfolioIdSet.add(property.portfolio_id)
+      if (property.service_type_id)
+        uniqueServiceTypeIds.add(property.service_type_id)
       if (property.expedia_id) uniqueExpediaIds.add(property.expedia_id)
       if (property.booking_id) uniqueBookingIds.add(property.booking_id)
       if (property.agoda_id) uniqueAgodaIds.add(property.agoda_id)
       if (property.id && property.name) {
         propertyMap.set(property.id, { id: property.id, name: property.name })
+      }
+      if (property.subportfolio?.id) {
+        subportfolioMap.set(property.subportfolio.id, {
+          id: property.subportfolio.id,
+          name: property.subportfolio.name,
+          portfolio_id: property.subportfolio.portfolio_id
+        })
       }
       if (property.hotel_address)
         uniqueHotelAddresses.add(property.hotel_address)
@@ -991,6 +1199,21 @@ export class PropertyService implements IPropertyService {
         uniqueAccessContacts.add(property.access_contact)
       if (property.reporting_contact)
         uniqueReportingContacts.add(property.reporting_contact)
+      if (property.description) uniqueDescriptions.add(property.description)
+      if (property.expedia_status)
+        uniqueExpediaStatuses.add(property.expedia_status)
+      if (property.booking_status)
+        uniqueBookingStatuses.add(property.booking_status)
+      if (property.agoda_status) uniqueAgodaStatuses.add(property.agoda_status)
+      if (property.qp_username) uniqueQpUsernames.add(property.qp_username)
+      if (property.previous_portfolio_id)
+        uniquePreviousPortfolioIds.add(property.previous_portfolio_id)
+      if (property.next_due_date)
+        uniqueNextDueDates.add(
+          property.next_due_date instanceof Date
+            ? property.next_due_date.toISOString()
+            : String(property.next_due_date)
+        )
       if (property.expedia_processor)
         uniqueExpediaProcessors.add(property.expedia_processor)
       if (property.booking_processor)
@@ -1011,6 +1234,73 @@ export class PropertyService implements IPropertyService {
           name: property.portfolio.name
         })
       }
+      if (property.serviceType?.id && property.serviceType?.type) {
+        serviceTypeMap.set(property.serviceType.id, {
+          id: property.serviceType.id,
+          type: property.serviceType.type
+        })
+      }
+      if (property.property_identifier)
+        uniquePropertyIdentifiers.add(property.property_identifier)
+      if (property.portfolio_contact)
+        uniquePortfolioContacts.add(property.portfolio_contact)
+      if (property.descriptor) uniqueDescriptors.add(property.descriptor)
+      if (property.fp_username) uniqueFpUsernames.add(property.fp_username)
+      if (property.expedia_billing_type)
+        uniqueExpediaBillingTypes.add(property.expedia_billing_type)
+      if (property.expedia_service_type)
+        uniqueExpediaServiceTypes.add(property.expedia_service_type)
+      if (property.expedia_frequency)
+        uniqueExpediaFrequencies.add(property.expedia_frequency)
+      if (property.expedia_from) uniqueExpediaFroms.add(property.expedia_from)
+      if (property.expedia_to) uniqueExpediaTos.add(property.expedia_to)
+      if (property.expedia_duration != null)
+        uniqueExpediaDurations.add(String(property.expedia_duration))
+      if (property.expedia_access_level != null)
+        uniqueExpediaAccessLevels.add(String(property.expedia_access_level))
+      if (property.expedia_scheduler != null)
+        uniqueExpediaSchedulers.add(String(property.expedia_scheduler))
+      if (property.booking_billing_type)
+        uniqueBookingBillingTypes.add(property.booking_billing_type)
+      if (property.booking_service_type)
+        uniqueBookingServiceTypes.add(property.booking_service_type)
+      if (property.booking_frequency)
+        uniqueBookingFrequencies.add(property.booking_frequency)
+      if (property.booking_from) uniqueBookingFroms.add(property.booking_from)
+      if (property.booking_to) uniqueBookingTos.add(property.booking_to)
+      if (property.booking_duration != null)
+        uniqueBookingDurations.add(String(property.booking_duration))
+      if (property.booking_access_level != null)
+        uniqueBookingAccessLevels.add(String(property.booking_access_level))
+      if (property.booking_scheduler != null)
+        uniqueBookingSchedulers.add(String(property.booking_scheduler))
+      if (property.agoda_billing_type)
+        uniqueAgodaBillingTypes.add(property.agoda_billing_type)
+      if (property.agoda_service_type)
+        uniqueAgodaServiceTypes.add(property.agoda_service_type)
+      if (property.agoda_frequency)
+        uniqueAgodaFrequencies.add(property.agoda_frequency)
+      if (property.agoda_from) uniqueAgodaFroms.add(property.agoda_from)
+      if (property.agoda_to) uniqueAgodaTos.add(property.agoda_to)
+      if (property.agoda_duration != null)
+        uniqueAgodaDurations.add(String(property.agoda_duration))
+      if (property.agoda_access_level != null)
+        uniqueAgodaAccessLevels.add(String(property.agoda_access_level))
+      if (property.agoda_scheduler != null)
+        uniqueAgodaSchedulers.add(String(property.agoda_scheduler))
+
+      const cred =
+        Array.isArray(property.credentials) && property.credentials.length > 0
+          ? property.credentials[0]
+          : null
+      if (cred?.needAnotherDomain != null)
+        uniqueNeedAnotherDomain.add(String(cred.needAnotherDomain))
+      if (cred?.expediaSecondaryUsername)
+        uniqueExpediaSecondaryUsernames.add(cred.expediaSecondaryUsername)
+      if (cred?.bookingSecondaryUsername)
+        uniqueBookingSecondaryUsernames.add(cred.bookingSecondaryUsername)
+      if (cred?.agodaSecondaryUsername)
+        uniqueAgodaSecondaryUsernames.add(cred.agodaSecondaryUsername)
     })
 
     return {
@@ -1019,6 +1309,10 @@ export class PropertyService implements IPropertyService {
         a.name.localeCompare(b.name)
       ),
       property: Array.from(propertyMap.values()).sort((a, b) =>
+        a.name.localeCompare(b.name)
+      ),
+      portfolio_id: Array.from(portfolioIdSet).sort(),
+      subportfolio: Array.from(subportfolioMap.values()).sort((a, b) =>
         a.name.localeCompare(b.name)
       ),
       booking_id: Array.from(uniqueBookingIds).sort(),
@@ -1031,13 +1325,62 @@ export class PropertyService implements IPropertyService {
       case_management_contact: Array.from(uniqueCaseManagementContacts).sort(),
       access_contact: Array.from(uniqueAccessContacts).sort(),
       reporting_contact: Array.from(uniqueReportingContacts).sort(),
+      description: Array.from(uniqueDescriptions).sort(),
+      expedia_status: Array.from(uniqueExpediaStatuses).sort(),
+      booking_status: Array.from(uniqueBookingStatuses).sort(),
+      agoda_status: Array.from(uniqueAgodaStatuses).sort(),
       expedia_processor: Array.from(uniqueExpediaProcessors).sort(),
       booking_processor: Array.from(uniqueBookingProcessors).sort(),
       agoda_processor: Array.from(uniqueAgodaProcessors).sort(),
       fp_mid: Array.from(uniqueFpMids).sort(),
       stripe_account_email: Array.from(uniqueStripeAccountEmails).sort(),
       from: Array.from(uniqueFromDates).sort(),
-      to: Array.from(uniqueToDates).sort()
+      to: Array.from(uniqueToDates).sort(),
+      property_identifier: Array.from(uniquePropertyIdentifiers).sort(),
+      portfolio_contact: Array.from(uniquePortfolioContacts).sort(),
+      descriptor: Array.from(uniqueDescriptors).sort(),
+      service_type: Array.from(serviceTypeMap.values()).sort((a, b) =>
+        a.type.localeCompare(b.type)
+      ),
+      service_type_id: Array.from(uniqueServiceTypeIds).sort(),
+      fp_username: Array.from(uniqueFpUsernames).sort(),
+      qp_username: Array.from(uniqueQpUsernames).sort(),
+      previous_portfolio_id: Array.from(uniquePreviousPortfolioIds).sort(),
+      next_due_date: Array.from(uniqueNextDueDates).sort(),
+      expedia_billing_type: Array.from(uniqueExpediaBillingTypes).sort(),
+      expedia_service_type: Array.from(uniqueExpediaServiceTypes).sort(),
+      expedia_frequency: Array.from(uniqueExpediaFrequencies).sort(),
+      expedia_from: Array.from(uniqueExpediaFroms).sort(),
+      expedia_to: Array.from(uniqueExpediaTos).sort(),
+      expedia_duration: Array.from(uniqueExpediaDurations).sort(),
+      expedia_access_level: Array.from(uniqueExpediaAccessLevels).sort(),
+      expedia_scheduler: Array.from(uniqueExpediaSchedulers).sort(),
+      booking_billing_type: Array.from(uniqueBookingBillingTypes).sort(),
+      booking_service_type: Array.from(uniqueBookingServiceTypes).sort(),
+      booking_frequency: Array.from(uniqueBookingFrequencies).sort(),
+      booking_from: Array.from(uniqueBookingFroms).sort(),
+      booking_to: Array.from(uniqueBookingTos).sort(),
+      booking_duration: Array.from(uniqueBookingDurations).sort(),
+      booking_access_level: Array.from(uniqueBookingAccessLevels).sort(),
+      booking_scheduler: Array.from(uniqueBookingSchedulers).sort(),
+      agoda_billing_type: Array.from(uniqueAgodaBillingTypes).sort(),
+      agoda_service_type: Array.from(uniqueAgodaServiceTypes).sort(),
+      agoda_frequency: Array.from(uniqueAgodaFrequencies).sort(),
+      agoda_from: Array.from(uniqueAgodaFroms).sort(),
+      agoda_to: Array.from(uniqueAgodaTos).sort(),
+      agoda_duration: Array.from(uniqueAgodaDurations).sort(),
+      agoda_access_level: Array.from(uniqueAgodaAccessLevels).sort(),
+      agoda_scheduler: Array.from(uniqueAgodaSchedulers).sort(),
+      need_another_domain: Array.from(uniqueNeedAnotherDomain).sort(),
+      expedia_secondary_username: Array.from(
+        uniqueExpediaSecondaryUsernames
+      ).sort(),
+      booking_secondary_username: Array.from(
+        uniqueBookingSecondaryUsernames
+      ).sort(),
+      agoda_secondary_username: Array.from(
+        uniqueAgodaSecondaryUsernames
+      ).sort()
     }
   }
 
@@ -1046,5 +1389,27 @@ export class PropertyService implements IPropertyService {
       .update(JSON.stringify(query))
       .digest('hex')
       .substring(0, 16)
+  }
+
+  private booleanValuesForInClause(
+    values: (string | number | boolean)[]
+  ): boolean[] {
+    const set = new Set<boolean>()
+    for (const v of values) {
+      if (v === true || v === 'true' || v === '1' || v === 1) set.add(true)
+      if (v === false || v === 'false' || v === '0' || v === 0) set.add(false)
+    }
+    return [...set]
+  }
+
+  private intValuesForInClause(
+    values: (string | number | boolean)[]
+  ): number[] {
+    const nums: number[] = []
+    for (const v of values) {
+      const n = Number(v)
+      if (!Number.isNaN(n) && Number.isFinite(n)) nums.push(n)
+    }
+    return nums
   }
 }

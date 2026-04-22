@@ -159,8 +159,18 @@ export class UserRepository implements IUserRepository {
         },
         userAccessedProperties: {
           select: {
+            id: true,
             property_id: true,
             portfolio_id: true
+          }
+        },
+        userProjectRoles: {
+          where: {
+            is_active: true
+          },
+          select: {
+            id: true,
+            project_type: true
           }
         }
       }
@@ -176,7 +186,7 @@ export class UserRepository implements IUserRepository {
       return null
     }
 
-    // Extract property and portfolio IDs
+    // Extract property and portfolio IDs from UserAccessedProperty
     const propertyIds = (user as any).userAccessedProperties?.flatMap(
       (access: any) => access.property_id
     ) || []
@@ -184,7 +194,7 @@ export class UserRepository implements IUserRepository {
       (access: any) => access.portfolio_id
     ) || []
 
-    // Fetch properties and portfolios in parallel using Prisma
+    // Fetch properties and portfolios for UserAccessedProperty
     const [properties, portfolios] = await Promise.all([
       propertyIds.length > 0 
         ? this.prisma.property.findMany({
@@ -220,10 +230,57 @@ export class UserRepository implements IUserRepository {
         : []
     ])
 
+    // Process UserProjectRoles - fetch properties and portfolios for each
+    const userProjectRoles = await Promise.all(
+      ((user as any).userProjectRoles || []).map(async (upr: any) => {
+        const [uprProperties, uprPortfolios] = await Promise.all([
+          upr.property_ids && upr.property_ids.length > 0
+            ? this.prisma.property.findMany({
+                where: { id: { in: upr.property_ids } },
+                select: {
+                  id: true,
+                  name: true,
+                  portfolio: {
+                    select: {
+                      id: true,
+                      name: true
+                    }
+                  }
+                },
+                orderBy: { name: 'asc' }
+              })
+            : [],
+          upr.portfolio_ids && upr.portfolio_ids.length > 0
+            ? this.prisma.portfolio.findMany({
+                where: { id: { in: upr.portfolio_ids } },
+                select: {
+                  id: true,
+                  name: true,
+                  serviceType: {
+                    select: {
+                      id: true,
+                      type: true
+                    }
+                  }
+                },
+                orderBy: { name: 'asc' }
+              })
+            : []
+        ])
+
+        return {
+          id: upr.id,
+          properties: uprProperties,
+          portfolios: uprPortfolios
+        }
+      })
+    )
+
     return {
       user,
       properties,
-      portfolios
+      portfolios,
+      userProjectRoles
     }
   }
 
