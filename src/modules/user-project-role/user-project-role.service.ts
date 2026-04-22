@@ -11,11 +11,9 @@ import type { IUserWithPermissions } from '../../common/interfaces/permission.in
 import { isUserSuperAdmin } from '../../common/utils/permission.util'
 import { PrismaService } from '../prisma/prisma.service'
 import type {
-  IProjectRole,
   IProjectRoleRepository
 } from '../project-role/project-role.interface'
 import {
-  AssignProjectRoleDto,
   CreateUserProjectRoleDto,
   UpdateUserProjectRoleDto
 } from './user-project-role.dto'
@@ -40,8 +38,9 @@ export class UserProjectRoleService implements IUserProjectRoleService {
     data: CreateUserProjectRoleDto,
     user: IUserWithPermissions
   ): Promise<IUserProjectRole> {
-    if (!isUserSuperAdmin(user)) {
-      throw new ForbiddenException('Only super admins can create project roles')
+    // Check if user is super admin or has full user management permission
+    if (!isUserSuperAdmin(user) && user.role?.user_permission?.permission_level !== 'all') {
+      throw new ForbiddenException('Only admins can create project roles')
     }
 
     // Check if user exists
@@ -102,9 +101,9 @@ export class UserProjectRoleService implements IUserProjectRoleService {
   async findAll(
     user: IUserWithPermissions
   ): Promise<IUserProjectRoleWithRelations[]> {
-    if (!isUserSuperAdmin(user)) {
+    if (!isUserSuperAdmin(user) && user.role?.user_permission?.permission_level !== 'all') {
       throw new ForbiddenException(
-        'Only super admins can view all project roles'
+        'Only admins can view all project roles'
       )
     }
 
@@ -115,8 +114,8 @@ export class UserProjectRoleService implements IUserProjectRoleService {
     userId: string,
     user: IUserWithPermissions
   ): Promise<IUserProjectRoleWithRelations[]> {
-    // Users can view their own project roles
-    if (user.id !== userId && !isUserSuperAdmin(user)) {
+    // Users can view their own project roles, or admins can view any user's roles
+    if (user.id !== userId && !isUserSuperAdmin(user) && user.role?.user_permission?.permission_level !== 'all') {
       throw new ForbiddenException(
         'You can only view your own project roles'
       )
@@ -130,8 +129,8 @@ export class UserProjectRoleService implements IUserProjectRoleService {
     projectType: ProjectType,
     user: IUserWithPermissions
   ): Promise<IUserProjectRoleWithRelations | null> {
-    // Users can view their own project roles
-    if (user.id !== userId && !isUserSuperAdmin(user)) {
+    // Users can view their own project roles, or admins can view any user's roles
+    if (user.id !== userId && !isUserSuperAdmin(user) && user.role?.user_permission?.permission_level !== 'all') {
       throw new ForbiddenException(
         'You can only view your own project roles'
       )
@@ -148,9 +147,9 @@ export class UserProjectRoleService implements IUserProjectRoleService {
     data: UpdateUserProjectRoleDto,
     user: IUserWithPermissions
   ): Promise<IUserProjectRole> {
-    if (!isUserSuperAdmin(user)) {
+    if (!isUserSuperAdmin(user) && user.role?.user_permission?.permission_level !== 'all') {
       throw new ForbiddenException(
-        'Only super admins can update project roles'
+        'Only admins can update project roles'
       )
     }
 
@@ -178,9 +177,9 @@ export class UserProjectRoleService implements IUserProjectRoleService {
     id: string,
     user: IUserWithPermissions
   ): Promise<{ message: string }> {
-    if (!isUserSuperAdmin(user)) {
+    if (!isUserSuperAdmin(user) && user.role?.user_permission?.permission_level !== 'all') {
       throw new ForbiddenException(
-        'Only super admins can remove project roles'
+        'Only admins can remove project roles'
       )
     }
 
@@ -206,9 +205,9 @@ export class UserProjectRoleService implements IUserProjectRoleService {
     },
     user: IUserWithPermissions
   ): Promise<IUserProjectRole> {
-    if (!isUserSuperAdmin(user)) {
+    if (!isUserSuperAdmin(user) && user.role?.user_permission?.permission_level !== 'all') {
       throw new ForbiddenException(
-        'Only super admins can assign project roles'
+        'Only admins can assign project roles'
       )
     }
 
@@ -271,5 +270,107 @@ export class UserProjectRoleService implements IUserProjectRoleService {
       property_ids: resources.property_ids || [],
       is_active: true
     })
+  }
+
+  async addAccess(
+    userProjectRoleId: string,
+    data: {
+      portfolio_ids?: string[]
+      property_ids?: string[]
+    },
+    user: IUserWithPermissions
+  ): Promise<{ message: string }> {
+    if (!isUserSuperAdmin(user) && user.role?.user_permission?.permission_level !== 'all') {
+      throw new ForbiddenException(
+        'Only admins can manage project role access'
+      )
+    }
+
+    if (
+      (!data.portfolio_ids || data.portfolio_ids.length === 0) &&
+      (!data.property_ids || data.property_ids.length === 0)
+    ) {
+      throw new BadRequestException(
+        'Please provide at least one portfolio_id or property_id to add'
+      )
+    }
+
+    const userProjectRole = await this.userProjectRoleRepository.findById(
+      userProjectRoleId
+    )
+
+    if (!userProjectRole) {
+      throw new NotFoundException('User project role not found')
+    }
+
+    // Merge new IDs with existing ones (no duplicates)
+    const updatedPortfolioIds = [
+      ...new Set([
+        ...(userProjectRole.portfolio_ids || []),
+        ...(data.portfolio_ids || [])
+      ])
+    ]
+
+    const updatedPropertyIds = [
+      ...new Set([
+        ...(userProjectRole.property_ids || []),
+        ...(data.property_ids || [])
+      ])
+    ]
+
+    await this.userProjectRoleRepository.update(userProjectRoleId, {
+      portfolio_ids: updatedPortfolioIds,
+      property_ids: updatedPropertyIds
+    })
+
+    return { message: 'Access added successfully to user project role' }
+  }
+
+  async revokeAccess(
+    userProjectRoleId: string,
+    data: {
+      portfolio_ids?: string[]
+      property_ids?: string[]
+    },
+    user: IUserWithPermissions
+  ): Promise<{ message: string }> {
+    if (!isUserSuperAdmin(user) && user.role?.user_permission?.permission_level !== 'all') {
+      throw new ForbiddenException(
+        'Only admins can manage project role access'
+      )
+    }
+
+    if (
+      (!data.portfolio_ids || data.portfolio_ids.length === 0) &&
+      (!data.property_ids || data.property_ids.length === 0)
+    ) {
+      throw new BadRequestException(
+        'Please provide at least one portfolio_id or property_id to revoke'
+      )
+    }
+
+    const userProjectRole = await this.userProjectRoleRepository.findById(
+      userProjectRoleId
+    )
+
+    if (!userProjectRole) {
+      throw new NotFoundException('User project role not found')
+    }
+
+    // Remove specified IDs from existing ones
+    const updatedPortfolioIds = (userProjectRole.portfolio_ids || []).filter(
+      id => !(data.portfolio_ids || []).includes(id)
+    )
+
+    const updatedPropertyIds = (userProjectRole.property_ids || []).filter(
+      id => !(data.property_ids || []).includes(id)
+    )
+
+    await this.userProjectRoleRepository.update(userProjectRoleId, {
+      portfolio_ids: updatedPortfolioIds,
+      property_ids: updatedPropertyIds
+    })
+
+    return { message: 'Access revoked successfully from user project role' }
   }
 }

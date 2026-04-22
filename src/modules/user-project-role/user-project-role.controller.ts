@@ -16,6 +16,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator'
 import {
   AssignProjectRoleDto,
   CreateUserProjectRoleDto,
+  ManageUserProjectRoleAccessDto,
   UpdateUserProjectRoleDto
 } from './user-project-role.dto'
 import type { IUserProjectRoleService } from './user-project-role.interface'
@@ -30,10 +31,11 @@ export class UserProjectRoleController {
   ) {}
 
   @Post()
-  @ApiOperation({ summary: 'Create a new user project role assignment' })
+  @ApiOperation({ summary: 'Create a new user project role assignment (Admin and Super Admin)' })
   @ApiResponse({ status: 201, description: 'User project role created successfully' })
   @ApiResponse({ status: 409, description: 'User already has a role for this project' })
   @ApiResponse({ status: 404, description: 'Project role or user not found' })
+  @ApiResponse({ status: 403, description: 'Only admins and super admins can create project roles' })
   async create(
     @Body() createUserProjectRoleDto: CreateUserProjectRoleDto,
     @CurrentUser() user: IUserWithPermissions
@@ -42,9 +44,10 @@ export class UserProjectRoleController {
   }
 
   @Post('assign')
-  @ApiOperation({ summary: 'Assign or update project role for a user' })
+  @ApiOperation({ summary: 'Assign or update project role for a user (Admin and Super Admin)' })
   @ApiResponse({ status: 201, description: 'Project role assigned successfully' })
   @ApiResponse({ status: 404, description: 'User, role, or project role not found' })
+  @ApiResponse({ status: 403, description: 'Only admins and super admins can assign project roles' })
   async assignProjectRole(
     @Body() assignProjectRoleDto: AssignProjectRoleDto,
     @CurrentUser() user: IUserWithPermissions
@@ -63,9 +66,9 @@ export class UserProjectRoleController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Get all user project roles (Super Admin only)' })
+  @ApiOperation({ summary: 'Get all user project roles (Admin and Super Admin)' })
   @ApiResponse({ status: 200, description: 'List of all user project roles' })
-  @ApiResponse({ status: 403, description: 'Only super admins can view all project roles' })
+  @ApiResponse({ status: 403, description: 'Only admins and super admins can view all project roles' })
   async findAll(
     @ParseQuery() _query: Record<string, any>,
     @CurrentUser() user: IUserWithPermissions
@@ -76,7 +79,7 @@ export class UserProjectRoleController {
   @Get('user/:userId')
   @ApiOperation({ summary: 'Get project roles for a specific user' })
   @ApiResponse({ status: 200, description: 'List of user project roles' })
-  @ApiResponse({ status: 403, description: 'You can only view your own project roles' })
+  @ApiResponse({ status: 403, description: 'You can only view your own project roles unless you are an admin or super admin' })
   async findByUser(
     @Param('userId') userId: string,
     @CurrentUser() user: IUserWithPermissions
@@ -89,6 +92,7 @@ export class UserProjectRoleController {
   @ApiQuery({ name: 'projectType', enum: ProjectType })
   @ApiResponse({ status: 200, description: 'User project role details' })
   @ApiResponse({ status: 404, description: 'Project role not found' })
+  @ApiResponse({ status: 403, description: 'You can only view your own project roles unless you are an admin or super admin' })
   async findByUserAndProject(
     @Param('userId') userId: string,
     @Param('projectType') projectType: ProjectType,
@@ -102,10 +106,10 @@ export class UserProjectRoleController {
   }
 
   @Patch(':id')
-  @ApiOperation({ summary: 'Update user project role by ID' })
+  @ApiOperation({ summary: 'Update user project role by ID (Admin and Super Admin)' })
   @ApiResponse({ status: 200, description: 'User project role updated successfully' })
   @ApiResponse({ status: 404, description: 'User project role not found' })
-  @ApiResponse({ status: 403, description: 'Only super admins can update project roles' })
+  @ApiResponse({ status: 403, description: 'Only admins and super admins can update project roles' })
   async update(
     @Param('id') id: string,
     @Body() updateUserProjectRoleDto: UpdateUserProjectRoleDto,
@@ -118,11 +122,39 @@ export class UserProjectRoleController {
     )
   }
 
+  @Patch(':id/access/add')
+  @ApiOperation({ summary: 'Add portfolio/property access to user project role (Admin and Super Admin)' })
+  @ApiResponse({ status: 200, description: 'Access added successfully to user project role' })
+  @ApiResponse({ status: 404, description: 'User project role not found' })
+  @ApiResponse({ status: 400, description: 'Bad Request - No IDs provided' })
+  @ApiResponse({ status: 403, description: 'Forbidden - Only admins and super admins can manage project role access' })
+  async addAccess(
+    @Param('id') id: string,
+    @Body() manageAccessDto: ManageUserProjectRoleAccessDto,
+    @CurrentUser() user: IUserWithPermissions
+  ) {
+    return this.userProjectRoleService.addAccess(id, manageAccessDto, user)
+  }
+
+  @Patch(':id/access/revoke')
+  @ApiOperation({ summary: 'Revoke portfolio/property access from user project role (Admin and Super Admin)' })
+  @ApiResponse({ status: 200, description: 'Access revoked successfully from user project role' })
+  @ApiResponse({ status: 404, description: 'User project role not found' })
+  @ApiResponse({ status: 400, description: 'Bad Request - No IDs provided' })
+  @ApiResponse({ status: 403, description: 'Forbidden - Only admins and super admins can manage project role access' })
+  async revokeAccess(
+    @Param('id') id: string,
+    @Body() manageAccessDto: ManageUserProjectRoleAccessDto,
+    @CurrentUser() user: IUserWithPermissions
+  ) {
+    return this.userProjectRoleService.revokeAccess(id, manageAccessDto, user)
+  }
+
   @Delete(':id')
-  @ApiOperation({ summary: 'Delete user project role by ID' })
+  @ApiOperation({ summary: 'Delete user project role by ID (Admin and Super Admin)' })
   @ApiResponse({ status: 200, description: 'User project role deleted successfully' })
   @ApiResponse({ status: 404, description: 'User project role not found' })
-  @ApiResponse({ status: 403, description: 'Only super admins can delete project roles' })
+  @ApiResponse({ status: 403, description: 'Only admins and super admins can delete project roles' })
   async remove(
     @Param('id') id: string,
     @CurrentUser() user: IUserWithPermissions

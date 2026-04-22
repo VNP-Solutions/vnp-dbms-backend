@@ -10,7 +10,8 @@ import type {
 
 const propertyInclude = {
   portfolio: { select: { id: true, name: true } },
-  subportfolio: { select: { id: true, name: true } },
+  subportfolio: { select: { id: true, name: true, portfolio_id: true } },
+  serviceType: { select: { id: true, type: true } },
   credentials: true
 }
 
@@ -57,6 +58,7 @@ export class PropertyRepository implements IPropertyRepository {
     const payload: any = {
       name: data.name,
       portfolio_id: data.portfolio_id,
+      service_type_id: data.service_type_id,
       card_descriptor: data.card_descriptor,
       is_active: data.is_active ?? true,
       next_due_date: data.next_due_date ? new Date(data.next_due_date) : undefined,
@@ -66,8 +68,11 @@ export class PropertyRepository implements IPropertyRepository {
       others_case_emails: data.others_case_emails ?? [],
       primary_case_email: data.primary_case_email,
       portfolio_contact_email: data.portfolio_contact_email,
+      portfolio_contact: data.portfolio_contact,
       webmail_password: data.webmail_password,
       description: data.description,
+      descriptor: data.descriptor,
+      property_identifier: data.property_identifier,
       hotel_address: data.hotel_address,
       case_management_contact: data.case_management_contact,
       access_contact: data.access_contact,
@@ -81,13 +86,39 @@ export class PropertyRepository implements IPropertyRepository {
       qp_password: data.qp_password,
       qp_api_key: data.qp_api_key,
       fp_mid: data.fp_mid,
+      fp_username: data.fp_username,
+      fp_password: data.fp_password,
       stripe_account_email: data.stripe_account_email,
       expedia_id: data.expedia_id,
       expedia_status: data.expedia_status,
       booking_id: data.booking_id,
       booking_status: data.booking_status,
       agoda_id: data.agoda_id,
-      agoda_status: data.agoda_status
+      agoda_status: data.agoda_status,
+      expedia_billing_type: data.expedia_billing_type,
+      expedia_service_type: data.expedia_service_type,
+      expedia_frequency: data.expedia_frequency,
+      expedia_access_level: data.expedia_access_level,
+      expedia_from: data.expedia_from,
+      expedia_to: data.expedia_to,
+      expedia_scheduler: data.expedia_scheduler,
+      expedia_duration: data.expedia_duration,
+      booking_billing_type: data.booking_billing_type,
+      booking_service_type: data.booking_service_type,
+      booking_frequency: data.booking_frequency,
+      booking_access_level: data.booking_access_level,
+      booking_from: data.booking_from,
+      booking_to: data.booking_to,
+      booking_scheduler: data.booking_scheduler,
+      booking_duration: data.booking_duration,
+      agoda_billing_type: data.agoda_billing_type,
+      agoda_service_type: data.agoda_service_type,
+      agoda_frequency: data.agoda_frequency,
+      agoda_access_level: data.agoda_access_level,
+      agoda_from: data.agoda_from,
+      agoda_to: data.agoda_to,
+      agoda_scheduler: data.agoda_scheduler,
+      agoda_duration: data.agoda_duration
     }
     if (data.subportfolio_id) payload.subportfolio_id = data.subportfolio_id
 

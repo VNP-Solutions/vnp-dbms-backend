@@ -1,8 +1,10 @@
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger'
-import { IsArray, IsNotEmpty, IsOptional, IsString } from 'class-validator'
+import { IsArray, IsBoolean, IsNotEmpty, IsOptional, IsString } from 'class-validator'
 
 export class CreatePropertyCredentialsDto {
-  @ApiPropertyOptional({ description: 'Expedia username' })
+  @ApiPropertyOptional({
+    description: 'Expedia login — username or email (single field)'
+  })
   @IsString()
   @IsOptional()
   expediaUsername?: string
@@ -12,7 +14,9 @@ export class CreatePropertyCredentialsDto {
   @IsOptional()
   expediaPassword?: string
 
-  @ApiPropertyOptional({ description: 'Agoda username' })
+  @ApiPropertyOptional({
+    description: 'Agoda login — username or email (single field)'
+  })
   @IsString()
   @IsOptional()
   agodaUsername?: string
@@ -22,7 +26,9 @@ export class CreatePropertyCredentialsDto {
   @IsOptional()
   agodaPassword?: string
 
-  @ApiPropertyOptional({ description: 'Booking.com username' })
+  @ApiPropertyOptional({
+    description: 'Booking.com login — username or email (single field)'
+  })
   @IsString()
   @IsOptional()
   bookingUsername?: string
@@ -31,6 +37,41 @@ export class CreatePropertyCredentialsDto {
   @IsString()
   @IsOptional()
   bookingPassword?: string
+
+  @ApiPropertyOptional({ description: 'Expedia secondary username' })
+  @IsString()
+  @IsOptional()
+  expediaSecondaryUsername?: string
+
+  @ApiPropertyOptional({ description: 'Expedia secondary password' })
+  @IsString()
+  @IsOptional()
+  expediaSecondaryPassword?: string
+
+  @ApiPropertyOptional({ description: 'Booking.com secondary username' })
+  @IsString()
+  @IsOptional()
+  bookingSecondaryUsername?: string
+
+  @ApiPropertyOptional({ description: 'Booking.com secondary password' })
+  @IsString()
+  @IsOptional()
+  bookingSecondaryPassword?: string
+
+  @ApiPropertyOptional({ description: 'Agoda secondary username' })
+  @IsString()
+  @IsOptional()
+  agodaSecondaryUsername?: string
+
+  @ApiPropertyOptional({ description: 'Agoda secondary password' })
+  @IsString()
+  @IsOptional()
+  agodaSecondaryPassword?: string
+
+  @ApiPropertyOptional({ description: 'Whether the property needs another domain' })
+  @IsBoolean()
+  @IsOptional()
+  needAnotherDomain?: boolean
 
   @ApiPropertyOptional({ description: 'Expedia email associated with the account' })
   @IsString()

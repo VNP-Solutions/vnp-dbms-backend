@@ -12,7 +12,15 @@ import {
   UseGuards,
   UseInterceptors
 } from '@nestjs/common'
-import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
+import {
+  ApiBearerAuth,
+  ApiBody,
+  ApiConsumes,
+  ApiExtraModels,
+  ApiOperation,
+  ApiResponse,
+  ApiTags
+} from '@nestjs/swagger'
 import { ExcelFileInterceptor } from '../../common/interceptors/excel-file.interceptor'
 import { ParseQuery } from '../../common/decorators/parse-query.decorator'
 import { RequirePermission } from '../../common/decorators/require-permission.decorator'
@@ -23,9 +31,15 @@ import { Public } from '../auth/decorators/public.decorator'
 import { CurrentUser } from '../auth/decorators/current-user.decorator'
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
 import {
+  AllDataForGlobalFilterResponseDto,
+  GlobalFilterIdNameDto,
+  GlobalFilterServiceTypeDto,
+  GlobalFilterSubportfolioDto,
   BulkDeletePropertyDto,
   CreatePropertyDto,
   GetPropertyCredentialDto,
+  PROPERTY_FILTER_OPERATION_DESCRIPTION,
+  PROPERTY_FILTER_SWAGGER_EXAMPLE_FILTERS,
   PropertyFilterDto,
   UpdatePropertyDto
 } from './property.dto'
@@ -33,6 +47,12 @@ import type { IPropertyService } from './property.interface'
 
 @ApiTags('Property')
 @ApiBearerAuth('JWT-auth')
+@ApiExtraModels(
+  AllDataForGlobalFilterResponseDto,
+  GlobalFilterIdNameDto,
+  GlobalFilterSubportfolioDto,
+  GlobalFilterServiceTypeDto
+)
 @Controller('property')
 @UseGuards(JwtAuthGuard, PermissionGuard)
 export class PropertyController {
@@ -104,8 +124,7 @@ export class PropertyController {
   @RequirePermission(ModuleType.PROPERTY, PermissionAction.READ)
   @ApiOperation({
     summary: 'Get all properties with advanced filtering, pagination, search and multi-field sort',
-    description:
-      'Use masked=true (default) for encrypted credentials. Use masked=false for decrypted credentials. Use is_active (true/false/All) for filtering active status. Supports multiple values per filter using the "in" array. Each filter item has: name (required), in (required array of values for OR condition), sort_by (optional: "asc" or "desc" for multi-field sorting). Sorting is applied in array order - first filter with sort_by is primary sort, second is secondary, etc. Available filter fields: portfolio_id, property_id, subportfolio_id, expedia_id, booking_id, agoda_id, card_descriptor, hotel_address, new_domain_email, portfolio_contact_email, primary_case_email, expedia_status, booking_status, agoda_status, case_management_contact, access_contact, reporting_contact, expedia_processor, booking_processor, agoda_processor, from, to, fp_mid, stripe_account_email, created_at, updated_at. For sort-only fields (created_at, updated_at): use in:[] with sort_by. Additional filters: start_date and end_date for created_at date range (YYYY-MM-DD format), search for text search across name, description, hotel_address.'
+    description: PROPERTY_FILTER_OPERATION_DESCRIPTION
   })
   @ApiResponse({ status: 200, description: 'Paginated list of properties' })
   @ApiBody({
@@ -221,98 +240,7 @@ export class PropertyController {
       },
       'All available filters': {
         value: {
-          filters: [
-            {
-              name: 'portfolio_id',
-              sort_by: 'asc',
-              in: ['507f1f77bcf86cd799439013', '507f1f77bcf86cd799439014']
-            },
-            {
-              name: 'property_id',
-              in: ['507f1f77bcf86cd799439015']
-            },
-            {
-              name: 'subportfolio_id',
-              in: ['507f1f77bcf86cd799439016']
-            },
-            {
-              name: 'expedia_id',
-              sort_by: 'desc',
-              in: ['EXP123', 'EXP456']
-            },
-            {
-              name: 'booking_id',
-              in: ['BK789', 'BK012']
-            },
-            {
-              name: 'agoda_id',
-              in: ['AG345', 'AG678']
-            },
-            {
-              name: 'card_descriptor',
-              in: ['VISA1234', 'MASTER5678']
-            },
-            {
-              name: 'hotel_address',
-              in: ['123 Main St', '456 Oak Ave']
-            },
-            {
-              name: 'new_domain_email',
-              in: ['hotel1@example.com', 'hotel2@example.com']
-            },
-            {
-              name: 'portfolio_contact_email',
-              in: ['contact1@example.com']
-            },
-            {
-              name: 'primary_case_email',
-              in: ['case@example.com']
-            },
-            {
-              name: 'expedia_status',
-              in: ['active', 'inactive']
-            },
-            {
-              name: 'booking_status',
-              in: ['confirmed']
-            },
-            {
-              name: 'agoda_status',
-              in: ['pending']
-            },
-            {
-              name: 'case_management_contact',
-              in: ['case-mgmt@hotel.com']
-            },
-            {
-              name: 'access_contact',
-              in: ['access@hotel.com']
-            },
-            {
-              name: 'reporting_contact',
-              in: ['reports@hotel.com']
-            },
-            {
-              name: 'expedia_processor',
-              in: ['John Doe', 'Jane Smith']
-            },
-            {
-              name: 'booking_processor',
-              in: ['Bob Wilson']
-            },
-            {
-              name: 'agoda_processor',
-              in: ['Alice Johnson']
-            },
-            {
-              name: 'fp_mid',
-              in: ['1234567890', '0987654321']
-            },
-            {
-              name: 'stripe_account_email',
-              in: ['stripe@hotel.com', 'payment@hotel.com']
-            }
-          ],
+          filters: PROPERTY_FILTER_SWAGGER_EXAMPLE_FILTERS,
           is_active: true,
           start_date: '2024-01-01',
           end_date: '2024-12-31',
@@ -364,128 +292,13 @@ export class PropertyController {
   @RequirePermission(ModuleType.PROPERTY, PermissionAction.READ)
   @ApiOperation({
     summary: 'Get unique filter values for global filter',
-    description: 'Returns unique values extracted from accessible portfolios and properties for populating global filter dropdowns. Data is served from Redis cache.'
+    description:
+      'Returns unique values from accessible portfolios and properties for group-filter / dropdown UIs. Includes OTA integration fields, contacts, statuses, processors, portfolio_id / subportfolio rows, service_type and service_type_id, qp_username, next_due_date, credential secondary usernames and need_another_domain (booleans as "true"/"false" strings). Built from the same cached portfolio + property sources as list endpoints.'
   })
   @ApiResponse({
     status: 200,
-    description: 'Unique filter values for global filter',
-    schema: {
-      type: 'object',
-      properties: {
-        expedia_id: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Unique Expedia IDs'
-        },
-        portfolio: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              id: { type: 'string' },
-              name: { type: 'string' }
-            }
-          },
-          description: 'Unique portfolios with id and name'
-        },
-        property: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              id: { type: 'string' },
-              name: { type: 'string' }
-            }
-          },
-          description: 'Unique properties with id and name'
-        },
-        booking_id: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Unique Booking.com IDs'
-        },
-        agoda_id: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Unique Agoda IDs'
-        },
-        hotel_address: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Unique hotel addresses'
-        },
-        card_descriptor: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Unique card descriptors'
-        },
-        new_domain_email: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Unique new domain emails'
-        },
-        portfolio_contact_email: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Unique portfolio contact emails'
-        },
-        case_contact_email: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Unique case contact emails'
-        },
-        case_management_contact: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Unique case management contacts'
-        },
-        access_contact: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Unique access contacts'
-        },
-        reporting_contact: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Unique reporting contacts'
-        },
-        expedia_processor: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Unique Expedia processors'
-        },
-        booking_processor: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Unique Booking processors'
-        },
-        agoda_processor: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Unique Agoda processors'
-        },
-        fp_mid: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Unique FP MIDs'
-        },
-        stripe_account_email: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Unique Stripe account emails'
-        },
-        from: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Unique from dates'
-        },
-        to: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Unique to dates'
-        }
-      }
-    }
+    description: 'Unique values per field',
+    type: AllDataForGlobalFilterResponseDto
   })
   @ApiResponse({ status: 403, description: 'Forbidden' })
   getAllDataForGlobalFilter(@CurrentUser() user: IUserWithPermissions) {

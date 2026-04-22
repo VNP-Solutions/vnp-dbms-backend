@@ -1,11 +1,13 @@
 import { PartialType } from '@nestjs/mapped-types'
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import { Transform, Type } from 'class-transformer'
+import { OtaBillingType, OtaIntegrationFrequency } from '@prisma/client'
 import {
   IsArray,
   IsBoolean,
   IsDate,
   IsDateString,
+  IsEnum,
   IsIn,
   IsNotEmpty,
   IsNumber,
@@ -15,8 +17,16 @@ import {
 } from 'class-validator'
 import { QueryDto } from '../../common/dto/query.dto'
 
+export const OTA_PAYMENT_PROCESSORS = [
+  'QuantumPay',
+  'Stripe',
+  'FreedomPay'
+] as const
+
 export class PropertyCredentialsInput {
-  @ApiPropertyOptional({ description: 'Expedia username' })
+  @ApiPropertyOptional({
+    description: 'Expedia login — username or email (single field)'
+  })
   @IsString()
   @IsOptional()
   expediaUsername?: string
@@ -26,7 +36,9 @@ export class PropertyCredentialsInput {
   @IsOptional()
   expediaPassword?: string
 
-  @ApiPropertyOptional({ description: 'Agoda username' })
+  @ApiPropertyOptional({
+    description: 'Agoda login — username or email (single field)'
+  })
   @IsString()
   @IsOptional()
   agodaUsername?: string
@@ -36,7 +48,9 @@ export class PropertyCredentialsInput {
   @IsOptional()
   agodaPassword?: string
 
-  @ApiPropertyOptional({ description: 'Booking.com username' })
+  @ApiPropertyOptional({
+    description: 'Booking.com login — username or email (single field)'
+  })
   @IsString()
   @IsOptional()
   bookingUsername?: string
@@ -45,6 +59,41 @@ export class PropertyCredentialsInput {
   @IsString()
   @IsOptional()
   bookingPassword?: string
+
+  @ApiPropertyOptional({ description: 'Expedia secondary username' })
+  @IsString()
+  @IsOptional()
+  expediaSecondaryUsername?: string
+
+  @ApiPropertyOptional({ description: 'Expedia secondary password' })
+  @IsString()
+  @IsOptional()
+  expediaSecondaryPassword?: string
+
+  @ApiPropertyOptional({ description: 'Booking.com secondary username' })
+  @IsString()
+  @IsOptional()
+  bookingSecondaryUsername?: string
+
+  @ApiPropertyOptional({ description: 'Booking.com secondary password' })
+  @IsString()
+  @IsOptional()
+  bookingSecondaryPassword?: string
+
+  @ApiPropertyOptional({ description: 'Agoda secondary username' })
+  @IsString()
+  @IsOptional()
+  agodaSecondaryUsername?: string
+
+  @ApiPropertyOptional({ description: 'Agoda secondary password' })
+  @IsString()
+  @IsOptional()
+  agodaSecondaryPassword?: string
+
+  @ApiPropertyOptional({ description: 'Whether the property needs another domain' })
+  @IsBoolean()
+  @IsOptional()
+  needAnotherDomain?: boolean
 
   @ApiPropertyOptional({
     description: 'Expedia email associated with the account'
@@ -154,6 +203,29 @@ export class CreatePropertyDto {
   @IsOptional()
   portfolio_contact_email?: string
 
+  @ApiPropertyOptional({ description: 'Portfolio contact (free text)' })
+  @IsString()
+  @IsOptional()
+  portfolio_contact?: string
+
+  @ApiPropertyOptional({
+    example: '507f1f77bcf86cd799439099',
+    description: 'Optional service type ID (overrides portfolio default when set)'
+  })
+  @IsString()
+  @IsOptional()
+  service_type_id?: string
+
+  @ApiPropertyOptional({ description: 'External property / PMS identifier' })
+  @IsString()
+  @IsOptional()
+  property_identifier?: string
+
+  @ApiPropertyOptional({ description: 'Descriptor / label for reporting' })
+  @IsString()
+  @IsOptional()
+  descriptor?: string
+
   @ApiPropertyOptional({ description: 'Webmail password (will be encrypted)' })
   @IsString()
   @IsOptional()
@@ -184,20 +256,29 @@ export class CreatePropertyDto {
   @IsOptional()
   reporting_contact?: string
 
-  @ApiPropertyOptional({ description: 'Expedia Processor' })
-  @IsString()
+  @ApiPropertyOptional({
+    description: 'Expedia Processor',
+    enum: OTA_PAYMENT_PROCESSORS
+  })
   @IsOptional()
-  expedia_processor?: string
+  @IsIn([...OTA_PAYMENT_PROCESSORS])
+  expedia_processor?: (typeof OTA_PAYMENT_PROCESSORS)[number]
 
-  @ApiPropertyOptional({ description: 'Booking Processor' })
-  @IsString()
+  @ApiPropertyOptional({
+    description: 'Booking Processor',
+    enum: OTA_PAYMENT_PROCESSORS
+  })
   @IsOptional()
-  booking_processor?: string
+  @IsIn([...OTA_PAYMENT_PROCESSORS])
+  booking_processor?: (typeof OTA_PAYMENT_PROCESSORS)[number]
 
-  @ApiPropertyOptional({ description: 'Agoda Processor' })
-  @IsString()
+  @ApiPropertyOptional({
+    description: 'Agoda Processor',
+    enum: OTA_PAYMENT_PROCESSORS
+  })
   @IsOptional()
-  agoda_processor?: string
+  @IsIn([...OTA_PAYMENT_PROCESSORS])
+  agoda_processor?: (typeof OTA_PAYMENT_PROCESSORS)[number]
 
   @ApiPropertyOptional({ 
     description: 'From date (YYYY-MM-DD format)',
@@ -235,6 +316,16 @@ export class CreatePropertyDto {
   @IsOptional()
   fp_mid?: string
 
+  @ApiPropertyOptional({ description: 'FreedomPay username' })
+  @IsString()
+  @IsOptional()
+  fp_username?: string
+
+  @ApiPropertyOptional({ description: 'FreedomPay password (will be encrypted)' })
+  @IsString()
+  @IsOptional()
+  fp_password?: string
+
   @ApiPropertyOptional({ description: 'Stripe account email' })
   @IsString()
   @IsOptional()
@@ -266,6 +357,129 @@ export class CreatePropertyDto {
   @IsString()
   @IsOptional()
   agoda_status?: string
+
+  @ApiPropertyOptional({ enum: OtaBillingType })
+  @IsEnum(OtaBillingType)
+  @IsOptional()
+  expedia_billing_type?: OtaBillingType
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  expedia_service_type?: string
+
+  @ApiPropertyOptional({ enum: OtaIntegrationFrequency })
+  @IsEnum(OtaIntegrationFrequency)
+  @IsOptional()
+  expedia_frequency?: OtaIntegrationFrequency
+
+  @ApiPropertyOptional()
+  @IsBoolean()
+  @IsOptional()
+  expedia_access_level?: boolean
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  expedia_from?: string
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  expedia_to?: string
+
+  @ApiPropertyOptional()
+  @IsBoolean()
+  @IsOptional()
+  expedia_scheduler?: boolean
+
+  @ApiPropertyOptional()
+  @IsNumber()
+  @IsOptional()
+  @Type(() => Number)
+  expedia_duration?: number
+
+  @ApiPropertyOptional({ enum: OtaBillingType })
+  @IsEnum(OtaBillingType)
+  @IsOptional()
+  booking_billing_type?: OtaBillingType
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  booking_service_type?: string
+
+  @ApiPropertyOptional({ enum: OtaIntegrationFrequency })
+  @IsEnum(OtaIntegrationFrequency)
+  @IsOptional()
+  booking_frequency?: OtaIntegrationFrequency
+
+  @ApiPropertyOptional()
+  @IsBoolean()
+  @IsOptional()
+  booking_access_level?: boolean
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  booking_from?: string
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  booking_to?: string
+
+  @ApiPropertyOptional()
+  @IsBoolean()
+  @IsOptional()
+  booking_scheduler?: boolean
+
+  @ApiPropertyOptional()
+  @IsNumber()
+  @IsOptional()
+  @Type(() => Number)
+  booking_duration?: number
+
+  @ApiPropertyOptional({ enum: OtaBillingType })
+  @IsEnum(OtaBillingType)
+  @IsOptional()
+  agoda_billing_type?: OtaBillingType
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  agoda_service_type?: string
+
+  @ApiPropertyOptional({ enum: OtaIntegrationFrequency })
+  @IsEnum(OtaIntegrationFrequency)
+  @IsOptional()
+  agoda_frequency?: OtaIntegrationFrequency
+
+  @ApiPropertyOptional()
+  @IsBoolean()
+  @IsOptional()
+  agoda_access_level?: boolean
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  agoda_from?: string
+
+  @ApiPropertyOptional()
+  @IsString()
+  @IsOptional()
+  agoda_to?: string
+
+  @ApiPropertyOptional()
+  @IsBoolean()
+  @IsOptional()
+  agoda_scheduler?: boolean
+
+  @ApiPropertyOptional()
+  @IsNumber()
+  @IsOptional()
+  @Type(() => Number)
+  agoda_duration?: number
 
   @ApiPropertyOptional({
     description: 'Property credentials (OTA login details)',
@@ -446,6 +660,46 @@ export class PropertyQueryDto extends QueryDto {
   @IsString()
   portfolio_contact_email?: string
 
+  @ApiPropertyOptional({ description: 'Filter by service type ID' })
+  @IsOptional()
+  @IsString()
+  service_type_id?: string
+
+  @ApiPropertyOptional({ description: 'Filter by property identifier (partial match)' })
+  @IsOptional()
+  @IsString()
+  property_identifier?: string
+
+  @ApiPropertyOptional({ description: 'Filter by portfolio contact (partial match)' })
+  @IsOptional()
+  @IsString()
+  portfolio_contact?: string
+
+  @ApiPropertyOptional({ description: 'Filter by descriptor (partial match)' })
+  @IsOptional()
+  @IsString()
+  descriptor?: string
+
+  @ApiPropertyOptional({ description: 'Filter by FP username' })
+  @IsOptional()
+  @IsString()
+  fp_username?: string
+
+  @ApiPropertyOptional({ enum: OtaBillingType })
+  @IsOptional()
+  @IsEnum(OtaBillingType)
+  expedia_billing_type?: OtaBillingType
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  expedia_service_type?: string
+
+  @ApiPropertyOptional({ enum: OtaIntegrationFrequency })
+  @IsOptional()
+  @IsEnum(OtaIntegrationFrequency)
+  expedia_frequency?: OtaIntegrationFrequency
+
   @ApiPropertyOptional({ description: 'Filter by description (partial match)' })
   @IsOptional()
   @IsString()
@@ -523,42 +777,152 @@ export class BulkDeletePropertyDto {
   ids: string[]
 }
 
+/** Allowed `filters[].name` values for POST /property/filter (keep in sync with property.service switch). */
+export const PROPERTY_FILTER_FIELD_NAMES = [
+  'portfolio_id',
+  'property_id',
+  'subportfolio_id',
+  'service_type_id',
+  'property_identifier',
+  'portfolio_contact',
+  'descriptor',
+  'expedia_id',
+  'booking_id',
+  'agoda_id',
+  'card_descriptor',
+  'hotel_address',
+  'new_domain_email',
+  'portfolio_contact_email',
+  'primary_case_email',
+  'expedia_status',
+  'booking_status',
+  'agoda_status',
+  'case_management_contact',
+  'access_contact',
+  'reporting_contact',
+  'expedia_processor',
+  'booking_processor',
+  'agoda_processor',
+  'from',
+  'to',
+  'fp_mid',
+  'fp_username',
+  'stripe_account_email',
+  'expedia_billing_type',
+  'expedia_service_type',
+  'expedia_frequency',
+  'expedia_access_level',
+  'expedia_from',
+  'expedia_to',
+  'expedia_scheduler',
+  'expedia_duration',
+  'booking_billing_type',
+  'booking_service_type',
+  'booking_frequency',
+  'booking_access_level',
+  'booking_from',
+  'booking_to',
+  'booking_scheduler',
+  'booking_duration',
+  'agoda_billing_type',
+  'agoda_service_type',
+  'agoda_frequency',
+  'agoda_access_level',
+  'agoda_from',
+  'agoda_to',
+  'agoda_scheduler',
+  'agoda_duration',
+  'created_at',
+  'updated_at'
+] as const
+
+export type PropertyFilterFieldName = (typeof PROPERTY_FILTER_FIELD_NAMES)[number]
+
+const OID = '507f1f77bcf86cd799439013'
+
+function swaggerExampleForFilterName(name: PropertyFilterFieldName): {
+  in: (string | number | boolean)[]
+  sort_by?: 'asc' | 'desc'
+} {
+  if (name === 'created_at' || name === 'updated_at')
+    return { in: [], sort_by: 'desc' }
+  if (name === 'portfolio_id')
+    return { in: [OID, '507f1f77bcf86cd799439014'], sort_by: 'asc' }
+  if (name === 'property_id')
+    return { in: ['507f1f77bcf86cd799439015'] }
+  if (name === 'subportfolio_id' || name === 'service_type_id')
+    return { in: [OID] }
+  if (
+    name === 'expedia_id' ||
+    name === 'booking_id' ||
+    name === 'agoda_id' ||
+    name === 'expedia_duration' ||
+    name === 'booking_duration' ||
+    name === 'agoda_duration'
+  )
+    return { in: [123456] }
+  if (
+    name === 'expedia_access_level' ||
+    name === 'expedia_scheduler' ||
+    name === 'booking_access_level' ||
+    name === 'booking_scheduler' ||
+    name === 'agoda_access_level' ||
+    name === 'agoda_scheduler'
+  )
+    return { in: [true, false] }
+  if (
+    name.endsWith('_billing_type') ||
+    name.endsWith('_frequency') ||
+    name === 'expedia_processor' ||
+    name === 'booking_processor' ||
+    name === 'agoda_processor'
+  ) {
+    if (name.endsWith('_billing_type')) return { in: ['VCC', 'DB'] }
+    if (name.endsWith('_frequency')) return { in: ['REGULAR', 'ONE_TIME'] }
+    return { in: ['QuantumPay', 'Stripe'] }
+  }
+  if (name.endsWith('_service_type')) return { in: ['HotelCollect', 'ExpediaCollect'] }
+  if (
+    name === 'expedia_from' ||
+    name === 'expedia_to' ||
+    name === 'booking_from' ||
+    name === 'booking_to' ||
+    name === 'agoda_from' ||
+    name === 'agoda_to' ||
+    name === 'from' ||
+    name === 'to'
+  )
+    return { in: ['2024-01-01', '2024-12-31'] }
+  return { in: [`example-${name}`] }
+}
+
+/** One filter row per allowed field — for Swagger “all fields” body example. */
+export const PROPERTY_FILTER_SWAGGER_EXAMPLE_FILTERS =
+  PROPERTY_FILTER_FIELD_NAMES.map((name) => {
+    const row = swaggerExampleForFilterName(name)
+    return { name, ...row }
+  })
+
+const PROPERTY_FILTER_FIELD_NAMES_LIST = PROPERTY_FILTER_FIELD_NAMES.join(', ')
+
+const PROPERTY_FILTER_ITEM_NAME_DESCRIPTION = `Field to filter or sort. Allowed values: ${PROPERTY_FILTER_FIELD_NAMES_LIST}. Use in: [] with sort_by only for created_at / updated_at. Booleans accept true/false or "true"/"false". IDs (expedia_id, booking_id, agoda_id) and *_duration use numbers in in[].`
+
+const PROPERTY_FILTER_DTO_FILTERS_DESCRIPTION = `Each item: name (required, one of: ${PROPERTY_FILTER_FIELD_NAMES_LIST}), in (required; OR match; empty only for sort-only on created_at/updated_at), sort_by (optional asc|desc). Root fields: page, limit, search (name, description, hotel_address, property_identifier, portfolio_contact, descriptor), start_date, end_date, is_active, masked, user_name, user_password.`
+
+/** Full narrative for POST /property/filter Swagger operation text. */
+export const PROPERTY_FILTER_OPERATION_DESCRIPTION =
+  `Returns properties with optional pagination. filters[].name must be one of: ${PROPERTY_FILTER_FIELD_NAMES_LIST}. Each filter row: in = array of values (OR match); use in: [] only with sort_by for created_at or updated_at. Boolean fields (expedia_access_level, expedia_scheduler, booking_access_level, booking_scheduler, agoda_access_level, agoda_scheduler) accept true/false or "true"/"false". Numeric in values: expedia_id, booking_id, agoda_id, expedia_duration, booking_duration, agoda_duration. Enum strings: billing types VCC, DB, EBS; frequencies REGULAR, ONE_TIME, STOP; processors QuantumPay, Stripe, FreedomPay. Root body (outside filters): page, limit, search, start_date, end_date, is_active, masked, user_name, user_password (when masked=false).`
+
 export class PropertyFilterItem {
   @ApiProperty({
-    description: 'Name of the field to filter or sort',
+    description: PROPERTY_FILTER_ITEM_NAME_DESCRIPTION,
     example: 'portfolio_id',
-    enum: [
-      'portfolio_id',
-      'property_id',
-      'subportfolio_id',
-      'expedia_id',
-      'booking_id',
-      'agoda_id',
-      'card_descriptor',
-      'hotel_address',
-      'new_domain_email',
-      'portfolio_contact_email',
-      'primary_case_email',
-      'expedia_status',
-      'booking_status',
-      'agoda_status',
-      'case_management_contact',
-      'access_contact',
-      'reporting_contact',
-      'expedia_processor',
-      'booking_processor',
-      'agoda_processor',
-      'from',
-      'to',
-      'fp_mid',
-      'stripe_account_email',
-      'created_at',
-      'updated_at'
-    ]
+    enum: [...PROPERTY_FILTER_FIELD_NAMES]
   })
   @IsString()
   @IsNotEmpty()
-  name: string
+  @IsIn([...PROPERTY_FILTER_FIELD_NAMES])
+  name: PropertyFilterFieldName
 
   @ApiPropertyOptional({
     description: 'Sort order for this field (applied in array order for multi-field sorting)',
@@ -570,80 +934,20 @@ export class PropertyFilterItem {
   sort_by?: 'asc' | 'desc'
 
   @ApiProperty({
-    description: 'Array of values to filter by (OR condition). For sort-only fields like created_at or updated_at, you can pass an empty array []',
+    description:
+      'Values to match with OR semantics. Use [] only for sort-only rows (created_at, updated_at) together with sort_by.',
     example: ['507f1f77bcf86cd799439013', '507f1f77bcf86cd799439014'],
     type: [String]
   })
   @IsArray()
-  @IsNotEmpty()
   in: (string | number | boolean)[]
 }
 
 export class PropertyFilterDto {
   @ApiPropertyOptional({
-    description: 'Array of filter items. Each filter supports multiple values (OR condition) and optional sort_by. Sorting is applied in array order for multi-field sorting. Available fields: portfolio_id, property_id, subportfolio_id, expedia_id, booking_id, agoda_id, card_descriptor, hotel_address, new_domain_email, portfolio_contact_email, primary_case_email, expedia_status, booking_status, agoda_status, case_management_contact, access_contact, reporting_contact, expedia_processor, booking_processor, agoda_processor, from, to, fp_mid, stripe_account_email, created_at, updated_at. For sort-only fields (created_at, updated_at): use in:[] with sort_by',
+    description: PROPERTY_FILTER_DTO_FILTERS_DESCRIPTION,
     type: [PropertyFilterItem],
-    example: [
-      {
-        name: 'portfolio_id',
-        sort_by: 'asc',
-        in: ['507f1f77bcf86cd799439013', '507f1f77bcf86cd799439014']
-      },
-      {
-        name: 'property_id',
-        in: ['507f1f77bcf86cd799439015']
-      },
-      {
-        name: 'expedia_id',
-        sort_by: 'desc',
-        in: ['EXP123', 'EXP456']
-      },
-      {
-        name: 'booking_id',
-        in: ['BK789', 'BK012']
-      },
-      {
-        name: 'agoda_id',
-        in: ['AG345', 'AG678']
-      },
-      {
-        name: 'card_descriptor',
-        in: ['VISA1234', 'MASTER5678']
-      },
-      {
-        name: 'hotel_address',
-        in: ['123 Main St', '456 Oak Ave']
-      },
-      {
-        name: 'new_domain_email',
-        in: ['hotel1@example.com', 'hotel2@example.com']
-      },
-      {
-        name: 'portfolio_contact_email',
-        in: ['contact1@example.com']
-      },
-      {
-        name: 'primary_case_email',
-        in: ['case@example.com']
-      },
-      {
-        name: 'expedia_status',
-        in: ['active', 'inactive']
-      },
-      {
-        name: 'booking_status',
-        in: ['confirmed']
-      },
-      {
-        name: 'agoda_status',
-        in: ['pending']
-      },
-      {
-        name: 'is_active',
-        sort_by: 'asc',
-        in: [true, false]
-      }
-    ]
+    example: PROPERTY_FILTER_SWAGGER_EXAMPLE_FILTERS
   })
   @IsOptional()
   @IsArray()
@@ -670,7 +974,8 @@ export class PropertyFilterDto {
   limit?: number
 
   @ApiPropertyOptional({
-    description: 'Search term for text fields (searches across name, description, hotel_address)',
+    description:
+      'Search term (case-insensitive contains) across name, description, hotel_address, property_identifier, portfolio_contact, descriptor',
     example: 'Hotel'
   })
   @IsOptional()
@@ -717,4 +1022,250 @@ export class PropertyFilterDto {
   @IsOptional()
   @IsBoolean()
   masked?: boolean
+}
+
+/** GET /property/global-filter — portfolio row */
+export class GlobalFilterIdNameDto {
+  @ApiProperty()
+  id: string
+
+  @ApiProperty()
+  name: string
+}
+
+/** GET /property/global-filter — subportfolio row */
+export class GlobalFilterSubportfolioDto {
+  @ApiProperty()
+  id: string
+
+  @ApiProperty()
+  name: string
+
+  @ApiProperty()
+  portfolio_id: string
+}
+
+/** GET /property/global-filter — service type row */
+export class GlobalFilterServiceTypeDto {
+  @ApiProperty()
+  id: string
+
+  @ApiProperty()
+  type: string
+}
+
+/**
+ * Response shape for GET /property/global-filter.
+ * Each array contains unique values from accessible portfolios + properties (for dropdowns / group filter).
+ */
+export class AllDataForGlobalFilterResponseDto {
+  @ApiProperty({ type: [String] })
+  expedia_id: string[]
+
+  @ApiProperty({ type: [GlobalFilterIdNameDto] })
+  portfolio: GlobalFilterIdNameDto[]
+
+  @ApiProperty({ type: [GlobalFilterIdNameDto] })
+  property: GlobalFilterIdNameDto[]
+
+  @ApiProperty({ type: [String] })
+  portfolio_id: string[]
+
+  @ApiProperty({ type: [GlobalFilterSubportfolioDto] })
+  subportfolio: GlobalFilterSubportfolioDto[]
+
+  @ApiProperty({ type: [String] })
+  booking_id: string[]
+
+  @ApiProperty({ type: [String] })
+  agoda_id: string[]
+
+  @ApiProperty({ type: [String] })
+  hotel_address: string[]
+
+  @ApiProperty({ type: [String] })
+  card_descriptor: string[]
+
+  @ApiProperty({ type: [String] })
+  new_domain_email: string[]
+
+  @ApiProperty({ type: [String] })
+  portfolio_contact_email: string[]
+
+  @ApiProperty({ type: [String] })
+  case_contact_email: string[]
+
+  @ApiProperty({ type: [String] })
+  case_management_contact: string[]
+
+  @ApiProperty({ type: [String] })
+  access_contact: string[]
+
+  @ApiProperty({ type: [String] })
+  reporting_contact: string[]
+
+  @ApiProperty({ type: [String] })
+  description: string[]
+
+  @ApiProperty({ type: [String] })
+  expedia_status: string[]
+
+  @ApiProperty({ type: [String] })
+  booking_status: string[]
+
+  @ApiProperty({ type: [String] })
+  agoda_status: string[]
+
+  @ApiProperty({ type: [String] })
+  expedia_processor: string[]
+
+  @ApiProperty({ type: [String] })
+  booking_processor: string[]
+
+  @ApiProperty({ type: [String] })
+  agoda_processor: string[]
+
+  @ApiProperty({ type: [String] })
+  fp_mid: string[]
+
+  @ApiProperty({ type: [String] })
+  stripe_account_email: string[]
+
+  @ApiProperty({ type: [String] })
+  from: string[]
+
+  @ApiProperty({ type: [String] })
+  to: string[]
+
+  @ApiProperty({ type: [String] })
+  property_identifier: string[]
+
+  @ApiProperty({ type: [String] })
+  portfolio_contact: string[]
+
+  @ApiProperty({ type: [String] })
+  descriptor: string[]
+
+  @ApiProperty({ type: [GlobalFilterServiceTypeDto] })
+  service_type: GlobalFilterServiceTypeDto[]
+
+  @ApiProperty({ type: [String] })
+  service_type_id: string[]
+
+  @ApiProperty({ type: [String] })
+  fp_username: string[]
+
+  @ApiProperty({ type: [String] })
+  qp_username: string[]
+
+  @ApiProperty({ type: [String] })
+  previous_portfolio_id: string[]
+
+  @ApiProperty({ type: [String], description: 'ISO date-time strings' })
+  next_due_date: string[]
+
+  @ApiProperty({ type: [String] })
+  expedia_billing_type: string[]
+
+  @ApiProperty({ type: [String] })
+  expedia_service_type: string[]
+
+  @ApiProperty({ type: [String] })
+  expedia_frequency: string[]
+
+  @ApiProperty({ type: [String] })
+  expedia_from: string[]
+
+  @ApiProperty({ type: [String] })
+  expedia_to: string[]
+
+  @ApiProperty({ type: [String] })
+  expedia_duration: string[]
+
+  @ApiProperty({
+    type: [String],
+    description: 'Boolean values serialized as "true" / "false"'
+  })
+  expedia_access_level: string[]
+
+  @ApiProperty({
+    type: [String],
+    description: 'Boolean values serialized as "true" / "false"'
+  })
+  expedia_scheduler: string[]
+
+  @ApiProperty({ type: [String] })
+  booking_billing_type: string[]
+
+  @ApiProperty({ type: [String] })
+  booking_service_type: string[]
+
+  @ApiProperty({ type: [String] })
+  booking_frequency: string[]
+
+  @ApiProperty({ type: [String] })
+  booking_from: string[]
+
+  @ApiProperty({ type: [String] })
+  booking_to: string[]
+
+  @ApiProperty({ type: [String] })
+  booking_duration: string[]
+
+  @ApiProperty({
+    type: [String],
+    description: 'Boolean values serialized as "true" / "false"'
+  })
+  booking_access_level: string[]
+
+  @ApiProperty({
+    type: [String],
+    description: 'Boolean values serialized as "true" / "false"'
+  })
+  booking_scheduler: string[]
+
+  @ApiProperty({ type: [String] })
+  agoda_billing_type: string[]
+
+  @ApiProperty({ type: [String] })
+  agoda_service_type: string[]
+
+  @ApiProperty({ type: [String] })
+  agoda_frequency: string[]
+
+  @ApiProperty({ type: [String] })
+  agoda_from: string[]
+
+  @ApiProperty({ type: [String] })
+  agoda_to: string[]
+
+  @ApiProperty({ type: [String] })
+  agoda_duration: string[]
+
+  @ApiProperty({
+    type: [String],
+    description: 'Boolean values serialized as "true" / "false"'
+  })
+  agoda_access_level: string[]
+
+  @ApiProperty({
+    type: [String],
+    description: 'Boolean values serialized as "true" / "false"'
+  })
+  agoda_scheduler: string[]
+
+  @ApiProperty({
+    type: [String],
+    description: 'From PropertyCredentials.needAnotherDomain as "true" / "false"'
+  })
+  need_another_domain: string[]
+
+  @ApiProperty({ type: [String] })
+  expedia_secondary_username: string[]
+
+  @ApiProperty({ type: [String] })
+  booking_secondary_username: string[]
+
+  @ApiProperty({ type: [String] })
+  agoda_secondary_username: string[]
 }

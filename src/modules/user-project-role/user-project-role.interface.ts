@@ -84,4 +84,20 @@ export interface IUserProjectRoleService {
     },
     user: IUserWithPermissions
   ): Promise<IUserProjectRole>
+  addAccess(
+    userProjectRoleId: string,
+    data: {
+      portfolio_ids?: string[]
+      property_ids?: string[]
+    },
+    user: IUserWithPermissions
+  ): Promise<{ message: string }>
+  revokeAccess(
+    userProjectRoleId: string,
+    data: {
+      portfolio_ids?: string[]
+      property_ids?: string[]
+    },
+    user: IUserWithPermissions
+  ): Promise<{ message: string }>
 }

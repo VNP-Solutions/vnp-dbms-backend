@@ -107,6 +107,13 @@ export type UserWithDetails = Prisma.UserGetPayload<{
     userAccessedProperties: {
       select: {
         property_id: true
+        portfolio_id: true
+      }
+    }
+    userProjectRoles: {
+      select: {
+        id: true
+        project_type: true
       }
     }
   }
@@ -129,6 +136,25 @@ export type UserWithAccessedProperties = UserWithDetails & {
         id: string
         name: string
       }
+    }>
+    userProjectRoles: Array<{
+      id: string
+      properties: Array<{
+        id: string
+        name: string
+        portfolio: {
+          id: string
+          name: string
+        }
+      }>
+      portfolios: Array<{
+        id: string
+        name: string
+        serviceType: {
+          id: string
+          type: string
+        }
+      }>
     }>
   }
 }
@@ -154,6 +180,25 @@ export interface IUserRepository {
         id: string
         type: string
       }
+    }>
+    userProjectRoles: Array<{
+      id: string
+      properties: Array<{
+        id: string
+        name: string
+        portfolio: {
+          id: string
+          name: string
+        }
+      }>
+      portfolios: Array<{
+        id: string
+        name: string
+        serviceType: {
+          id: string
+          type: string
+        }
+      }>
     }>
   } | null>
   update(id: string, data: Partial<User>): Promise<UserWithRole>
