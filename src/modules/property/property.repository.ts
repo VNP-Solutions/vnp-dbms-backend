@@ -71,7 +71,6 @@ export class PropertyRepository implements IPropertyRepository {
       portfolio_contact: data.portfolio_contact,
       webmail_password: data.webmail_password,
       description: data.description,
-      descriptor: data.descriptor,
       property_identifier: data.property_identifier,
       hotel_address: data.hotel_address,
       case_management_contact: data.case_management_contact,
@@ -334,6 +333,11 @@ export class PropertyRepository implements IPropertyRepository {
 
       if (row.propertyAddress) propertyPayload.hotel_address = row.propertyAddress
       if (row.cardDescriptor) propertyPayload.card_descriptor = row.cardDescriptor
+      if (row.description) propertyPayload.description = row.description
+      if (row.propertyIdentifier)
+        propertyPayload.property_identifier = row.propertyIdentifier
+      if (row.portfolioContact)
+        propertyPayload.portfolio_contact = row.portfolioContact
       if (row.expediaId) propertyPayload.expedia_id = parseInt(row.expediaId) || undefined
       if (row.agodaId) propertyPayload.agoda_id = parseInt(row.agodaId) || undefined
       if (row.bookingId) propertyPayload.booking_id = parseInt(row.bookingId) || undefined
@@ -342,6 +346,8 @@ export class PropertyRepository implements IPropertyRepository {
       if (row.qpUsername) propertyPayload.qp_username = row.qpUsername
       if (row.qpPassword) propertyPayload.qp_password = row.qpPassword
       if (row.qpApiKey) propertyPayload.qp_api_key = row.qpApiKey
+      if (row.fpUsername) propertyPayload.fp_username = row.fpUsername
+      if (row.fpPassword) propertyPayload.fp_password = row.fpPassword
       if (row.webmailPassword) propertyPayload.webmail_password = row.webmailPassword
       if (row.expediaStatus) propertyPayload.expedia_status = row.expediaStatus
       if (row.bookingStatus) propertyPayload.booking_status = row.bookingStatus
@@ -352,10 +358,50 @@ export class PropertyRepository implements IPropertyRepository {
       if (row.expediaProcessor) propertyPayload.expedia_processor = row.expediaProcessor
       if (row.bookingProcessor) propertyPayload.booking_processor = row.bookingProcessor
       if (row.agodaProcessor) propertyPayload.agoda_processor = row.agodaProcessor
-      if (row.from) propertyPayload.from = row.from
-      if (row.to) propertyPayload.to = row.to
       if (row.fpMid) propertyPayload.fp_mid = row.fpMid
       if (row.stripeAccountEmail) propertyPayload.stripe_account_email = row.stripeAccountEmail
+      if (row.expediaBillingType)
+        propertyPayload.expedia_billing_type = row.expediaBillingType
+      if (row.expediaServiceType)
+        propertyPayload.expedia_service_type = row.expediaServiceType
+      if (row.expediaFrequency)
+        propertyPayload.expedia_frequency = row.expediaFrequency
+      if (row.expediaAccessLevel)
+        propertyPayload.expedia_access_level = row.expediaAccessLevel === 'true'
+      if (row.expediaFrom) propertyPayload.expedia_from = row.expediaFrom
+      if (row.expediaTo) propertyPayload.expedia_to = row.expediaTo
+      if (row.expediaScheduler)
+        propertyPayload.expedia_scheduler = row.expediaScheduler === 'true'
+      if (row.expediaDuration)
+        propertyPayload.expedia_duration = parseInt(row.expediaDuration) || undefined
+      if (row.bookingBillingType)
+        propertyPayload.booking_billing_type = row.bookingBillingType
+      if (row.bookingServiceType)
+        propertyPayload.booking_service_type = row.bookingServiceType
+      if (row.bookingFrequency)
+        propertyPayload.booking_frequency = row.bookingFrequency
+      if (row.bookingAccessLevel)
+        propertyPayload.booking_access_level = row.bookingAccessLevel === 'true'
+      if (row.bookingFrom) propertyPayload.booking_from = row.bookingFrom
+      if (row.bookingTo) propertyPayload.booking_to = row.bookingTo
+      if (row.bookingScheduler)
+        propertyPayload.booking_scheduler = row.bookingScheduler === 'true'
+      if (row.bookingDuration)
+        propertyPayload.booking_duration = parseInt(row.bookingDuration) || undefined
+      if (row.agodaBillingType)
+        propertyPayload.agoda_billing_type = row.agodaBillingType
+      if (row.agodaServiceType)
+        propertyPayload.agoda_service_type = row.agodaServiceType
+      if (row.agodaFrequency)
+        propertyPayload.agoda_frequency = row.agodaFrequency
+      if (row.agodaAccessLevel)
+        propertyPayload.agoda_access_level = row.agodaAccessLevel === 'true'
+      if (row.agodaFrom) propertyPayload.agoda_from = row.agodaFrom
+      if (row.agodaTo) propertyPayload.agoda_to = row.agodaTo
+      if (row.agodaScheduler)
+        propertyPayload.agoda_scheduler = row.agodaScheduler === 'true'
+      if (row.agodaDuration)
+        propertyPayload.agoda_duration = parseInt(row.agodaDuration) || undefined
       
       if (!propertyPayload.expedia_status) propertyPayload.expedia_status = 'Access Required'
       if (!propertyPayload.booking_status) propertyPayload.booking_status = 'Access Required'
@@ -381,6 +427,20 @@ export class PropertyRepository implements IPropertyRepository {
         if (row.expediaPassword) credPayload.expediaPassword = row.expediaPassword
         if (row.bookingPassword) credPayload.bookingPassword = row.bookingPassword
         if (row.agodaPassword) credPayload.agodaPassword = row.agodaPassword
+        if (row.expediaSecondaryUsername)
+          credPayload.expediaSecondaryUsername = row.expediaSecondaryUsername
+        if (row.expediaSecondaryPassword)
+          credPayload.expediaSecondaryPassword = row.expediaSecondaryPassword
+        if (row.bookingSecondaryUsername)
+          credPayload.bookingSecondaryUsername = row.bookingSecondaryUsername
+        if (row.bookingSecondaryPassword)
+          credPayload.bookingSecondaryPassword = row.bookingSecondaryPassword
+        if (row.agodaSecondaryUsername)
+          credPayload.agodaSecondaryUsername = row.agodaSecondaryUsername
+        if (row.agodaSecondaryPassword)
+          credPayload.agodaSecondaryPassword = row.agodaSecondaryPassword
+        if (row.needAnotherDomain)
+          credPayload.needAnotherDomain = row.needAnotherDomain === 'true'
         if (row.caseContactEmail) credPayload.case_contact_email = row.caseContactEmail
 
         if (Object.keys(credPayload).length > 0) {
