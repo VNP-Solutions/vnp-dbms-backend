@@ -90,11 +90,6 @@ export class PropertyCredentialsInput {
   @IsOptional()
   agodaSecondaryPassword?: string
 
-  @ApiPropertyOptional({ description: 'Whether the property needs another domain' })
-  @IsBoolean()
-  @IsOptional()
-  needAnotherDomain?: boolean
-
   @ApiPropertyOptional({
     description: 'Expedia email associated with the account'
   })
@@ -481,6 +476,20 @@ export class CreatePropertyDto {
   @IsOptional()
   @Type(() => Number)
   agoda_duration?: number
+
+  @ApiPropertyOptional({
+    description: 'Need another domain for OTA integrations'
+  })
+  @IsBoolean()
+  @IsOptional()
+  need_another_domain?: boolean
+
+  @ApiPropertyOptional({
+    description: 'Booking.com OTP phone number'
+  })
+  @IsString()
+  @IsOptional()
+  booking_otp_phone?: string
 
   @ApiPropertyOptional({
     description: 'Property credentials (OTA login details)',
@@ -1250,9 +1259,12 @@ export class AllDataForGlobalFilterResponseDto {
 
   @ApiProperty({
     type: [String],
-    description: 'From PropertyCredentials.needAnotherDomain as "true" / "false"'
+    description: 'From Property.need_another_domain as "true" / "false"'
   })
   need_another_domain: string[]
+
+  @ApiProperty({ type: [String] })
+  booking_otp_phone: string[]
 
   @ApiProperty({ type: [String] })
   expedia_secondary_username: string[]
