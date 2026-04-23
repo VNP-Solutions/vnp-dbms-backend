@@ -1,5 +1,4 @@
-import { PartialType } from '@nestjs/mapped-types'
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
+import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger'
 import { Transform, Type } from 'class-transformer'
 import { OtaBillingType, OtaIntegrationFrequency } from '@prisma/client'
 import {
@@ -163,12 +162,16 @@ export class CreatePropertyDto {
   @IsOptional()
   subportfolio_id?: string
 
-  @ApiPropertyOptional({ description: 'Previous portfolio ID (tracking)' })
+  @ApiPropertyOptional({
+    example: '507f1f77bcf86cd799439020',
+    description: 'Previous portfolio ID (tracking)'
+  })
   @IsString()
   @IsOptional()
   previous_portfolio_id?: string
 
   @ApiPropertyOptional({
+    example: ['507f1f77bcf86cd799439012', '507f1f77bcf86cd799439015'],
     description: 'Portfolio IDs where property is visible',
     type: [String]
   })
@@ -177,28 +180,44 @@ export class CreatePropertyDto {
   @IsOptional()
   show_in_portfolio?: string[]
 
-  @ApiPropertyOptional({ description: 'New domain email' })
+  @ApiPropertyOptional({
+    example: 'newdomains@grandhotel.com',
+    description: 'New domain email'
+  })
   @IsString()
   @IsOptional()
   new_domain_email?: string
 
-  @ApiPropertyOptional({ description: 'Other case emails', type: [String] })
+  @ApiPropertyOptional({
+    example: ['case1@example.com', 'case2@example.com'],
+    description: 'Other case emails',
+    type: [String]
+  })
   @IsArray()
   @IsString({ each: true })
   @IsOptional()
   others_case_emails?: string[]
 
-  @ApiPropertyOptional({ description: 'Primary case email' })
+  @ApiPropertyOptional({
+    example: 'primarycase@grandhotel.com',
+    description: 'Primary case email'
+  })
   @IsString()
   @IsOptional()
   primary_case_email?: string
 
-  @ApiPropertyOptional({ description: 'Portfolio contact email' })
+  @ApiPropertyOptional({
+    example: 'portfolio@grandhotel.com',
+    description: 'Portfolio contact email'
+  })
   @IsString()
   @IsOptional()
   portfolio_contact_email?: string
 
-  @ApiPropertyOptional({ description: 'Portfolio contact (free text)' })
+  @ApiPropertyOptional({
+    example: 'John Smith - Portfolio Manager',
+    description: 'Portfolio contact (free text)'
+  })
   @IsString()
   @IsOptional()
   portfolio_contact?: string
@@ -211,42 +230,64 @@ export class CreatePropertyDto {
   @IsOptional()
   service_type_id?: string
 
-  @ApiPropertyOptional({ description: 'External property / PMS identifier' })
+  @ApiPropertyOptional({
+    example: 'PROP-12345',
+    description: 'External property / PMS identifier'
+  })
   @IsString()
   @IsOptional()
   property_identifier?: string
 
-  @ApiPropertyOptional({ description: 'Webmail password (will be encrypted)' })
+  @ApiPropertyOptional({
+    example: 'SecurePass123!',
+    description: 'Webmail password (will be encrypted)'
+  })
   @IsString()
   @IsOptional()
   webmail_password?: string
 
-  @ApiPropertyOptional({ description: 'Description' })
+  @ApiPropertyOptional({
+    example: 'Luxury 5-star hotel in downtown with 200 rooms',
+    description: 'Description'
+  })
   @IsString()
   @IsOptional()
   description?: string
 
-  @ApiPropertyOptional({ description: 'Hotel address' })
+  @ApiPropertyOptional({
+    example: '123 Main Street, New York, NY 10001, USA',
+    description: 'Hotel address'
+  })
   @IsString()
   @IsOptional()
   hotel_address?: string
 
-  @ApiPropertyOptional({ description: 'Case Management Contact' })
+  @ApiPropertyOptional({
+    example: 'Jane Doe - Case Manager',
+    description: 'Case Management Contact'
+  })
   @IsString()
   @IsOptional()
   case_management_contact?: string
 
-  @ApiPropertyOptional({ description: 'Access Contact' })
+  @ApiPropertyOptional({
+    example: 'Mike Johnson - IT Access',
+    description: 'Access Contact'
+  })
   @IsString()
   @IsOptional()
   access_contact?: string
 
-  @ApiPropertyOptional({ description: 'Reporting Contact' })
+  @ApiPropertyOptional({
+    example: 'Sarah Williams - Reporting Lead',
+    description: 'Reporting Contact'
+  })
   @IsString()
   @IsOptional()
   reporting_contact?: string
 
   @ApiPropertyOptional({
+    example: 'QuantumPay',
     description: 'Expedia Processor',
     enum: OTA_PAYMENT_PROCESSORS
   })
@@ -255,6 +296,7 @@ export class CreatePropertyDto {
   expedia_processor?: (typeof OTA_PAYMENT_PROCESSORS)[number]
 
   @ApiPropertyOptional({
+    example: 'Stripe',
     description: 'Booking Processor',
     enum: OTA_PAYMENT_PROCESSORS
   })
@@ -263,6 +305,7 @@ export class CreatePropertyDto {
   booking_processor?: (typeof OTA_PAYMENT_PROCESSORS)[number]
 
   @ApiPropertyOptional({
+    example: 'FreedomPay',
     description: 'Agoda Processor',
     enum: OTA_PAYMENT_PROCESSORS
   })
@@ -286,37 +329,58 @@ export class CreatePropertyDto {
   @IsOptional()
   to?: string
 
-  @ApiPropertyOptional({ description: 'QP Username' })
+  @ApiPropertyOptional({
+    example: 'qp_user_grandhotel',
+    description: 'QP Username'
+  })
   @IsString()
   @IsOptional()
   qp_username?: string
 
-  @ApiPropertyOptional({ description: 'QP Password (will be encrypted)' })
+  @ApiPropertyOptional({
+    example: 'QPPass123!',
+    description: 'QP Password (will be encrypted)'
+  })
   @IsString()
   @IsOptional()
   qp_password?: string
 
-  @ApiPropertyOptional({ description: 'QP API Key (will be encrypted)' })
+  @ApiPropertyOptional({
+    example: 'qp_api_key_abc123xyz',
+    description: 'QP API Key (will be encrypted)'
+  })
   @IsString()
   @IsOptional()
   qp_api_key?: string
 
-  @ApiPropertyOptional({ description: 'FP MID' })
+  @ApiPropertyOptional({
+    example: 'FP-MID-789456',
+    description: 'FP MID'
+  })
   @IsString()
   @IsOptional()
   fp_mid?: string
 
-  @ApiPropertyOptional({ description: 'FreedomPay username' })
+  @ApiPropertyOptional({
+    example: 'fp_user_grandhotel',
+    description: 'FreedomPay username'
+  })
   @IsString()
   @IsOptional()
   fp_username?: string
 
-  @ApiPropertyOptional({ description: 'FreedomPay password (will be encrypted)' })
+  @ApiPropertyOptional({
+    example: 'FPPass123!',
+    description: 'FreedomPay password (will be encrypted)'
+  })
   @IsString()
   @IsOptional()
   fp_password?: string
 
-  @ApiPropertyOptional({ description: 'Stripe account email' })
+  @ApiPropertyOptional({
+    example: 'billing@grandhotel.com',
+    description: 'Stripe account email'
+  })
   @IsString()
   @IsOptional()
   stripe_account_email?: string
@@ -348,136 +412,209 @@ export class CreatePropertyDto {
   @IsOptional()
   agoda_status?: string
 
-  @ApiPropertyOptional({ enum: OtaBillingType })
+  @ApiPropertyOptional({
+    example: 'VCC',
+    enum: OtaBillingType
+  })
   @Transform(({ value }) => value?.toString().toUpperCase())
   @IsEnum(OtaBillingType)
   @IsOptional()
   expedia_billing_type?: OtaBillingType
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({
+    example: 'Standard Integration',
+    description: 'Expedia service type'
+  })
   @IsString()
   @IsOptional()
   expedia_service_type?: string
 
-  @ApiPropertyOptional({ enum: OtaIntegrationFrequency })
+  @ApiPropertyOptional({
+    example: 'REGULAR',
+    enum: OtaIntegrationFrequency
+  })
   @Transform(({ value }) => value?.toString().toUpperCase())
   @IsEnum(OtaIntegrationFrequency)
   @IsOptional()
   expedia_frequency?: OtaIntegrationFrequency
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({
+    example: true,
+    description: 'Expedia access level granted'
+  })
   @IsBoolean()
   @IsOptional()
   expedia_access_level?: boolean
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({
+    example: '2024-01-01',
+    description: 'Expedia integration start date (YYYY-MM-DD)'
+  })
   @IsString()
   @IsOptional()
   expedia_from?: string
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({
+    example: '2024-12-31',
+    description: 'Expedia integration end date (YYYY-MM-DD)'
+  })
   @IsString()
   @IsOptional()
   expedia_to?: string
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({
+    example: false,
+    description: 'Expedia scheduler enabled'
+  })
   @IsBoolean()
   @IsOptional()
   expedia_scheduler?: boolean
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({
+    example: 30,
+    description: 'Expedia integration duration in days'
+  })
   @IsNumber()
   @IsOptional()
   @Type(() => Number)
   expedia_duration?: number
 
-  @ApiPropertyOptional({ enum: OtaBillingType })
+  @ApiPropertyOptional({
+    example: 'DB',
+    enum: OtaBillingType
+  })
   @Transform(({ value }) => value?.toString().toUpperCase())
   @IsEnum(OtaBillingType)
   @IsOptional()
   booking_billing_type?: OtaBillingType
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({
+    example: 'Premium Partner',
+    description: 'Booking.com service type'
+  })
   @IsString()
   @IsOptional()
   booking_service_type?: string
 
-  @ApiPropertyOptional({ enum: OtaIntegrationFrequency })
+  @ApiPropertyOptional({
+    example: 'ONE_TIME',
+    enum: OtaIntegrationFrequency
+  })
   @Transform(({ value }) => value?.toString().toUpperCase())
   @IsEnum(OtaIntegrationFrequency)
   @IsOptional()
   booking_frequency?: OtaIntegrationFrequency
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({
+    example: true,
+    description: 'Booking.com access level granted'
+  })
   @IsBoolean()
   @IsOptional()
   booking_access_level?: boolean
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({
+    example: '2024-02-01',
+    description: 'Booking.com integration start date (YYYY-MM-DD)'
+  })
   @IsString()
   @IsOptional()
   booking_from?: string
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({
+    example: '2024-11-30',
+    description: 'Booking.com integration end date (YYYY-MM-DD)'
+  })
   @IsString()
   @IsOptional()
   booking_to?: string
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({
+    example: true,
+    description: 'Booking.com scheduler enabled'
+  })
   @IsBoolean()
   @IsOptional()
   booking_scheduler?: boolean
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({
+    example: 60,
+    description: 'Booking.com integration duration in days'
+  })
   @IsNumber()
   @IsOptional()
   @Type(() => Number)
   booking_duration?: number
 
-  @ApiPropertyOptional({ enum: OtaBillingType })
+  @ApiPropertyOptional({
+    example: 'EBS',
+    enum: OtaBillingType
+  })
   @Transform(({ value }) => value?.toString().toUpperCase())
   @IsEnum(OtaBillingType)
   @IsOptional()
   agoda_billing_type?: OtaBillingType
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({
+    example: 'Preferred Partner Plus',
+    description: 'Agoda service type'
+  })
   @IsString()
   @IsOptional()
   agoda_service_type?: string
 
-  @ApiPropertyOptional({ enum: OtaIntegrationFrequency })
+  @ApiPropertyOptional({
+    example: 'STOP',
+    enum: OtaIntegrationFrequency
+  })
   @Transform(({ value }) => value?.toString().toUpperCase())
   @IsEnum(OtaIntegrationFrequency)
   @IsOptional()
   agoda_frequency?: OtaIntegrationFrequency
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({
+    example: false,
+    description: 'Agoda access level granted'
+  })
   @IsBoolean()
   @IsOptional()
   agoda_access_level?: boolean
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({
+    example: '2024-03-15',
+    description: 'Agoda integration start date (YYYY-MM-DD)'
+  })
   @IsString()
   @IsOptional()
   agoda_from?: string
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({
+    example: '2024-09-15',
+    description: 'Agoda integration end date (YYYY-MM-DD)'
+  })
   @IsString()
   @IsOptional()
   agoda_to?: string
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({
+    example: true,
+    description: 'Agoda scheduler enabled'
+  })
   @IsBoolean()
   @IsOptional()
   agoda_scheduler?: boolean
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({
+    example: 90,
+    description: 'Agoda integration duration in days'
+  })
   @IsNumber()
   @IsOptional()
   @Type(() => Number)
   agoda_duration?: number
 
   @ApiPropertyOptional({
+    example: true,
     description: 'Need another domain for OTA integrations'
   })
   @IsBoolean()
@@ -485,6 +622,7 @@ export class CreatePropertyDto {
   need_another_domain?: boolean
 
   @ApiPropertyOptional({
+    example: '+1-555-123-4567',
     description: 'Booking.com OTP phone number'
   })
   @IsString()
@@ -501,23 +639,7 @@ export class CreatePropertyDto {
   credentials?: PropertyCredentialsInput
 }
 
-export class UpdatePropertyDto extends PartialType(CreatePropertyDto) {
-  @ApiPropertyOptional({
-    description: 'Set is_active (use activate/deactivate endpoints if needed)'
-  })
-  @IsBoolean()
-  @IsOptional()
-  is_active?: boolean
-
-  @ApiPropertyOptional({
-    description: 'Property credentials (OTA login details)',
-    type: PropertyCredentialsInput
-  })
-  @ValidateNested()
-  @Type(() => PropertyCredentialsInput)
-  @IsOptional()
-  credentials?: PropertyCredentialsInput
-}
+export class UpdatePropertyDto extends PartialType(CreatePropertyDto) {}
 
 export const REQUIRED_FIELD_VALUES = [
   'expedia',
