@@ -14,6 +14,9 @@ export interface ImportPropertyRow {
   portfolioName: string
   propertyAddress?: string
   cardDescriptor?: string
+  description?: string
+  propertyIdentifier?: string
+  portfolioContact?: string
   expediaId?: string
   agodaId?: string
   bookingId?: string
@@ -23,11 +26,20 @@ export interface ImportPropertyRow {
   expediaPassword?: string
   bookingPassword?: string
   agodaPassword?: string
+  expediaSecondaryUsername?: string
+  expediaSecondaryPassword?: string
+  bookingSecondaryUsername?: string
+  bookingSecondaryPassword?: string
+  agodaSecondaryUsername?: string
+  agodaSecondaryPassword?: string
+  needAnotherDomain?: string
   portfolioContactEmail?: string
   caseContactEmail?: string
   qpUsername?: string
   qpPassword?: string
   qpApiKey?: string
+  fpUsername?: string
+  fpPassword?: string
   newDomainsEmail?: string
   webmailPassword?: string
   expediaStatus?: string
@@ -39,10 +51,32 @@ export interface ImportPropertyRow {
   expediaProcessor?: string
   bookingProcessor?: string
   agodaProcessor?: string
-  from?: string
-  to?: string
   fpMid?: string
   stripeAccountEmail?: string
+  expediaBillingType?: string
+  expediaServiceType?: string
+  expediaFrequency?: string
+  expediaAccessLevel?: string
+  expediaFrom?: string
+  expediaTo?: string
+  expediaScheduler?: string
+  expediaDuration?: string
+  bookingBillingType?: string
+  bookingServiceType?: string
+  bookingFrequency?: string
+  bookingAccessLevel?: string
+  bookingFrom?: string
+  bookingTo?: string
+  bookingScheduler?: string
+  bookingDuration?: string
+  agodaBillingType?: string
+  agodaServiceType?: string
+  agodaFrequency?: string
+  agodaAccessLevel?: string
+  agodaFrom?: string
+  agodaTo?: string
+  agodaScheduler?: string
+  agodaDuration?: string
 }
 
 export interface ImportPropertiesResult {
@@ -94,7 +128,6 @@ export interface AllDataForGlobalFilterResponse {
   to: string[]
   property_identifier: string[]
   portfolio_contact: string[]
-  descriptor: string[]
   service_type: Array<{ id: string; type: string }>
   service_type_id: string[]
   fp_username: string[]

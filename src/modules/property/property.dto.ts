@@ -221,11 +221,6 @@ export class CreatePropertyDto {
   @IsOptional()
   property_identifier?: string
 
-  @ApiPropertyOptional({ description: 'Descriptor / label for reporting' })
-  @IsString()
-  @IsOptional()
-  descriptor?: string
-
   @ApiPropertyOptional({ description: 'Webmail password (will be encrypted)' })
   @IsString()
   @IsOptional()
@@ -359,6 +354,7 @@ export class CreatePropertyDto {
   agoda_status?: string
 
   @ApiPropertyOptional({ enum: OtaBillingType })
+  @Transform(({ value }) => value?.toString().toUpperCase())
   @IsEnum(OtaBillingType)
   @IsOptional()
   expedia_billing_type?: OtaBillingType
@@ -369,6 +365,7 @@ export class CreatePropertyDto {
   expedia_service_type?: string
 
   @ApiPropertyOptional({ enum: OtaIntegrationFrequency })
+  @Transform(({ value }) => value?.toString().toUpperCase())
   @IsEnum(OtaIntegrationFrequency)
   @IsOptional()
   expedia_frequency?: OtaIntegrationFrequency
@@ -400,6 +397,7 @@ export class CreatePropertyDto {
   expedia_duration?: number
 
   @ApiPropertyOptional({ enum: OtaBillingType })
+  @Transform(({ value }) => value?.toString().toUpperCase())
   @IsEnum(OtaBillingType)
   @IsOptional()
   booking_billing_type?: OtaBillingType
@@ -410,6 +408,7 @@ export class CreatePropertyDto {
   booking_service_type?: string
 
   @ApiPropertyOptional({ enum: OtaIntegrationFrequency })
+  @Transform(({ value }) => value?.toString().toUpperCase())
   @IsEnum(OtaIntegrationFrequency)
   @IsOptional()
   booking_frequency?: OtaIntegrationFrequency
@@ -441,6 +440,7 @@ export class CreatePropertyDto {
   booking_duration?: number
 
   @ApiPropertyOptional({ enum: OtaBillingType })
+  @Transform(({ value }) => value?.toString().toUpperCase())
   @IsEnum(OtaBillingType)
   @IsOptional()
   agoda_billing_type?: OtaBillingType
@@ -451,6 +451,7 @@ export class CreatePropertyDto {
   agoda_service_type?: string
 
   @ApiPropertyOptional({ enum: OtaIntegrationFrequency })
+  @Transform(({ value }) => value?.toString().toUpperCase())
   @IsEnum(OtaIntegrationFrequency)
   @IsOptional()
   agoda_frequency?: OtaIntegrationFrequency
@@ -675,17 +676,13 @@ export class PropertyQueryDto extends QueryDto {
   @IsString()
   portfolio_contact?: string
 
-  @ApiPropertyOptional({ description: 'Filter by descriptor (partial match)' })
-  @IsOptional()
-  @IsString()
-  descriptor?: string
-
   @ApiPropertyOptional({ description: 'Filter by FP username' })
   @IsOptional()
   @IsString()
   fp_username?: string
 
   @ApiPropertyOptional({ enum: OtaBillingType })
+  @Transform(({ value }) => value?.toString().toUpperCase())
   @IsOptional()
   @IsEnum(OtaBillingType)
   expedia_billing_type?: OtaBillingType
@@ -696,6 +693,7 @@ export class PropertyQueryDto extends QueryDto {
   expedia_service_type?: string
 
   @ApiPropertyOptional({ enum: OtaIntegrationFrequency })
+  @Transform(({ value }) => value?.toString().toUpperCase())
   @IsOptional()
   @IsEnum(OtaIntegrationFrequency)
   expedia_frequency?: OtaIntegrationFrequency
@@ -785,7 +783,6 @@ export const PROPERTY_FILTER_FIELD_NAMES = [
   'service_type_id',
   'property_identifier',
   'portfolio_contact',
-  'descriptor',
   'expedia_id',
   'booking_id',
   'agoda_id',
@@ -907,7 +904,7 @@ const PROPERTY_FILTER_FIELD_NAMES_LIST = PROPERTY_FILTER_FIELD_NAMES.join(', ')
 
 const PROPERTY_FILTER_ITEM_NAME_DESCRIPTION = `Field to filter or sort. Allowed values: ${PROPERTY_FILTER_FIELD_NAMES_LIST}. Use in: [] with sort_by only for created_at / updated_at. Booleans accept true/false or "true"/"false". IDs (expedia_id, booking_id, agoda_id) and *_duration use numbers in in[].`
 
-const PROPERTY_FILTER_DTO_FILTERS_DESCRIPTION = `Each item: name (required, one of: ${PROPERTY_FILTER_FIELD_NAMES_LIST}), in (required; OR match; empty only for sort-only on created_at/updated_at), sort_by (optional asc|desc). Root fields: page, limit, search (name, description, hotel_address, property_identifier, portfolio_contact, descriptor), start_date, end_date, is_active, masked, user_name, user_password.`
+const PROPERTY_FILTER_DTO_FILTERS_DESCRIPTION = `Each item: name (required, one of: ${PROPERTY_FILTER_FIELD_NAMES_LIST}), in (required; OR match; empty only for sort-only on created_at/updated_at), sort_by (optional asc|desc). Root fields: page, limit, search (name, description, hotel_address, property_identifier, portfolio_contact, card_descriptor), start_date, end_date, is_active, masked, user_name, user_password.`
 
 /** Full narrative for POST /property/filter Swagger operation text. */
 export const PROPERTY_FILTER_OPERATION_DESCRIPTION =
@@ -975,7 +972,7 @@ export class PropertyFilterDto {
 
   @ApiPropertyOptional({
     description:
-      'Search term (case-insensitive contains) across name, description, hotel_address, property_identifier, portfolio_contact, descriptor',
+      'Search term (case-insensitive contains) across name, description, hotel_address, property_identifier, portfolio_contact, card_descriptor',
     example: 'Hotel'
   })
   @IsOptional()
@@ -1142,9 +1139,6 @@ export class AllDataForGlobalFilterResponseDto {
 
   @ApiProperty({ type: [String] })
   portfolio_contact: string[]
-
-  @ApiProperty({ type: [String] })
-  descriptor: string[]
 
   @ApiProperty({ type: [GlobalFilterServiceTypeDto] })
   service_type: GlobalFilterServiceTypeDto[]

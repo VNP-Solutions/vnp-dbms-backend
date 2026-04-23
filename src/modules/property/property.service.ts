@@ -262,9 +262,6 @@ export class PropertyService implements IPropertyService {
           case 'portfolio_contact':
             whereConditions.push({ portfolio_contact: { in: values } })
             break
-          case 'descriptor':
-            whereConditions.push({ descriptor: { in: values } })
-            break
           case 'fp_username':
             whereConditions.push({ fp_username: { in: values } })
             break
@@ -410,7 +407,12 @@ export class PropertyService implements IPropertyService {
               mode: 'insensitive'
             }
           },
-          { descriptor: { contains: filterDto.search, mode: 'insensitive' } }
+          {
+            card_descriptor: {
+              contains: filterDto.search,
+              mode: 'insensitive'
+            }
+          }
         ]
       })
     }
@@ -870,6 +872,19 @@ export class PropertyService implements IPropertyService {
           return str ? this.encryptionUtil.encrypt(str) : undefined
         }
 
+        const parseBool = (val: any) => {
+          if (!val) return undefined
+          const str = String(val).trim().toLowerCase()
+          if (str === 'true' || str === '1' || str === 'yes') return 'true'
+          if (str === 'false' || str === '0' || str === 'no') return 'false'
+          return undefined
+        }
+
+        const parseEnum = (val: any) => {
+          if (!val) return undefined
+          return String(val).trim().toUpperCase()
+        }
+
         return {
           propertyName,
           portfolioName,
@@ -878,6 +893,15 @@ export class PropertyService implements IPropertyService {
             : undefined,
           cardDescriptor: r['Card Descriptor']
             ? String(r['Card Descriptor']).trim()
+            : undefined,
+          description: r['Description']
+            ? String(r['Description']).trim()
+            : undefined,
+          propertyIdentifier: r['Property Identifier']
+            ? String(r['Property Identifier']).trim()
+            : undefined,
+          portfolioContact: r['Portfolio Contact']
+            ? String(r['Portfolio Contact']).trim()
             : undefined,
           expediaId: r['Expedia ID']
             ? String(r['Expedia ID']).trim()
@@ -898,6 +922,23 @@ export class PropertyService implements IPropertyService {
           expediaPassword: encryptPassword(r['Expedia Password']),
           bookingPassword: encryptPassword(r['Booking Password']),
           agodaPassword: encryptPassword(r['Agoda Password']),
+          expediaSecondaryUsername: r['Expedia Secondary Username']
+            ? String(r['Expedia Secondary Username']).trim()
+            : undefined,
+          expediaSecondaryPassword: encryptPassword(
+            r['Expedia Secondary Password']
+          ),
+          bookingSecondaryUsername: r['Booking Secondary Username']
+            ? String(r['Booking Secondary Username']).trim()
+            : undefined,
+          bookingSecondaryPassword: encryptPassword(
+            r['Booking Secondary Password']
+          ),
+          agodaSecondaryUsername: r['Agoda Secondary Username']
+            ? String(r['Agoda Secondary Username']).trim()
+            : undefined,
+          agodaSecondaryPassword: encryptPassword(r['Agoda Secondary Password']),
+          needAnotherDomain: parseBool(r['Need Another Domain']),
           portfolioContactEmail: r['Portfolio Contact Email']
             ? String(r['Portfolio Contact Email']).trim()
             : undefined,
@@ -909,6 +950,10 @@ export class PropertyService implements IPropertyService {
             : undefined,
           qpPassword: encryptPassword(r['Qp Password']),
           qpApiKey: encryptPassword(r['Qp Api Key']),
+          fpUsername: r['FP Username']
+            ? String(r['FP Username']).trim()
+            : undefined,
+          fpPassword: encryptPassword(r['FP Password']),
           newDomainsEmail: r['New Domains Email']
             ? String(r['New Domains Email']).trim()
             : undefined,
@@ -940,17 +985,57 @@ export class PropertyService implements IPropertyService {
           agodaProcessor: r['Agoda Processor']
             ? String(r['Agoda Processor']).trim()
             : undefined,
-          from: r['From']
-            ? String(r['From']).trim()
-            : undefined,
-          to: r['To']
-            ? String(r['To']).trim()
-            : undefined,
-          fpMid: r['FP MID']
-            ? String(r['FP MID']).trim()
-            : undefined,
+          fpMid: r['FP MID'] ? String(r['FP MID']).trim() : undefined,
           stripeAccountEmail: r['Stripe Account Email']
             ? String(r['Stripe Account Email']).trim()
+            : undefined,
+          expediaBillingType: parseEnum(r['Expedia Billing Type']),
+          expediaServiceType: r['Expedia Service Type']
+            ? String(r['Expedia Service Type']).trim()
+            : undefined,
+          expediaFrequency: parseEnum(r['Expedia Frequency']),
+          expediaAccessLevel: parseBool(r['Expedia Access Level']),
+          expediaFrom: r['Expedia From']
+            ? String(r['Expedia From']).trim()
+            : undefined,
+          expediaTo: r['Expedia To']
+            ? String(r['Expedia To']).trim()
+            : undefined,
+          expediaScheduler: parseBool(r['Expedia Scheduler']),
+          expediaDuration: r['Expedia Duration']
+            ? String(r['Expedia Duration']).trim()
+            : undefined,
+          bookingBillingType: parseEnum(r['Booking Billing Type']),
+          bookingServiceType: r['Booking Service Type']
+            ? String(r['Booking Service Type']).trim()
+            : undefined,
+          bookingFrequency: parseEnum(r['Booking Frequency']),
+          bookingAccessLevel: parseBool(r['Booking Access Level']),
+          bookingFrom: r['Booking From']
+            ? String(r['Booking From']).trim()
+            : undefined,
+          bookingTo: r['Booking To']
+            ? String(r['Booking To']).trim()
+            : undefined,
+          bookingScheduler: parseBool(r['Booking Scheduler']),
+          bookingDuration: r['Booking Duration']
+            ? String(r['Booking Duration']).trim()
+            : undefined,
+          agodaBillingType: parseEnum(r['Agoda Billing Type']),
+          agodaServiceType: r['Agoda Service Type']
+            ? String(r['Agoda Service Type']).trim()
+            : undefined,
+          agodaFrequency: parseEnum(r['Agoda Frequency']),
+          agodaAccessLevel: parseBool(r['Agoda Access Level']),
+          agodaFrom: r['Agoda From']
+            ? String(r['Agoda From']).trim()
+            : undefined,
+          agodaTo: r['Agoda To']
+            ? String(r['Agoda To']).trim()
+            : undefined,
+          agodaScheduler: parseBool(r['Agoda Scheduler']),
+          agodaDuration: r['Agoda Duration']
+            ? String(r['Agoda Duration']).trim()
             : undefined
         } satisfies ImportPropertyRow
       })
@@ -1109,7 +1194,6 @@ export class PropertyService implements IPropertyService {
     const serviceTypeMap = new Map<string, { id: string; type: string }>()
     const uniquePropertyIdentifiers = new Set<string>()
     const uniquePortfolioContacts = new Set<string>()
-    const uniqueDescriptors = new Set<string>()
     const uniqueFpUsernames = new Set<string>()
     const uniqueExpediaBillingTypes = new Set<string>()
     const uniqueExpediaServiceTypes = new Set<string>()
@@ -1244,7 +1328,6 @@ export class PropertyService implements IPropertyService {
         uniquePropertyIdentifiers.add(property.property_identifier)
       if (property.portfolio_contact)
         uniquePortfolioContacts.add(property.portfolio_contact)
-      if (property.descriptor) uniqueDescriptors.add(property.descriptor)
       if (property.fp_username) uniqueFpUsernames.add(property.fp_username)
       if (property.expedia_billing_type)
         uniqueExpediaBillingTypes.add(property.expedia_billing_type)
@@ -1338,7 +1421,6 @@ export class PropertyService implements IPropertyService {
       to: Array.from(uniqueToDates).sort(),
       property_identifier: Array.from(uniquePropertyIdentifiers).sort(),
       portfolio_contact: Array.from(uniquePortfolioContacts).sort(),
-      descriptor: Array.from(uniqueDescriptors).sort(),
       service_type: Array.from(serviceTypeMap.values()).sort((a, b) =>
         a.type.localeCompare(b.type)
       ),

@@ -330,7 +330,6 @@ model Property {
   portfolio_contact         String?
   webmail_password          String?
   description               String?
-  descriptor                String?
   hotel_address             String?
   property_identifier       String?
 
