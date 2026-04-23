@@ -394,6 +394,10 @@ model Property {
   agoda_scheduler    Boolean?
   agoda_duration     Int?
 
+  // OTA Configuration
+  need_another_domain Boolean?
+  booking_otp_phone   String?
+
   userFeatureAccessPermissions UserFeatureAccessPermission[]
   credentials                  PropertyCredentials[]
 
@@ -490,7 +494,6 @@ model PropertyCredentials {
   bookingSecondaryPassword   String?
   agodaSecondaryUsername     String?
   agodaSecondaryPassword     String?
-  needAnotherDomain          Boolean?
   expediaEmailAssociated  String?
   propertyContactEmail    String?
   portfolioContactEmail   String?

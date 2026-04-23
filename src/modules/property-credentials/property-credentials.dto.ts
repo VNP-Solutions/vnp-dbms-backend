@@ -68,11 +68,6 @@ export class CreatePropertyCredentialsDto {
   @IsOptional()
   agodaSecondaryPassword?: string
 
-  @ApiPropertyOptional({ description: 'Whether the property needs another domain' })
-  @IsBoolean()
-  @IsOptional()
-  needAnotherDomain?: boolean
-
   @ApiPropertyOptional({ description: 'Expedia email associated with the account' })
   @IsString()
   @IsOptional()

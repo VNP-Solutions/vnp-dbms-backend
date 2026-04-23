@@ -117,7 +117,9 @@ export class PropertyRepository implements IPropertyRepository {
       agoda_from: data.agoda_from,
       agoda_to: data.agoda_to,
       agoda_scheduler: data.agoda_scheduler,
-      agoda_duration: data.agoda_duration
+      agoda_duration: data.agoda_duration,
+      need_another_domain: data.need_another_domain,
+      booking_otp_phone: data.booking_otp_phone
     }
     if (data.subportfolio_id) payload.subportfolio_id = data.subportfolio_id
 
@@ -402,6 +404,11 @@ export class PropertyRepository implements IPropertyRepository {
         propertyPayload.agoda_scheduler = row.agodaScheduler === 'true'
       if (row.agodaDuration)
         propertyPayload.agoda_duration = parseInt(row.agodaDuration) || undefined
+      
+      if (row.needAnotherDomain)
+        propertyPayload.need_another_domain = row.needAnotherDomain === 'true'
+      if (row.bookingOtpPhone)
+        propertyPayload.booking_otp_phone = row.bookingOtpPhone
       
       if (!propertyPayload.expedia_status) propertyPayload.expedia_status = 'Access Required'
       if (!propertyPayload.booking_status) propertyPayload.booking_status = 'Access Required'

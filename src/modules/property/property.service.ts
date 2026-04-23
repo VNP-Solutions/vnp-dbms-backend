@@ -938,7 +938,6 @@ export class PropertyService implements IPropertyService {
             ? String(r['Agoda Secondary Username']).trim()
             : undefined,
           agodaSecondaryPassword: encryptPassword(r['Agoda Secondary Password']),
-          needAnotherDomain: parseBool(r['Need Another Domain']),
           portfolioContactEmail: r['Portfolio Contact Email']
             ? String(r['Portfolio Contact Email']).trim()
             : undefined,
@@ -1036,6 +1035,10 @@ export class PropertyService implements IPropertyService {
           agodaScheduler: parseBool(r['Agoda Scheduler']),
           agodaDuration: r['Agoda Duration']
             ? String(r['Agoda Duration']).trim()
+            : undefined,
+          needAnotherDomain: parseBool(r['Need Another Domain']),
+          bookingOtpPhone: r['Booking OTP Phone']
+            ? String(r['Booking OTP Phone']).trim()
             : undefined
         } satisfies ImportPropertyRow
       })
@@ -1233,6 +1236,7 @@ export class PropertyService implements IPropertyService {
     const uniqueAgodaAccessLevels = new Set<string>()
     const uniqueAgodaSchedulers = new Set<string>()
     const uniqueNeedAnotherDomain = new Set<string>()
+    const uniqueBookingOtpPhone = new Set<string>()
     const uniqueExpediaSecondaryUsernames = new Set<string>()
     const uniqueBookingSecondaryUsernames = new Set<string>()
     const uniqueAgodaSecondaryUsernames = new Set<string>()
@@ -1371,13 +1375,15 @@ export class PropertyService implements IPropertyService {
         uniqueAgodaAccessLevels.add(String(property.agoda_access_level))
       if (property.agoda_scheduler != null)
         uniqueAgodaSchedulers.add(String(property.agoda_scheduler))
+      if (property.need_another_domain != null)
+        uniqueNeedAnotherDomain.add(String(property.need_another_domain))
+      if (property.booking_otp_phone)
+        uniqueBookingOtpPhone.add(property.booking_otp_phone)
 
       const cred =
         Array.isArray(property.credentials) && property.credentials.length > 0
           ? property.credentials[0]
           : null
-      if (cred?.needAnotherDomain != null)
-        uniqueNeedAnotherDomain.add(String(cred.needAnotherDomain))
       if (cred?.expediaSecondaryUsername)
         uniqueExpediaSecondaryUsernames.add(cred.expediaSecondaryUsername)
       if (cred?.bookingSecondaryUsername)
@@ -1454,6 +1460,7 @@ export class PropertyService implements IPropertyService {
       agoda_access_level: Array.from(uniqueAgodaAccessLevels).sort(),
       agoda_scheduler: Array.from(uniqueAgodaSchedulers).sort(),
       need_another_domain: Array.from(uniqueNeedAnotherDomain).sort(),
+      booking_otp_phone: Array.from(uniqueBookingOtpPhone).sort(),
       expedia_secondary_username: Array.from(
         uniqueExpediaSecondaryUsernames
       ).sort(),

@@ -32,7 +32,6 @@ export interface ImportPropertyRow {
   bookingSecondaryPassword?: string
   agodaSecondaryUsername?: string
   agodaSecondaryPassword?: string
-  needAnotherDomain?: string
   portfolioContactEmail?: string
   caseContactEmail?: string
   qpUsername?: string
@@ -77,6 +76,8 @@ export interface ImportPropertyRow {
   agodaTo?: string
   agodaScheduler?: string
   agodaDuration?: string
+  needAnotherDomain?: string
+  bookingOtpPhone?: string
 }
 
 export interface ImportPropertiesResult {
@@ -159,6 +160,7 @@ export interface AllDataForGlobalFilterResponse {
   agoda_access_level: string[]
   agoda_scheduler: string[]
   need_another_domain: string[]
+  booking_otp_phone: string[]
   expedia_secondary_username: string[]
   booking_secondary_username: string[]
   agoda_secondary_username: string[]
