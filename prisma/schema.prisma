@@ -241,7 +241,10 @@ model ServiceType {
   is_active  Boolean
   order      Int         @default(0)
   portfolios Portfolio[]
-  properties Property[]
+  propertiesPropertyDefault    Property[] @relation("PropertyDefaultServiceType")
+  propertiesExpediaOtaService  Property[] @relation("PropertyExpediaOtaServiceType")
+  propertiesBookingOtaService  Property[] @relation("PropertyBookingOtaServiceType")
+  propertiesAgodaOtaService    Property[] @relation("PropertyAgodaOtaServiceType")
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -317,7 +320,7 @@ model Property {
   portfolio_id          String        @db.ObjectId
   portfolio             Portfolio     @relation(fields: [portfolio_id], references: [id], onDelete: Cascade)
   service_type_id       String?       @db.ObjectId
-  serviceType           ServiceType?  @relation(fields: [service_type_id], references: [id], onDelete: SetNull)
+  serviceType           ServiceType?  @relation("PropertyDefaultServiceType", fields: [service_type_id], references: [id], onDelete: SetNull)
   subportfolio_id       String?       @db.ObjectId
   subportfolio          Subportfolio? @relation(fields: [subportfolio_id], references: [id], onDelete: SetNull)
   previous_portfolio_id String?       @db.ObjectId
@@ -365,9 +368,10 @@ model Property {
   agoda_status    String?
 
   // Expedia integration detail
-  expedia_billing_type OtaBillingType?
-  expedia_service_type String?
-  expedia_frequency    OtaIntegrationFrequency?
+  expedia_billing_type      OtaBillingType?
+  expedia_service_type_id   String?       @db.ObjectId
+  expediaServiceType        ServiceType?  @relation("PropertyExpediaOtaServiceType", fields: [expedia_service_type_id], references: [id], onDelete: SetNull)
+  expedia_frequency         OtaIntegrationFrequency?
   expedia_access_level Boolean?
   expedia_from         String?
   expedia_to           String?
@@ -375,9 +379,10 @@ model Property {
   expedia_duration     Int?
 
   // Booking.com integration detail
-  booking_billing_type OtaBillingType?
-  booking_service_type String?
-  booking_frequency    OtaIntegrationFrequency?
+  booking_billing_type      OtaBillingType?
+  booking_service_type_id   String?       @db.ObjectId
+  bookingServiceType        ServiceType?  @relation("PropertyBookingOtaServiceType", fields: [booking_service_type_id], references: [id], onDelete: SetNull)
+  booking_frequency         OtaIntegrationFrequency?
   booking_access_level Boolean?
   booking_from         String?
   booking_to           String?
@@ -385,9 +390,10 @@ model Property {
   booking_duration     Int?
 
   // Agoda integration detail
-  agoda_billing_type OtaBillingType?
-  agoda_service_type String?
-  agoda_frequency    OtaIntegrationFrequency?
+  agoda_billing_type      OtaBillingType?
+  agoda_service_type_id   String?       @db.ObjectId
+  agodaServiceType        ServiceType?  @relation("PropertyAgodaOtaServiceType", fields: [agoda_service_type_id], references: [id], onDelete: SetNull)
+  agoda_frequency         OtaIntegrationFrequency?
   agoda_access_level Boolean?
   agoda_from         String?
   agoda_to           String?
@@ -413,6 +419,9 @@ model Property {
   @@index([expedia_id])
   @@index([booking_id])
   @@index([agoda_id])
+  @@index([expedia_service_type_id])
+  @@index([booking_service_type_id])
+  @@index([agoda_service_type_id])
 }
 
 model UserFeatureAccessPermission {
