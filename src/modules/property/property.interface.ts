@@ -7,6 +7,9 @@ export type PropertyWithRelations = Property & {
   portfolio: { id: string; name: string }
   subportfolio: { id: string; name: string; portfolio_id: string } | null
   serviceType?: { id: string; type: string } | null
+  expediaServiceType?: { id: string; type: string } | null
+  bookingServiceType?: { id: string; type: string } | null
+  agodaServiceType?: { id: string; type: string } | null
 }
 
 export interface ImportPropertyRow {
@@ -53,7 +56,7 @@ export interface ImportPropertyRow {
   fpMid?: string
   stripeAccountEmail?: string
   expediaBillingType?: string
-  expediaServiceType?: string
+  expediaServiceTypeId?: string
   expediaFrequency?: string
   expediaAccessLevel?: string
   expediaFrom?: string
@@ -61,7 +64,7 @@ export interface ImportPropertyRow {
   expediaScheduler?: string
   expediaDuration?: string
   bookingBillingType?: string
-  bookingServiceType?: string
+  bookingServiceTypeId?: string
   bookingFrequency?: string
   bookingAccessLevel?: string
   bookingFrom?: string
@@ -69,7 +72,7 @@ export interface ImportPropertyRow {
   bookingScheduler?: string
   bookingDuration?: string
   agodaBillingType?: string
-  agodaServiceType?: string
+  agodaServiceTypeId?: string
   agodaFrequency?: string
   agodaAccessLevel?: string
   agodaFrom?: string
@@ -136,7 +139,8 @@ export interface AllDataForGlobalFilterResponse {
   previous_portfolio_id: string[]
   next_due_date: string[]
   expedia_billing_type: string[]
-  expedia_service_type: string[]
+  expedia_service_type: Array<{ id: string; type: string }>
+  expedia_service_type_id: string[]
   expedia_frequency: string[]
   expedia_from: string[]
   expedia_to: string[]
@@ -144,7 +148,8 @@ export interface AllDataForGlobalFilterResponse {
   expedia_access_level: string[]
   expedia_scheduler: string[]
   booking_billing_type: string[]
-  booking_service_type: string[]
+  booking_service_type: Array<{ id: string; type: string }>
+  booking_service_type_id: string[]
   booking_frequency: string[]
   booking_from: string[]
   booking_to: string[]
@@ -152,7 +157,8 @@ export interface AllDataForGlobalFilterResponse {
   booking_access_level: string[]
   booking_scheduler: string[]
   agoda_billing_type: string[]
-  agoda_service_type: string[]
+  agoda_service_type: Array<{ id: string; type: string }>
+  agoda_service_type_id: string[]
   agoda_frequency: string[]
   agoda_from: string[]
   agoda_to: string[]
