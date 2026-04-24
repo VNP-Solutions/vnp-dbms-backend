@@ -21,23 +21,26 @@ import {
   ApiResponse,
   ApiTags
 } from '@nestjs/swagger'
-import { ExcelFileInterceptor } from '../../common/interceptors/excel-file.interceptor'
 import { ParseQuery } from '../../common/decorators/parse-query.decorator'
 import { RequirePermission } from '../../common/decorators/require-permission.decorator'
 import { PermissionGuard } from '../../common/guards/permission.guard'
-import { ModuleType, PermissionAction } from '../../common/interfaces/permission.interface'
+import { ExcelFileInterceptor } from '../../common/interceptors/excel-file.interceptor'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
-import { Public } from '../auth/decorators/public.decorator'
+import {
+  ModuleType,
+  PermissionAction
+} from '../../common/interfaces/permission.interface'
 import { CurrentUser } from '../auth/decorators/current-user.decorator'
+import { Public } from '../auth/decorators/public.decorator'
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
 import {
   AllDataForGlobalFilterResponseDto,
-  GlobalFilterIdNameDto,
-  GlobalFilterServiceTypeDto,
-  GlobalFilterSubportfolioDto,
   BulkDeletePropertyDto,
   CreatePropertyDto,
   GetPropertyCredentialDto,
+  GlobalFilterIdNameDto,
+  GlobalFilterServiceTypeDto,
+  GlobalFilterSubportfolioDto,
   PROPERTY_FILTER_OPERATION_DESCRIPTION,
   PROPERTY_FILTER_SWAGGER_EXAMPLE_FILTERS,
   PropertyFilterDto,
@@ -81,7 +84,10 @@ export class PropertyController {
   @ApiOperation({ summary: 'Create a new property' })
   @ApiResponse({ status: 201, description: 'Property created successfully' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
-  create(@Body() dto: CreatePropertyDto, @CurrentUser() user: IUserWithPermissions) {
+  create(
+    @Body() dto: CreatePropertyDto,
+    @CurrentUser() user: IUserWithPermissions
+  ) {
     return this.propertyService.create(dto, user)
   }
 
@@ -108,7 +114,10 @@ export class PropertyController {
     }
   })
   @ApiResponse({ status: 201, description: 'Properties imported successfully' })
-  @ApiResponse({ status: 400, description: 'Bad request - Invalid file or missing required columns' })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request - Invalid file or missing required columns'
+  })
   @ApiResponse({ status: 403, description: 'Forbidden' })
   importFromExcel(
     @UploadedFile() file: Express.Multer.File,
@@ -123,13 +132,15 @@ export class PropertyController {
   @Post('filter')
   @RequirePermission(ModuleType.PROPERTY, PermissionAction.READ)
   @ApiOperation({
-    summary: 'Get all properties with advanced filtering, pagination, search and multi-field sort',
+    summary:
+      'Get all properties with advanced filtering, pagination, search and multi-field sort',
     description: PROPERTY_FILTER_OPERATION_DESCRIPTION
   })
   @ApiResponse({ status: 200, description: 'Paginated list of properties' })
   @ApiBody({
     type: PropertyFilterDto,
-    description: 'Filter, pagination, and search parameters with multi-field sorting',
+    description:
+      'Filter, pagination, and search parameters with multi-field sorting',
     examples: {
       'Basic filter': {
         value: {
@@ -252,7 +263,10 @@ export class PropertyController {
       }
     }
   })
-  findAllWithFilters(@Body() filterDto: PropertyFilterDto, @CurrentUser() user: IUserWithPermissions) {
+  findAllWithFilters(
+    @Body() filterDto: PropertyFilterDto,
+    @CurrentUser() user: IUserWithPermissions
+  ) {
     return this.propertyService.findAllWithFilters(filterDto, user)
   }
 
@@ -260,9 +274,13 @@ export class PropertyController {
   @RequirePermission(ModuleType.PROPERTY, PermissionAction.READ)
   @ApiOperation({
     summary: 'Get all properties (no filter, no pagination)',
-    description: 'Returns every property accessible to the current user in a single array. Credentials are always masked. Results are Redis-cached per user (1 hour TTL) and invalidated on any write.'
+    description:
+      'Returns every property accessible to the current user in a single array. Credentials are always masked. Results are Redis-cached per user (1 hour TTL) and invalidated on any write.'
   })
-  @ApiResponse({ status: 200, description: 'Full list of properties (credentials masked)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Full list of properties (credentials masked)'
+  })
   findAllCached(@CurrentUser() user: IUserWithPermissions) {
     return this.propertyService.findAllCached(user)
   }
@@ -271,10 +289,11 @@ export class PropertyController {
   @RequirePermission(ModuleType.PROPERTY, PermissionAction.READ)
   @ApiOperation({
     summary: 'Manually refresh Redis cache',
-    description: 'Clears all property and portfolio Redis cache keys and forces a fresh fetch from the database. Use this to ensure all users get the latest data immediately after database changes (e.g., after deleting portfolios).'
+    description:
+      'Clears all property and portfolio Redis cache keys and forces a fresh fetch from the database. Use this to ensure all users get the latest data immediately after database changes (e.g., after deleting portfolios).'
   })
-  @ApiResponse({ 
-    status: 200, 
+  @ApiResponse({
+    status: 200,
     description: 'Cache refreshed successfully',
     schema: {
       type: 'object',
@@ -307,8 +326,13 @@ export class PropertyController {
 
   @Get('dropdown')
   @RequirePermission(ModuleType.PROPERTY, PermissionAction.READ)
-  @ApiOperation({ summary: 'Get portfolios and subportfolios for dropdown (permission-based)' })
-  @ApiResponse({ status: 200, description: 'Portfolios and subportfolios for current user' })
+  @ApiOperation({
+    summary: 'Get portfolios and subportfolios for dropdown (permission-based)'
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Portfolios and subportfolios for current user'
+  })
   getDropdown(@CurrentUser() user: IUserWithPermissions) {
     return this.propertyService.getDropdown(user)
   }
@@ -316,7 +340,10 @@ export class PropertyController {
   @Get('portfolio/:portfolioId')
   @RequirePermission(ModuleType.PROPERTY, PermissionAction.READ, true)
   @ApiOperation({ summary: 'Get properties by portfolio ID' })
-  @ApiResponse({ status: 200, description: 'List of properties for the portfolio' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of properties for the portfolio'
+  })
   findByPortfolioId(
     @Param('portfolioId') portfolioId: string,
     @ParseQuery() _query: Record<string, any>,
@@ -328,7 +355,10 @@ export class PropertyController {
   @Get('subportfolio/:subportfolioId')
   @RequirePermission(ModuleType.PROPERTY, PermissionAction.READ, true)
   @ApiOperation({ summary: 'Get properties by subportfolio ID' })
-  @ApiResponse({ status: 200, description: 'List of properties for the subportfolio' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of properties for the subportfolio'
+  })
   findBySubportfolioId(
     @Param('subportfolioId') subportfolioId: string,
     @ParseQuery() _query: Record<string, any>,
@@ -372,7 +402,8 @@ export class PropertyController {
   @RequirePermission(ModuleType.PROPERTY, PermissionAction.DELETE)
   @ApiOperation({
     summary: 'Bulk delete properties',
-    description: 'Delete multiple properties by their IDs. Returns list of successfully deleted and skipped properties with reasons.'
+    description:
+      'Delete multiple properties by their IDs. Returns list of successfully deleted and skipped properties with reasons.'
   })
   @ApiResponse({
     status: 200,
@@ -408,7 +439,10 @@ export class PropertyController {
     }
   })
   @ApiResponse({ status: 403, description: 'Forbidden' })
-  bulkDelete(@Body() dto: BulkDeletePropertyDto, @CurrentUser() user: IUserWithPermissions) {
+  bulkDelete(
+    @Body() dto: BulkDeletePropertyDto,
+    @CurrentUser() user: IUserWithPermissions
+  ) {
     return this.propertyService.bulkDelete(dto.ids, user)
   }
 }

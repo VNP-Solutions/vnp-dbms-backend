@@ -78,6 +78,7 @@ export interface ImportPropertyRow {
   agodaDuration?: string
   needAnotherDomain?: string
   bookingOtpPhone?: string
+  serviceTypeName?: string
 }
 
 export interface ImportPropertiesResult {

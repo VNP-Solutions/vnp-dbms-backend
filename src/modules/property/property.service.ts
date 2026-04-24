@@ -873,7 +873,7 @@ export class PropertyService implements IPropertyService {
         }
 
         const parseBool = (val: any) => {
-          if (!val) return undefined
+          if (val === null || val === undefined || val === '') return undefined
           const str = String(val).trim().toLowerCase()
           if (str === 'true' || str === '1' || str === 'yes') return 'true'
           if (str === 'false' || str === '0' || str === 'no') return 'false'
@@ -1039,6 +1039,9 @@ export class PropertyService implements IPropertyService {
           needAnotherDomain: parseBool(r['Need Another Domain']),
           bookingOtpPhone: r['Booking OTP Phone']
             ? String(r['Booking OTP Phone']).trim()
+            : undefined,
+          serviceTypeName: r['Service Type']
+            ? String(r['Service Type']).trim()
             : undefined
         } satisfies ImportPropertyRow
       })

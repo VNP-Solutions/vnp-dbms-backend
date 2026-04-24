@@ -258,6 +258,44 @@ export class PropertyRepository implements IPropertyRepository {
     const createdProperties: any[] = []
     const skippedProperties: Array<{ name: string; reason: string }> = []
 
+    // Cache ServiceType lookups within this import so we don't hit the DB
+    // once per row when many rows share the same Service Type value.
+    const serviceTypeCache = new Map<string, string>()
+    const resolveServiceTypeId = async (
+      typeName: string
+    ): Promise<string | undefined> => {
+      const trimmed = typeName.trim()
+      if (!trimmed) return undefined
+      const key = trimmed.toLowerCase()
+      const cached = serviceTypeCache.get(key)
+      if (cached) return cached
+
+      let serviceType = await this.prisma.serviceType.findFirst({
+        where: { type: { equals: trimmed, mode: 'insensitive' } },
+        select: { id: true }
+      })
+
+      if (!serviceType) {
+        logger.log(`Service type "${trimmed}" not found — creating it`)
+        const maxOrder = await this.prisma.serviceType.findFirst({
+          orderBy: { order: 'desc' },
+          select: { order: true }
+        })
+        serviceType = await this.prisma.serviceType.create({
+          data: {
+            type: trimmed,
+            is_active: true,
+            order: (maxOrder?.order ?? 0) + 1
+          },
+          select: { id: true }
+        })
+        logger.log(`Service type "${trimmed}" created successfully`)
+      }
+
+      serviceTypeCache.set(key, serviceType.id)
+      return serviceType.id
+    }
+
     for (const row of rows) {
       const { propertyName, portfolioName } = row
 
@@ -409,7 +447,20 @@ export class PropertyRepository implements IPropertyRepository {
         propertyPayload.need_another_domain = row.needAnotherDomain === 'true'
       if (row.bookingOtpPhone)
         propertyPayload.booking_otp_phone = row.bookingOtpPhone
-      
+      if (row.caseContactEmail)
+        propertyPayload.primary_case_email = row.caseContactEmail
+
+      if (row.serviceTypeName) {
+        try {
+          const resolvedId = await resolveServiceTypeId(row.serviceTypeName)
+          if (resolvedId) propertyPayload.service_type_id = resolvedId
+        } catch (err: any) {
+          logger.error(
+            `Error resolving service type "${row.serviceTypeName}" for property "${propertyName}": ${err.message}`
+          )
+        }
+      }
+
       if (!propertyPayload.expedia_status) propertyPayload.expedia_status = 'Access Required'
       if (!propertyPayload.booking_status) propertyPayload.booking_status = 'Access Required'
       if (!propertyPayload.agoda_status) propertyPayload.agoda_status = 'Access Required'
@@ -446,9 +497,6 @@ export class PropertyRepository implements IPropertyRepository {
           credPayload.agodaSecondaryUsername = row.agodaSecondaryUsername
         if (row.agodaSecondaryPassword)
           credPayload.agodaSecondaryPassword = row.agodaSecondaryPassword
-        if (row.needAnotherDomain)
-          credPayload.needAnotherDomain = row.needAnotherDomain === 'true'
-        if (row.caseContactEmail) credPayload.case_contact_email = row.caseContactEmail
 
         if (Object.keys(credPayload).length > 0) {
           await this.prisma.propertyCredentials.create({
