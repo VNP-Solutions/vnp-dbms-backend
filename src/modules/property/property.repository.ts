@@ -448,7 +448,7 @@ export class PropertyRepository implements IPropertyRepository {
       if (row.bookingOtpPhone)
         propertyPayload.booking_otp_phone = row.bookingOtpPhone
       if (row.caseContactEmail)
-        propertyPayload.primary_case_email = row.caseContactEmail
+        propertyPayload.case_management_contact = row.caseContactEmail
 
       if (row.serviceTypeName) {
         try {
