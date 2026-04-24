@@ -1,18 +1,18 @@
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger'
-import { OtaBillingType, OtaIntegrationFrequency } from '@prisma/client'
 import { Transform, Type } from 'class-transformer'
+import { OtaBillingType, OtaIntegrationFrequency } from '@prisma/client'
 import {
-    IsArray,
-    IsBoolean,
-    IsDate,
-    IsDateString,
-    IsEnum,
-    IsIn,
-    IsNotEmpty,
-    IsNumber,
-    IsOptional,
-    IsString,
-    ValidateNested
+  IsArray,
+  IsBoolean,
+  IsDate,
+  IsDateString,
+  IsEnum,
+  IsIn,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+  ValidateNested
 } from 'class-validator'
 import { QueryDto } from '../../common/dto/query.dto'
 
@@ -422,12 +422,12 @@ export class CreatePropertyDto {
   expedia_billing_type?: OtaBillingType
 
   @ApiPropertyOptional({
-    example: '507f1f77bcf86cd7994390aa',
-    description: 'Expedia OTA ServiceType document id (MongoDB ObjectId)'
+    example: 'Standard Integration',
+    description: 'Expedia service type'
   })
   @IsString()
   @IsOptional()
-  expedia_service_type_id?: string
+  expedia_service_type?: string
 
   @ApiPropertyOptional({
     example: 'REGULAR',
@@ -489,12 +489,12 @@ export class CreatePropertyDto {
   booking_billing_type?: OtaBillingType
 
   @ApiPropertyOptional({
-    example: '507f1f77bcf86cd7994390ab',
-    description: 'Booking.com OTA ServiceType document id (MongoDB ObjectId)'
+    example: 'Premium Partner',
+    description: 'Booking.com service type'
   })
   @IsString()
   @IsOptional()
-  booking_service_type_id?: string
+  booking_service_type?: string
 
   @ApiPropertyOptional({
     example: 'ONE_TIME',
@@ -556,12 +556,12 @@ export class CreatePropertyDto {
   agoda_billing_type?: OtaBillingType
 
   @ApiPropertyOptional({
-    example: '507f1f77bcf86cd7994390ac',
-    description: 'Agoda OTA ServiceType document id (MongoDB ObjectId)'
+    example: 'Preferred Partner Plus',
+    description: 'Agoda service type'
   })
   @IsString()
   @IsOptional()
-  agoda_service_type_id?: string
+  agoda_service_type?: string
 
   @ApiPropertyOptional({
     example: 'STOP',
@@ -818,12 +818,10 @@ export class PropertyQueryDto extends QueryDto {
   @IsEnum(OtaBillingType)
   expedia_billing_type?: OtaBillingType
 
-  @ApiPropertyOptional({
-    description: 'Filter by Expedia OTA ServiceType id (MongoDB ObjectId)'
-  })
+  @ApiPropertyOptional()
   @IsOptional()
   @IsString()
-  expedia_service_type_id?: string
+  expedia_service_type?: string
 
   @ApiPropertyOptional({ enum: OtaIntegrationFrequency })
   @Transform(({ value }) => value?.toString().toUpperCase())
@@ -939,7 +937,7 @@ export const PROPERTY_FILTER_FIELD_NAMES = [
   'fp_username',
   'stripe_account_email',
   'expedia_billing_type',
-  'expedia_service_type_id',
+  'expedia_service_type',
   'expedia_frequency',
   'expedia_access_level',
   'expedia_from',
@@ -947,7 +945,7 @@ export const PROPERTY_FILTER_FIELD_NAMES = [
   'expedia_scheduler',
   'expedia_duration',
   'booking_billing_type',
-  'booking_service_type_id',
+  'booking_service_type',
   'booking_frequency',
   'booking_access_level',
   'booking_from',
@@ -955,7 +953,7 @@ export const PROPERTY_FILTER_FIELD_NAMES = [
   'booking_scheduler',
   'booking_duration',
   'agoda_billing_type',
-  'agoda_service_type_id',
+  'agoda_service_type',
   'agoda_frequency',
   'agoda_access_level',
   'agoda_from',
@@ -980,13 +978,7 @@ function swaggerExampleForFilterName(name: PropertyFilterFieldName): {
     return { in: [OID, '507f1f77bcf86cd799439014'], sort_by: 'asc' }
   if (name === 'property_id')
     return { in: ['507f1f77bcf86cd799439015'] }
-  if (
-    name === 'subportfolio_id' ||
-    name === 'service_type_id' ||
-    name === 'expedia_service_type_id' ||
-    name === 'booking_service_type_id' ||
-    name === 'agoda_service_type_id'
-  )
+  if (name === 'subportfolio_id' || name === 'service_type_id')
     return { in: [OID] }
   if (
     name === 'expedia_id' ||
@@ -1017,6 +1009,7 @@ function swaggerExampleForFilterName(name: PropertyFilterFieldName): {
     if (name.endsWith('_frequency')) return { in: ['REGULAR', 'ONE_TIME'] }
     return { in: ['QuantumPay', 'Stripe'] }
   }
+  if (name.endsWith('_service_type')) return { in: ['HotelCollect', 'ExpediaCollect'] }
   if (
     name === 'expedia_from' ||
     name === 'expedia_to' ||
@@ -1040,13 +1033,13 @@ export const PROPERTY_FILTER_SWAGGER_EXAMPLE_FILTERS =
 
 const PROPERTY_FILTER_FIELD_NAMES_LIST = PROPERTY_FILTER_FIELD_NAMES.join(', ')
 
-const PROPERTY_FILTER_ITEM_NAME_DESCRIPTION = `Field to filter or sort. Allowed values: ${PROPERTY_FILTER_FIELD_NAMES_LIST}. Use in: [] with sort_by only for created_at / updated_at. Booleans accept true/false or "true"/"false". IDs (expedia_id, booking_id, agoda_id) and *_duration use numbers in in[]. MongoDB ObjectId strings in in[]: service_type_id, expedia_service_type_id, booking_service_type_id, agoda_service_type_id.`
+const PROPERTY_FILTER_ITEM_NAME_DESCRIPTION = `Field to filter or sort. Allowed values: ${PROPERTY_FILTER_FIELD_NAMES_LIST}. Use in: [] with sort_by only for created_at / updated_at. Booleans accept true/false or "true"/"false". IDs (expedia_id, booking_id, agoda_id) and *_duration use numbers in in[].`
 
 const PROPERTY_FILTER_DTO_FILTERS_DESCRIPTION = `Each item: name (required, one of: ${PROPERTY_FILTER_FIELD_NAMES_LIST}), in (required; OR match; empty only for sort-only on created_at/updated_at), sort_by (optional asc|desc). Root fields: page, limit, search (name, description, hotel_address, property_identifier, portfolio_contact, card_descriptor), start_date, end_date, is_active, masked, user_name, user_password.`
 
 /** Full narrative for POST /property/filter Swagger operation text. */
 export const PROPERTY_FILTER_OPERATION_DESCRIPTION =
-  `Returns properties with optional pagination. filters[].name must be one of: ${PROPERTY_FILTER_FIELD_NAMES_LIST}. Each filter row: in = array of values (OR match); use in: [] only with sort_by for created_at or updated_at. Boolean fields (expedia_access_level, expedia_scheduler, booking_access_level, booking_scheduler, agoda_access_level, agoda_scheduler) accept true/false or "true"/"false". Numeric in values: expedia_id, booking_id, agoda_id, expedia_duration, booking_duration, agoda_duration. MongoDB ObjectId strings in in[]: service_type_id, expedia_service_type_id, booking_service_type_id, agoda_service_type_id. Enum strings: billing types VCC, DB, EBS; frequencies REGULAR, ONE_TIME, STOP; processors QuantumPay, Stripe, FreedomPay. Root body (outside filters): page, limit, search, start_date, end_date, is_active, masked, user_name, user_password (when masked=false).`
+  `Returns properties with optional pagination. filters[].name must be one of: ${PROPERTY_FILTER_FIELD_NAMES_LIST}. Each filter row: in = array of values (OR match); use in: [] only with sort_by for created_at or updated_at. Boolean fields (expedia_access_level, expedia_scheduler, booking_access_level, booking_scheduler, agoda_access_level, agoda_scheduler) accept true/false or "true"/"false". Numeric in values: expedia_id, booking_id, agoda_id, expedia_duration, booking_duration, agoda_duration. Enum strings: billing types VCC, DB, EBS; frequencies REGULAR, ONE_TIME, STOP; processors QuantumPay, Stripe, FreedomPay. Root body (outside filters): page, limit, search, start_date, end_date, is_active, masked, user_name, user_password (when masked=false).`
 
 export class PropertyFilterItem {
   @ApiProperty({
@@ -1299,17 +1292,8 @@ export class AllDataForGlobalFilterResponseDto {
   @ApiProperty({ type: [String] })
   expedia_billing_type: string[]
 
-  @ApiProperty({
-    type: [GlobalFilterServiceTypeDto],
-    description: 'Distinct ServiceType rows linked via Property.expedia_service_type_id'
-  })
-  expedia_service_type: GlobalFilterServiceTypeDto[]
-
-  @ApiProperty({
-    type: [String],
-    description: 'Sorted unique Property.expedia_service_type_id values'
-  })
-  expedia_service_type_id: string[]
+  @ApiProperty({ type: [String] })
+  expedia_service_type: string[]
 
   @ApiProperty({ type: [String] })
   expedia_frequency: string[]
@@ -1338,17 +1322,8 @@ export class AllDataForGlobalFilterResponseDto {
   @ApiProperty({ type: [String] })
   booking_billing_type: string[]
 
-  @ApiProperty({
-    type: [GlobalFilterServiceTypeDto],
-    description: 'Distinct ServiceType rows linked via Property.booking_service_type_id'
-  })
-  booking_service_type: GlobalFilterServiceTypeDto[]
-
-  @ApiProperty({
-    type: [String],
-    description: 'Sorted unique Property.booking_service_type_id values'
-  })
-  booking_service_type_id: string[]
+  @ApiProperty({ type: [String] })
+  booking_service_type: string[]
 
   @ApiProperty({ type: [String] })
   booking_frequency: string[]
@@ -1377,17 +1352,8 @@ export class AllDataForGlobalFilterResponseDto {
   @ApiProperty({ type: [String] })
   agoda_billing_type: string[]
 
-  @ApiProperty({
-    type: [GlobalFilterServiceTypeDto],
-    description: 'Distinct ServiceType rows linked via Property.agoda_service_type_id'
-  })
-  agoda_service_type: GlobalFilterServiceTypeDto[]
-
-  @ApiProperty({
-    type: [String],
-    description: 'Sorted unique Property.agoda_service_type_id values'
-  })
-  agoda_service_type_id: string[]
+  @ApiProperty({ type: [String] })
+  agoda_service_type: string[]
 
   @ApiProperty({ type: [String] })
   agoda_frequency: string[]

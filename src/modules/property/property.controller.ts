@@ -1,47 +1,47 @@
 import {
-    BadRequestException,
-    Body,
-    Controller,
-    Delete,
-    Get,
-    Inject,
-    Param,
-    Patch,
-    Post,
-    UploadedFile,
-    UseGuards,
-    UseInterceptors
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Inject,
+  Param,
+  Patch,
+  Post,
+  UploadedFile,
+  UseGuards,
+  UseInterceptors
 } from '@nestjs/common'
 import {
-    ApiBearerAuth,
-    ApiBody,
-    ApiConsumes,
-    ApiExtraModels,
-    ApiOperation,
-    ApiResponse,
-    ApiTags
+  ApiBearerAuth,
+  ApiBody,
+  ApiConsumes,
+  ApiExtraModels,
+  ApiOperation,
+  ApiResponse,
+  ApiTags
 } from '@nestjs/swagger'
+import { ExcelFileInterceptor } from '../../common/interceptors/excel-file.interceptor'
 import { ParseQuery } from '../../common/decorators/parse-query.decorator'
 import { RequirePermission } from '../../common/decorators/require-permission.decorator'
 import { PermissionGuard } from '../../common/guards/permission.guard'
-import { ExcelFileInterceptor } from '../../common/interceptors/excel-file.interceptor'
-import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
 import { ModuleType, PermissionAction } from '../../common/interfaces/permission.interface'
-import { CurrentUser } from '../auth/decorators/current-user.decorator'
+import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
 import { Public } from '../auth/decorators/public.decorator'
+import { CurrentUser } from '../auth/decorators/current-user.decorator'
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
 import {
-    AllDataForGlobalFilterResponseDto,
-    BulkDeletePropertyDto,
-    CreatePropertyDto,
-    GetPropertyCredentialDto,
-    GlobalFilterIdNameDto,
-    GlobalFilterServiceTypeDto,
-    GlobalFilterSubportfolioDto,
-    PROPERTY_FILTER_OPERATION_DESCRIPTION,
-    PROPERTY_FILTER_SWAGGER_EXAMPLE_FILTERS,
-    PropertyFilterDto,
-    UpdatePropertyDto
+  AllDataForGlobalFilterResponseDto,
+  GlobalFilterIdNameDto,
+  GlobalFilterServiceTypeDto,
+  GlobalFilterSubportfolioDto,
+  BulkDeletePropertyDto,
+  CreatePropertyDto,
+  GetPropertyCredentialDto,
+  PROPERTY_FILTER_OPERATION_DESCRIPTION,
+  PROPERTY_FILTER_SWAGGER_EXAMPLE_FILTERS,
+  PropertyFilterDto,
+  UpdatePropertyDto
 } from './property.dto'
 import type { IPropertyService } from './property.interface'
 
@@ -92,7 +92,7 @@ export class PropertyController {
   @ApiOperation({
     summary: 'Bulk import properties from Excel',
     description:
-      'Upload Excel file with Property Name (required), Portfolio (required, auto-creates if missing). Optional: Property Address, Card Descriptor, Description, Property Identifier, Portfolio Contact, Expedia/Booking/Agoda IDs/Statuses/Usernames/Passwords, Expedia/Booking/Agoda Secondary Username/Password, Need Another Domain (true/false), Booking OTP Phone, Case Management/Access/Reporting Contacts, Portfolio/Case Contact Emails, QP Username/Password/Api Key, FP Username/Password/MID, Stripe Account Email, New Domains Email, Webmail Password, Expedia/Booking/Agoda Processors (QuantumPay/Stripe/FreedomPay), Expedia/Booking/Agoda Billing Type (VCC/DB/EBS), Expedia/Booking/Agoda Service Type ID (MongoDB ObjectId of ServiceType), Frequency (REGULAR/ONE_TIME/STOP), Access Level (true/false), Expedia/Booking/Agoda From/To dates (OTA-specific), Scheduler (true/false), Duration (number). Passwords auto-encrypted. Existing property names skipped.'
+      'Upload Excel file with Property Name (required), Portfolio (required, auto-creates if missing). Optional: Property Address, Card Descriptor, Description, Property Identifier, Portfolio Contact, Expedia/Booking/Agoda IDs/Statuses/Usernames/Passwords, Expedia/Booking/Agoda Secondary Username/Password, Need Another Domain (true/false), Booking OTP Phone, Case Management/Access/Reporting Contacts, Portfolio/Case Contact Emails, QP Username/Password/Api Key, FP Username/Password/MID, Stripe Account Email, New Domains Email, Webmail Password, Expedia/Booking/Agoda Processors (QuantumPay/Stripe/FreedomPay), Expedia/Booking/Agoda Billing Type (VCC/DB/EBS), Service Type, Frequency (REGULAR/ONE_TIME/STOP), Access Level (true/false), Expedia/Booking/Agoda From/To dates (OTA-specific), Scheduler (true/false), Duration (number). Passwords auto-encrypted. Existing property names skipped.'
   })
   @ApiBody({
     schema: {
@@ -293,7 +293,7 @@ export class PropertyController {
   @ApiOperation({
     summary: 'Get unique filter values for global filter',
     description:
-      'Returns unique values from accessible portfolios and properties for group-filter / dropdown UIs. Includes OTA integration fields, contacts, statuses, processors, portfolio_id / subportfolio rows, service_type and service_type_id, expedia/booking/agoda_service_type (ServiceType id+type rows in use) and matching *_service_type_id id lists, qp_username, next_due_date, credential secondary usernames and need_another_domain (booleans as "true"/"false" strings). Built from the same cached portfolio + property sources as list endpoints.'
+      'Returns unique values from accessible portfolios and properties for group-filter / dropdown UIs. Includes OTA integration fields, contacts, statuses, processors, portfolio_id / subportfolio rows, service_type and service_type_id, qp_username, next_due_date, credential secondary usernames and need_another_domain (booleans as "true"/"false" strings). Built from the same cached portfolio + property sources as list endpoints.'
   })
   @ApiResponse({
     status: 200,

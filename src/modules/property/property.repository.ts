@@ -2,19 +2,16 @@ import { Inject, Injectable, Logger } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { CreatePropertyDto, UpdatePropertyDto } from './property.dto'
 import type {
-    ImportPropertiesResult,
-    ImportPropertyRow,
-    IPropertyRepository,
-    PropertyWithRelations
+  ImportPropertiesResult,
+  ImportPropertyRow,
+  IPropertyRepository,
+  PropertyWithRelations
 } from './property.interface'
 
 const propertyInclude = {
   portfolio: { select: { id: true, name: true } },
   subportfolio: { select: { id: true, name: true, portfolio_id: true } },
   serviceType: { select: { id: true, type: true } },
-  expediaServiceType: { select: { id: true, type: true } },
-  bookingServiceType: { select: { id: true, type: true } },
-  agodaServiceType: { select: { id: true, type: true } },
   credentials: true
 }
 
@@ -98,7 +95,7 @@ export class PropertyRepository implements IPropertyRepository {
       agoda_id: data.agoda_id,
       agoda_status: data.agoda_status,
       expedia_billing_type: data.expedia_billing_type,
-      expedia_service_type_id: data.expedia_service_type_id,
+      expedia_service_type: data.expedia_service_type,
       expedia_frequency: data.expedia_frequency,
       expedia_access_level: data.expedia_access_level,
       expedia_from: data.expedia_from,
@@ -106,7 +103,7 @@ export class PropertyRepository implements IPropertyRepository {
       expedia_scheduler: data.expedia_scheduler,
       expedia_duration: data.expedia_duration,
       booking_billing_type: data.booking_billing_type,
-      booking_service_type_id: data.booking_service_type_id,
+      booking_service_type: data.booking_service_type,
       booking_frequency: data.booking_frequency,
       booking_access_level: data.booking_access_level,
       booking_from: data.booking_from,
@@ -114,7 +111,7 @@ export class PropertyRepository implements IPropertyRepository {
       booking_scheduler: data.booking_scheduler,
       booking_duration: data.booking_duration,
       agoda_billing_type: data.agoda_billing_type,
-      agoda_service_type_id: data.agoda_service_type_id,
+      agoda_service_type: data.agoda_service_type,
       agoda_frequency: data.agoda_frequency,
       agoda_access_level: data.agoda_access_level,
       agoda_from: data.agoda_from,
@@ -367,8 +364,8 @@ export class PropertyRepository implements IPropertyRepository {
       if (row.stripeAccountEmail) propertyPayload.stripe_account_email = row.stripeAccountEmail
       if (row.expediaBillingType)
         propertyPayload.expedia_billing_type = row.expediaBillingType
-      if (row.expediaServiceTypeId)
-        propertyPayload.expedia_service_type_id = row.expediaServiceTypeId
+      if (row.expediaServiceType)
+        propertyPayload.expedia_service_type = row.expediaServiceType
       if (row.expediaFrequency)
         propertyPayload.expedia_frequency = row.expediaFrequency
       if (row.expediaAccessLevel)
@@ -381,8 +378,8 @@ export class PropertyRepository implements IPropertyRepository {
         propertyPayload.expedia_duration = parseInt(row.expediaDuration) || undefined
       if (row.bookingBillingType)
         propertyPayload.booking_billing_type = row.bookingBillingType
-      if (row.bookingServiceTypeId)
-        propertyPayload.booking_service_type_id = row.bookingServiceTypeId
+      if (row.bookingServiceType)
+        propertyPayload.booking_service_type = row.bookingServiceType
       if (row.bookingFrequency)
         propertyPayload.booking_frequency = row.bookingFrequency
       if (row.bookingAccessLevel)
@@ -395,8 +392,8 @@ export class PropertyRepository implements IPropertyRepository {
         propertyPayload.booking_duration = parseInt(row.bookingDuration) || undefined
       if (row.agodaBillingType)
         propertyPayload.agoda_billing_type = row.agodaBillingType
-      if (row.agodaServiceTypeId)
-        propertyPayload.agoda_service_type_id = row.agodaServiceTypeId
+      if (row.agodaServiceType)
+        propertyPayload.agoda_service_type = row.agodaServiceType
       if (row.agodaFrequency)
         propertyPayload.agoda_frequency = row.agodaFrequency
       if (row.agodaAccessLevel)
