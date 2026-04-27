@@ -11,7 +11,6 @@ import type {
 const propertyInclude = {
   portfolio: { select: { id: true, name: true } },
   subportfolio: { select: { id: true, name: true, portfolio_id: true } },
-  serviceType: { select: { id: true, type: true } },
   credentials: true
 }
 
@@ -58,7 +57,7 @@ export class PropertyRepository implements IPropertyRepository {
     const payload: any = {
       name: data.name,
       portfolio_id: data.portfolio_id,
-      service_type_id: data.service_type_id,
+      service_type: data.service_type,
       card_descriptor: data.card_descriptor,
       is_active: data.is_active ?? true,
       next_due_date: data.next_due_date ? new Date(data.next_due_date) : undefined,
@@ -258,44 +257,6 @@ export class PropertyRepository implements IPropertyRepository {
     const createdProperties: any[] = []
     const skippedProperties: Array<{ name: string; reason: string }> = []
 
-    // Cache ServiceType lookups within this import so we don't hit the DB
-    // once per row when many rows share the same Service Type value.
-    const serviceTypeCache = new Map<string, string>()
-    const resolveServiceTypeId = async (
-      typeName: string
-    ): Promise<string | undefined> => {
-      const trimmed = typeName.trim()
-      if (!trimmed) return undefined
-      const key = trimmed.toLowerCase()
-      const cached = serviceTypeCache.get(key)
-      if (cached) return cached
-
-      let serviceType = await this.prisma.serviceType.findFirst({
-        where: { type: { equals: trimmed, mode: 'insensitive' } },
-        select: { id: true }
-      })
-
-      if (!serviceType) {
-        logger.log(`Service type "${trimmed}" not found — creating it`)
-        const maxOrder = await this.prisma.serviceType.findFirst({
-          orderBy: { order: 'desc' },
-          select: { order: true }
-        })
-        serviceType = await this.prisma.serviceType.create({
-          data: {
-            type: trimmed,
-            is_active: true,
-            order: (maxOrder?.order ?? 0) + 1
-          },
-          select: { id: true }
-        })
-        logger.log(`Service type "${trimmed}" created successfully`)
-      }
-
-      serviceTypeCache.set(key, serviceType.id)
-      return serviceType.id
-    }
-
     for (const row of rows) {
       const { propertyName, portfolioName } = row
 
@@ -451,14 +412,7 @@ export class PropertyRepository implements IPropertyRepository {
         propertyPayload.primary_case_email = row.caseContactEmail
 
       if (row.serviceTypeName) {
-        try {
-          const resolvedId = await resolveServiceTypeId(row.serviceTypeName)
-          if (resolvedId) propertyPayload.service_type_id = resolvedId
-        } catch (err: any) {
-          logger.error(
-            `Error resolving service type "${row.serviceTypeName}" for property "${propertyName}": ${err.message}`
-          )
-        }
+        propertyPayload.service_type = row.serviceTypeName.trim()
       }
 
       if (!propertyPayload.expedia_status) propertyPayload.expedia_status = 'Access Required'

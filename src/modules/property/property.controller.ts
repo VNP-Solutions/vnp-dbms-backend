@@ -39,7 +39,6 @@ import {
   CreatePropertyDto,
   GetPropertyCredentialDto,
   GlobalFilterIdNameDto,
-  GlobalFilterServiceTypeDto,
   GlobalFilterSubportfolioDto,
   PROPERTY_FILTER_OPERATION_DESCRIPTION,
   PROPERTY_FILTER_SWAGGER_EXAMPLE_FILTERS,
@@ -53,8 +52,7 @@ import type { IPropertyService } from './property.interface'
 @ApiExtraModels(
   AllDataForGlobalFilterResponseDto,
   GlobalFilterIdNameDto,
-  GlobalFilterSubportfolioDto,
-  GlobalFilterServiceTypeDto
+  GlobalFilterSubportfolioDto
 )
 @Controller('property')
 @UseGuards(JwtAuthGuard, PermissionGuard)
@@ -312,7 +310,7 @@ export class PropertyController {
   @ApiOperation({
     summary: 'Get unique filter values for global filter',
     description:
-      'Returns unique values from accessible portfolios and properties for group-filter / dropdown UIs. Includes OTA integration fields, contacts, statuses, processors, portfolio_id / subportfolio rows, service_type and service_type_id, qp_username, next_due_date, credential secondary usernames and need_another_domain (booleans as "true"/"false" strings). Built from the same cached portfolio + property sources as list endpoints.'
+      'Returns unique values from accessible portfolios and properties for group-filter / dropdown UIs. Includes OTA integration fields, contacts, statuses, processors, portfolio_id / subportfolio rows, service_type, qp_username, next_due_date, credential secondary usernames and need_another_domain (booleans as "true"/"false" strings). Built from the same cached portfolio + property sources as list endpoints.'
   })
   @ApiResponse({
     status: 200,

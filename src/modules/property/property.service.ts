@@ -253,8 +253,8 @@ export class PropertyService implements IPropertyService {
           case 'stripe_account_email':
             whereConditions.push({ stripe_account_email: { in: values } })
             break
-          case 'service_type_id':
-            whereConditions.push({ service_type_id: { in: values } })
+          case 'service_type':
+            whereConditions.push({ service_type: { in: values } })
             break
           case 'property_identifier':
             whereConditions.push({ property_identifier: { in: values } })
@@ -1197,7 +1197,6 @@ export class PropertyService implements IPropertyService {
     const uniqueStripeAccountEmails = new Set<string>()
     const uniqueFromDates = new Set<string>()
     const uniqueToDates = new Set<string>()
-    const serviceTypeMap = new Map<string, { id: string; type: string }>()
     const uniquePropertyIdentifiers = new Set<string>()
     const uniquePortfolioContacts = new Set<string>()
     const uniqueFpUsernames = new Set<string>()
@@ -1224,7 +1223,7 @@ export class PropertyService implements IPropertyService {
       string,
       { id: string; name: string; portfolio_id: string }
     >()
-    const uniqueServiceTypeIds = new Set<string>()
+    const uniqueServiceTypes = new Set<string>()
     const uniqueDescriptions = new Set<string>()
     const uniqueExpediaStatuses = new Set<string>()
     const uniqueBookingStatuses = new Set<string>()
@@ -1259,8 +1258,8 @@ export class PropertyService implements IPropertyService {
 
     properties.forEach((property: any) => {
       if (property.portfolio_id) portfolioIdSet.add(property.portfolio_id)
-      if (property.service_type_id)
-        uniqueServiceTypeIds.add(property.service_type_id)
+      if (property.service_type)
+        uniqueServiceTypes.add(property.service_type)
       if (property.expedia_id) uniqueExpediaIds.add(property.expedia_id)
       if (property.booking_id) uniqueBookingIds.add(property.booking_id)
       if (property.agoda_id) uniqueAgodaIds.add(property.agoda_id)
@@ -1323,12 +1322,6 @@ export class PropertyService implements IPropertyService {
         portfolioMap.set(property.portfolio.id, {
           id: property.portfolio.id,
           name: property.portfolio.name
-        })
-      }
-      if (property.serviceType?.id && property.serviceType?.type) {
-        serviceTypeMap.set(property.serviceType.id, {
-          id: property.serviceType.id,
-          type: property.serviceType.type
         })
       }
       if (property.property_identifier)
@@ -1430,10 +1423,7 @@ export class PropertyService implements IPropertyService {
       to: Array.from(uniqueToDates).sort(),
       property_identifier: Array.from(uniquePropertyIdentifiers).sort(),
       portfolio_contact: Array.from(uniquePortfolioContacts).sort(),
-      service_type: Array.from(serviceTypeMap.values()).sort((a, b) =>
-        a.type.localeCompare(b.type)
-      ),
-      service_type_id: Array.from(uniqueServiceTypeIds).sort(),
+      service_type: Array.from(uniqueServiceTypes).sort(),
       fp_username: Array.from(uniqueFpUsernames).sort(),
       qp_username: Array.from(uniqueQpUsernames).sort(),
       previous_portfolio_id: Array.from(uniquePreviousPortfolioIds).sort(),
