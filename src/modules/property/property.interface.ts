@@ -6,7 +6,6 @@ import { CreatePropertyDto, PropertyFilterDto, UpdatePropertyDto } from './prope
 export type PropertyWithRelations = Property & {
   portfolio: { id: string; name: string }
   subportfolio: { id: string; name: string; portfolio_id: string } | null
-  serviceType?: { id: string; type: string } | null
 }
 
 export interface ImportPropertyRow {
@@ -130,8 +129,7 @@ export interface AllDataForGlobalFilterResponse {
   to: string[]
   property_identifier: string[]
   portfolio_contact: string[]
-  service_type: Array<{ id: string; type: string }>
-  service_type_id: string[]
+  service_type: string[]
   fp_username: string[]
   qp_username: string[]
   previous_portfolio_id: string[]

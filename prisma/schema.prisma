@@ -241,7 +241,6 @@ model ServiceType {
   is_active  Boolean
   order      Int         @default(0)
   portfolios Portfolio[]
-  properties Property[]
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -251,12 +250,12 @@ model ServiceType {
 }
 
 model Currency {
-  id         String   @id @default(auto()) @map("_id") @db.ObjectId
-  code       String   @unique
-  name       String
-  symbol     String?
-  is_active  Boolean  @default(true)
-  order      Int      @default(0)
+  id        String  @id @default(auto()) @map("_id") @db.ObjectId
+  code      String  @unique
+  name      String
+  symbol    String?
+  is_active Boolean @default(true)
+  order     Int     @default(0)
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -316,22 +315,21 @@ model Property {
   next_due_date         DateTime?
   portfolio_id          String        @db.ObjectId
   portfolio             Portfolio     @relation(fields: [portfolio_id], references: [id], onDelete: Cascade)
-  service_type_id       String?       @db.ObjectId
-  serviceType           ServiceType?  @relation(fields: [service_type_id], references: [id], onDelete: SetNull)
+  service_type          String?
   subportfolio_id       String?       @db.ObjectId
   subportfolio          Subportfolio? @relation(fields: [subportfolio_id], references: [id], onDelete: SetNull)
   previous_portfolio_id String?       @db.ObjectId
   show_in_portfolio     String[]      @default([]) @db.ObjectId
 
-  new_domain_email          String?
-  others_case_emails        String[] @default([])
-  primary_case_email        String?
-  portfolio_contact_email   String?
-  portfolio_contact         String?
-  webmail_password          String?
-  description               String?
-  hotel_address             String?
-  property_identifier       String?
+  new_domain_email        String?
+  others_case_emails      String[] @default([])
+  primary_case_email      String?
+  portfolio_contact_email String?
+  portfolio_contact       String?
+  webmail_password        String?
+  description             String?
+  hotel_address           String?
+  property_identifier     String?
 
   // Contact Information
   case_management_contact String?
@@ -357,12 +355,12 @@ model Property {
   stripe_account_email String?
 
   // OTA Integration Fields
-  expedia_id      Int?
-  expedia_status  String?
-  booking_id      Int?
-  booking_status  String?
-  agoda_id        Int?
-  agoda_status    String?
+  expedia_id     Int?
+  expedia_status String?
+  booking_id     Int?
+  booking_status String?
+  agoda_id       Int?
+  agoda_status   String?
 
   // Expedia integration detail
   expedia_billing_type OtaBillingType?
@@ -405,7 +403,6 @@ model Property {
   updated_at DateTime @updatedAt
 
   @@index([portfolio_id])
-  @@index([service_type_id])
   @@index([subportfolio_id])
   @@index([is_active])
   @@index([next_due_date])
@@ -480,24 +477,24 @@ model UserProjectRole {
 }
 
 model PropertyCredentials {
-  id                      String   @id @default(auto()) @map("_id") @db.ObjectId
-  property_id             String   @db.ObjectId
-  expediaUsername         String?
-  expediaPassword         String?
-  agodaUsername           String?
-  agodaPassword           String?
-  bookingUsername         String?
-  bookingPassword         String?
-  expediaSecondaryUsername   String?
-  expediaSecondaryPassword   String?
-  bookingSecondaryUsername   String?
-  bookingSecondaryPassword   String?
-  agodaSecondaryUsername     String?
-  agodaSecondaryPassword     String?
-  expediaEmailAssociated  String?
-  propertyContactEmail    String?
-  portfolioContactEmail   String?
-  multiplePortfolioEmails String[] @default([])
+  id                       String   @id @default(auto()) @map("_id") @db.ObjectId
+  property_id              String   @db.ObjectId
+  expediaUsername          String?
+  expediaPassword          String?
+  agodaUsername            String?
+  agodaPassword            String?
+  bookingUsername          String?
+  bookingPassword          String?
+  expediaSecondaryUsername String?
+  expediaSecondaryPassword String?
+  bookingSecondaryUsername String?
+  bookingSecondaryPassword String?
+  agodaSecondaryUsername   String?
+  agodaSecondaryPassword   String?
+  expediaEmailAssociated   String?
+  propertyContactEmail     String?
+  portfolioContactEmail    String?
+  multiplePortfolioEmails  String[] @default([])
 
   case_contact_email String?
   case_contact_name  String?

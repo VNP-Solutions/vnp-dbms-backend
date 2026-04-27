@@ -223,12 +223,12 @@ export class CreatePropertyDto {
   portfolio_contact?: string
 
   @ApiPropertyOptional({
-    example: '507f1f77bcf86cd799439099',
-    description: 'Optional service type ID (overrides portfolio default when set)'
+    example: 'OTA',
+    description: 'Optional service type (string value)'
   })
   @IsString()
   @IsOptional()
-  service_type_id?: string
+  service_type?: string
 
   @ApiPropertyOptional({
     example: 'PROP-12345',
@@ -792,10 +792,10 @@ export class PropertyQueryDto extends QueryDto {
   @IsString()
   portfolio_contact_email?: string
 
-  @ApiPropertyOptional({ description: 'Filter by service type ID' })
+  @ApiPropertyOptional({ description: 'Filter by service type' })
   @IsOptional()
   @IsString()
-  service_type_id?: string
+  service_type?: string
 
   @ApiPropertyOptional({ description: 'Filter by property identifier (partial match)' })
   @IsOptional()
@@ -911,7 +911,7 @@ export const PROPERTY_FILTER_FIELD_NAMES = [
   'portfolio_id',
   'property_id',
   'subportfolio_id',
-  'service_type_id',
+  'service_type',
   'property_identifier',
   'portfolio_contact',
   'expedia_id',
@@ -978,8 +978,10 @@ function swaggerExampleForFilterName(name: PropertyFilterFieldName): {
     return { in: [OID, '507f1f77bcf86cd799439014'], sort_by: 'asc' }
   if (name === 'property_id')
     return { in: ['507f1f77bcf86cd799439015'] }
-  if (name === 'subportfolio_id' || name === 'service_type_id')
+  if (name === 'subportfolio_id')
     return { in: [OID] }
+  if (name === 'service_type')
+    return { in: ['OTA', 'OTA_PLUS', 'ESP'] }
   if (
     name === 'expedia_id' ||
     name === 'booking_id' ||
@@ -1173,15 +1175,6 @@ export class GlobalFilterSubportfolioDto {
   portfolio_id: string
 }
 
-/** GET /property/global-filter — service type row */
-export class GlobalFilterServiceTypeDto {
-  @ApiProperty()
-  id: string
-
-  @ApiProperty()
-  type: string
-}
-
 /**
  * Response shape for GET /property/global-filter.
  * Each array contains unique values from accessible portfolios + properties (for dropdowns / group filter).
@@ -1271,11 +1264,8 @@ export class AllDataForGlobalFilterResponseDto {
   @ApiProperty({ type: [String] })
   portfolio_contact: string[]
 
-  @ApiProperty({ type: [GlobalFilterServiceTypeDto] })
-  service_type: GlobalFilterServiceTypeDto[]
-
   @ApiProperty({ type: [String] })
-  service_type_id: string[]
+  service_type: string[]
 
   @ApiProperty({ type: [String] })
   fp_username: string[]
