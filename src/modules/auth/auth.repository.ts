@@ -65,6 +65,8 @@ export class AuthRepository implements IAuthRepository {
     is_verified: boolean
     invited_by_id?: string
     invitation_sent_at?: Date
+    job_title?: string
+    phone_number?: string
   }): Promise<User> {
     return this.prisma.user.create({
       data
