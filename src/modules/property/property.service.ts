@@ -130,9 +130,21 @@ export class PropertyService implements IPropertyService {
     const whereConditions: any[] = []
     const orderByArray: any[] = []
 
+    // Pre-process filters to detect date range pairs
+    const processedFilters = new Set<string>()
+    const filterMap = new Map<string, any>()
+    
     if (filterDto.filters && Array.isArray(filterDto.filters)) {
+      // Build a map of all filters for easy lookup
+      for (const filter of filterDto.filters) {
+        filterMap.set(filter.name, filter)
+      }
+
       for (const filter of filterDto.filters) {
         const { name, sort_by, in: values } = filter
+
+        // Skip if already processed as part of a date range pair
+        if (processedFilters.has(name)) continue
 
         // Collect sort_by for multi-field sorting (independent of filter values)
         if (sort_by) {
@@ -150,6 +162,88 @@ export class PropertyService implements IPropertyService {
 
         // Skip filter logic if no values provided, but keep sort_by
         if (!values || values.length === 0) continue
+
+        // Handle date range pairs for OTA integrations
+        if (name === 'expedia_from') {
+          const toFilter = filterMap.get('expedia_to')
+          if (toFilter && toFilter.in && toFilter.in.length > 0) {
+            // Both from and to are provided - create range condition
+            const fromDate = String(values[0])
+            const toDate = String(toFilter.in[0])
+            whereConditions.push({
+              AND: [
+                { expedia_from: { lte: toDate } },
+                { expedia_to: { gte: fromDate } }
+              ]
+            })
+            processedFilters.add('expedia_from')
+            processedFilters.add('expedia_to')
+            continue
+          }
+        }
+
+        if (name === 'expedia_to') {
+          const fromFilter = filterMap.get('expedia_from')
+          if (fromFilter && fromFilter.in && fromFilter.in.length > 0) {
+            // Already processed in expedia_from case
+            processedFilters.add('expedia_to')
+            continue
+          }
+        }
+
+        if (name === 'booking_from') {
+          const toFilter = filterMap.get('booking_to')
+          if (toFilter && toFilter.in && toFilter.in.length > 0) {
+            // Both from and to are provided - create range condition
+            const fromDate = String(values[0])
+            const toDate = String(toFilter.in[0])
+            whereConditions.push({
+              AND: [
+                { booking_from: { lte: toDate } },
+                { booking_to: { gte: fromDate } }
+              ]
+            })
+            processedFilters.add('booking_from')
+            processedFilters.add('booking_to')
+            continue
+          }
+        }
+
+        if (name === 'booking_to') {
+          const fromFilter = filterMap.get('booking_from')
+          if (fromFilter && fromFilter.in && fromFilter.in.length > 0) {
+            // Already processed in booking_from case
+            processedFilters.add('booking_to')
+            continue
+          }
+        }
+
+        if (name === 'agoda_from') {
+          const toFilter = filterMap.get('agoda_to')
+          if (toFilter && toFilter.in && toFilter.in.length > 0) {
+            // Both from and to are provided - create range condition
+            const fromDate = String(values[0])
+            const toDate = String(toFilter.in[0])
+            whereConditions.push({
+              AND: [
+                { agoda_from: { lte: toDate } },
+                { agoda_to: { gte: fromDate } }
+              ]
+            })
+            processedFilters.add('agoda_from')
+            processedFilters.add('agoda_to')
+            continue
+          }
+        }
+
+        if (name === 'agoda_to') {
+          const fromFilter = filterMap.get('agoda_from')
+          if (fromFilter && fromFilter.in && fromFilter.in.length > 0) {
+            // Already processed in agoda_from case
+            processedFilters.add('agoda_to')
+            continue
+          }
+        }
 
         switch (name) {
           case 'portfolio_id':
@@ -280,12 +374,6 @@ export class PropertyService implements IPropertyService {
               whereConditions.push({ expedia_access_level: { in: bools } })
             break
           }
-          case 'expedia_from':
-            whereConditions.push({ expedia_from: { in: values } })
-            break
-          case 'expedia_to':
-            whereConditions.push({ expedia_to: { in: values } })
-            break
           case 'expedia_scheduler': {
             const bools = this.booleanValuesForInClause(values)
             if (bools.length)
@@ -313,12 +401,6 @@ export class PropertyService implements IPropertyService {
               whereConditions.push({ booking_access_level: { in: bools } })
             break
           }
-          case 'booking_from':
-            whereConditions.push({ booking_from: { in: values } })
-            break
-          case 'booking_to':
-            whereConditions.push({ booking_to: { in: values } })
-            break
           case 'booking_scheduler': {
             const bools = this.booleanValuesForInClause(values)
             if (bools.length)
@@ -346,12 +428,6 @@ export class PropertyService implements IPropertyService {
               whereConditions.push({ agoda_access_level: { in: bools } })
             break
           }
-          case 'agoda_from':
-            whereConditions.push({ agoda_from: { in: values } })
-            break
-          case 'agoda_to':
-            whereConditions.push({ agoda_to: { in: values } })
-            break
           case 'agoda_scheduler': {
             const bools = this.booleanValuesForInClause(values)
             if (bools.length)
