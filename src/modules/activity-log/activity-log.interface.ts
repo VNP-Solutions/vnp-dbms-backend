@@ -30,6 +30,7 @@ export interface IActivityLogService {
   logActivity(data: {
     username: string
     role: string
+    roleId: string | null
     endpoint: string
     success: boolean
     statusCode: number

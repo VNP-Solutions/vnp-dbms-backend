@@ -33,6 +33,7 @@ export class ActivityLogController {
   @ApiQuery({ name: 'end_date', required: false })
   @ApiQuery({ name: 'success', required: false, type: 'boolean' })
   @ApiQuery({ name: 'role', required: false })
+  @ApiQuery({ name: 'roleId', required: false })
   @ApiQuery({ name: 'resource', required: false })
   async getAllLogs(@ParseQuery() query: Record<string, any>) {
     const { page = 1, limit = 10, ...otherQuery } = query
