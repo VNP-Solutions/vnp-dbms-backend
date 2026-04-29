@@ -12,6 +12,7 @@ export class ActivityLogRepository implements IActivityLogRepository {
   async create(data: {
     username: string
     role: string
+    roleId: string | null
     endpoint: string
     success: boolean
     statusCode: number
@@ -36,6 +37,7 @@ export class ActivityLogRepository implements IActivityLogRepository {
         end_date,
         success,
         role,
+        roleId,
         resource,
         ...filters
       } = query || {}
@@ -75,6 +77,10 @@ export class ActivityLogRepository implements IActivityLogRepository {
 
       if (role) {
         additionalConditions.push({ role })
+      }
+
+      if (roleId) {
+        additionalConditions.push({ roleId })
       }
 
       if (resource) {
