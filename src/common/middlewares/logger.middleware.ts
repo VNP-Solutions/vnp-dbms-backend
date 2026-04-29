@@ -83,8 +83,8 @@ export class LoggerMiddleware implements NestMiddleware {
       )
       const user = (req as any).user
       const username = user?.email || 'anonymous'
-      // const role = user?.role?.name || 'guest'
-      const role = user?.user_role_id || 'guest'
+      const role = user?.role?.name || 'guest'
+      const roleId = user?.user_role_id || null
       const resource = this.extractResourceType(path)
       const success = statusCode >= 200 && statusCode < 300
 
@@ -94,6 +94,7 @@ export class LoggerMiddleware implements NestMiddleware {
           .logActivity({
             username,
             role,
+            roleId,
             endpoint: method + ' ' + path,
             success,
             statusCode,

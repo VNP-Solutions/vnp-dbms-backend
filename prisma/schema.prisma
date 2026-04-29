@@ -516,6 +516,7 @@ model ActivityLog {
   id           String   @id @default(auto()) @map("_id") @db.ObjectId
   username     String
   role         String
+  roleId       String?
   endpoint     String
   success      Boolean
   statusCode   Int
