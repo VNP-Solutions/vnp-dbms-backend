@@ -46,7 +46,7 @@ export class ActivityLogRepository implements IActivityLogRepository {
       const take = limit ? parseInt(limit) : 10
 
       const orderBy = sortBy
-        ? { [sortBy]: sortOrder?.toLowerCase() === 'desc' ? 'desc' : 'asc' }
+        ? { [sortBy || 'timestamp']: sortOrder?.toLowerCase() === 'desc' ? 'desc' : 'asc' }
         : { timestamp: 'desc' as const }
 
       const additionalConditions: any[] = []
