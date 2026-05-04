@@ -149,7 +149,10 @@ export class PropertyService implements IPropertyService {
         // Collect sort_by for multi-field sorting (independent of filter values)
         if (sort_by) {
           // Handle special cases for relation fields
-          if (name === 'portfolio_id') {
+          if (name === 'property_id') {
+            // Map property_id to the actual id field
+            orderByArray.push({ id: sort_by })
+          } else if (name === 'portfolio_id') {
             // Sort by the actual portfolio_id field, not the relation
             orderByArray.push({ portfolio_id: sort_by })
           } else if (name === 'subportfolio_id') {
@@ -369,15 +372,13 @@ export class PropertyService implements IPropertyService {
             whereConditions.push({ expedia_frequency: { in: values } })
             break
           case 'expedia_access_level': {
-            const bools = this.booleanValuesForInClause(values)
-            if (bools.length)
-              whereConditions.push({ expedia_access_level: { in: bools } })
+            const condition = this.booleanFilterCondition('expedia_access_level', values)
+            if (condition) whereConditions.push(condition)
             break
           }
           case 'expedia_scheduler': {
-            const bools = this.booleanValuesForInClause(values)
-            if (bools.length)
-              whereConditions.push({ expedia_scheduler: { in: bools } })
+            const condition = this.booleanFilterCondition('expedia_scheduler', values)
+            if (condition) whereConditions.push(condition)
             break
           }
           case 'expedia_duration': {
@@ -396,15 +397,13 @@ export class PropertyService implements IPropertyService {
             whereConditions.push({ booking_frequency: { in: values } })
             break
           case 'booking_access_level': {
-            const bools = this.booleanValuesForInClause(values)
-            if (bools.length)
-              whereConditions.push({ booking_access_level: { in: bools } })
+            const condition = this.booleanFilterCondition('booking_access_level', values)
+            if (condition) whereConditions.push(condition)
             break
           }
           case 'booking_scheduler': {
-            const bools = this.booleanValuesForInClause(values)
-            if (bools.length)
-              whereConditions.push({ booking_scheduler: { in: bools } })
+            const condition = this.booleanFilterCondition('booking_scheduler', values)
+            if (condition) whereConditions.push(condition)
             break
           }
           case 'booking_duration': {
@@ -423,21 +422,24 @@ export class PropertyService implements IPropertyService {
             whereConditions.push({ agoda_frequency: { in: values } })
             break
           case 'agoda_access_level': {
-            const bools = this.booleanValuesForInClause(values)
-            if (bools.length)
-              whereConditions.push({ agoda_access_level: { in: bools } })
+            const condition = this.booleanFilterCondition('agoda_access_level', values)
+            if (condition) whereConditions.push(condition)
             break
           }
           case 'agoda_scheduler': {
-            const bools = this.booleanValuesForInClause(values)
-            if (bools.length)
-              whereConditions.push({ agoda_scheduler: { in: bools } })
+            const condition = this.booleanFilterCondition('agoda_scheduler', values)
+            if (condition) whereConditions.push(condition)
             break
           }
           case 'agoda_duration': {
             const nums = this.intValuesForInClause(values)
             if (nums.length)
               whereConditions.push({ agoda_duration: { in: nums } })
+            break
+          }
+          case 'need_another_domain': {
+            const condition = this.booleanFilterCondition('need_another_domain', values)
+            if (condition) whereConditions.push(condition)
             break
           }
         }
@@ -1558,6 +1560,26 @@ export class PropertyService implements IPropertyService {
       if (v === false || v === 'false' || v === '0' || v === 0) set.add(false)
     }
     return [...set]
+  }
+
+  private booleanFilterCondition(
+    fieldName: string,
+    values: (string | number | boolean)[]
+  ): any {
+    const bools = this.booleanValuesForInClause(values)
+    
+    // If no valid boolean values, return null (no filter)
+    if (bools.length === 0) return null
+    
+    // If both true and false are present, no filter needed (matches all)
+    if (bools.length === 2) return null
+    
+    // If only one value, use equals
+    if (bools.length === 1) {
+      return { [fieldName]: { equals: bools[0] } }
+    }
+    
+    return null
   }
 
   private intValuesForInClause(

@@ -960,6 +960,7 @@ export const PROPERTY_FILTER_FIELD_NAMES = [
   'agoda_to',
   'agoda_scheduler',
   'agoda_duration',
+  'need_another_domain',
   'created_at',
   'updated_at'
 ] as const
@@ -997,7 +998,8 @@ function swaggerExampleForFilterName(name: PropertyFilterFieldName): {
     name === 'booking_access_level' ||
     name === 'booking_scheduler' ||
     name === 'agoda_access_level' ||
-    name === 'agoda_scheduler'
+    name === 'agoda_scheduler' ||
+    name === 'need_another_domain'
   )
     return { in: [true, false] }
   if (
