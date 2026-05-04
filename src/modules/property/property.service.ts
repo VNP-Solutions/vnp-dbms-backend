@@ -520,6 +520,33 @@ export class PropertyService implements IPropertyService {
     const shouldDecrypt = filterDto.masked === false
 
     if (shouldDecrypt) {
+      // Verify credentials when requesting decrypted data
+      this.logger.debug('Decryption requested, verifying user credentials')
+      const isValidCredentials = await this.verifyUserCredentials(
+        filterDto.user_name,
+        filterDto.user_password,
+        user
+      )
+
+      if (!isValidCredentials) {
+        // Return masked data with error message
+        this.logger.warn(`Failed credential verification for user: ${user.email}`)
+        const dataWithMaskedCredentials = data.map(p =>
+          this.maskCredentialsForResponse(p)
+        )
+        return {
+          data: dataWithMaskedCredentials,
+          metadata: {
+            totalDocuments: total,
+            currentPage,
+            totalPages,
+            limit,
+            error: 'Invalid username or password' as string | undefined
+          }
+        } as PaginatedResult<PropertyWithRelations>
+      }
+
+      this.logger.debug('Credentials verified successfully, returning decrypted data')
       const dataWithDecryptedCredentials = data.map(p =>
         this.decryptCredentialsForResponse(p)
       )
@@ -1549,6 +1576,36 @@ export class PropertyService implements IPropertyService {
       .update(JSON.stringify(query))
       .digest('hex')
       .substring(0, 16)
+  }
+
+  private async verifyUserCredentials(
+    userName: string | undefined,
+    userPassword: string | undefined,
+    currentUser: IUserWithPermissions
+  ): Promise<boolean> {
+    // If no credentials provided, return false
+    if (!userName || !userPassword) {
+      return false
+    }
+
+    // Verify the provided credentials match the current authenticated user
+    if (userName !== currentUser.email) {
+      return false
+    }
+
+    // Get user from database with password
+    const userFromDb = await this.authRepository.findUserByEmail(userName)
+    if (!userFromDb) {
+      return false
+    }
+
+    // Verify password
+    const isPasswordValid = await EncryptionUtil.comparePassword(
+      userPassword,
+      userFromDb.password
+    )
+
+    return isPasswordValid
   }
 
   private booleanValuesForInClause(
