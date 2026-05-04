@@ -134,11 +134,36 @@ export class PropertyController {
       'Get all properties with advanced filtering, pagination, search and multi-field sort',
     description: PROPERTY_FILTER_OPERATION_DESCRIPTION
   })
-  @ApiResponse({ status: 200, description: 'Paginated list of properties' })
+  @ApiResponse({
+    status: 200,
+    description: 'Paginated list of properties. When masked=false with invalid credentials, returns masked data with error message in metadata.error',
+    schema: {
+      type: 'object',
+      properties: {
+        data: {
+          type: 'array',
+          items: { type: 'object' }
+        },
+        metadata: {
+          type: 'object',
+          properties: {
+            totalDocuments: { type: 'number' },
+            currentPage: { type: 'number' },
+            totalPages: { type: 'number' },
+            limit: { type: 'number' },
+            error: {
+              type: 'string',
+              description: 'Error message when credentials are invalid (e.g., "Invalid username or password")'
+            }
+          }
+        }
+      }
+    }
+  })
   @ApiBody({
     type: PropertyFilterDto,
     description:
-      'Filter, pagination, and search parameters with multi-field sorting',
+      'Filter, pagination, and search parameters with multi-field sorting. When masked=false, user_name and user_password are required for authentication to view decrypted credentials.',
     examples: {
       'Basic filter': {
         value: {
@@ -171,7 +196,9 @@ export class PropertyController {
           page: 1,
           limit: 20,
           search: 'Hotel',
-          masked: false
+          masked: false,
+          user_name: 'user@example.com',
+          user_password: 'your_password'
         }
       },
       'is_active All (both active and inactive)': {
@@ -256,7 +283,24 @@ export class PropertyController {
           page: 1,
           limit: 10,
           search: 'Hotel',
-          masked: true
+          masked: true,
+          user_name: 'user@example.com',
+          user_password: 'your_password'
+        }
+      },
+      'Unmask credentials with authentication': {
+        value: {
+          filters: [
+            {
+              name: 'portfolio_id',
+              in: ['507f1f77bcf86cd799439013']
+            }
+          ],
+          page: 1,
+          limit: 10,
+          masked: false,
+          user_name: 'user@example.com',
+          user_password: 'your_password'
         }
       }
     }

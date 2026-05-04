@@ -1148,12 +1148,28 @@ export class PropertyFilterDto {
   is_active?: boolean
 
   @ApiPropertyOptional({
-    description: 'If true (default), credentials are masked. If false, credentials are decrypted.',
+    description: 'If true (default), credentials are masked. If false, credentials are decrypted. When false, user_name and user_password are required.',
     example: true
   })
   @IsOptional()
   @IsBoolean()
   masked?: boolean
+
+  @ApiPropertyOptional({
+    description: 'User email for authentication when masked=false. Required when requesting decrypted credentials.',
+    example: 'user@example.com'
+  })
+  @IsOptional()
+  @IsString()
+  user_name?: string
+
+  @ApiPropertyOptional({
+    description: 'User password for authentication when masked=false. Required when requesting decrypted credentials.',
+    example: 'password123'
+  })
+  @IsOptional()
+  @IsString()
+  user_password?: string
 }
 
 /** GET /property/global-filter — portfolio row */
