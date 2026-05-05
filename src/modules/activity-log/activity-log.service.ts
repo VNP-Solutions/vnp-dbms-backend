@@ -16,6 +16,8 @@ export class ActivityLogService implements IActivityLogService {
     success: boolean
     statusCode: number
     ipAddress: string
+    location?: string | null
+    timezone?: string | null
     resource: string
     responseTime: number
   }) {

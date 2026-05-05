@@ -98,7 +98,9 @@ export class LoggerMiddleware implements NestMiddleware {
             endpoint: method + ' ' + path,
             success,
             statusCode,
-            ipAddress: req.ip || 'unknown',
+            ipAddress: (req.headers['ip-address'] as string) || req.ip || 'unknown',
+            location: (req.headers['location'] as string) || null,
+            timezone: (req.headers['timezone'] as string) || null,
             resource,
             responseTime
           })

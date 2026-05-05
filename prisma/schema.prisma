@@ -521,6 +521,8 @@ model ActivityLog {
   success      Boolean
   statusCode   Int
   ipAddress    String
+  location     String?
+  timezone     String?
   resource     String
   responseTime Int
   timestamp    DateTime @default(now())
