@@ -5,6 +5,66 @@ import { ActivityLogService } from '../../modules/activity-log/activity-log.serv
 @Injectable()
 export class LoggerMiddleware implements NestMiddleware {
   constructor(private readonly activityLogService: ActivityLogService) {}
+
+  /** Get the first valid header value (case-insensitive). */
+private getHeader(req: Request, ...keys: string[]): string | undefined {
+  const wanted = keys.map((k) => k.toLowerCase())
+
+  // Normalized Node.js headers
+  for (const key of wanted) {
+    const value = req.headers[key]
+
+    const normalized = Array.isArray(value)
+      ? value[0]?.trim()
+      : value?.trim()
+
+    if (normalized) return normalized
+  }
+
+  // Fallback for uncommon/raw headers
+  for (let i = 0; i < req.rawHeaders.length; i += 2) {
+    const key = req.rawHeaders[i]?.toLowerCase()
+
+    if (!key || !wanted.includes(key)) continue
+
+    const value = req.rawHeaders[i + 1]?.trim()
+
+    if (value) return value
+  }
+
+  return undefined
+}
+
+/** Remove IPv4-mapped IPv6 prefix (::ffff:) */
+private normalizeIp(ip: string): string {
+  return ip.trim().replace(/^::ffff:/, '')
+}
+
+/** Extract first client IP from x-forwarded-for */
+private getForwardedIp(req: Request): string | undefined {
+  return this.getHeader(req, 'x-forwarded-for')
+    ?.split(',')[0]
+    ?.trim()
+}
+
+/** Resolve client IP from trusted headers or socket */
+private resolveClientIp(req: Request): string {
+  const ip =
+    this.getHeader(
+      req,
+      'ip-address',
+      'x-client-ip',
+      'x-real-ip',
+      'true-client-ip',
+      'cf-connecting-ip'
+    ) ||
+    this.getForwardedIp(req) ||
+    req.ip ||
+    req.socket?.remoteAddress
+
+  return ip ? this.normalizeIp(ip) : 'unknown'
+}
+
   // ANSI color codes
   private colors = {
     reset: '\x1b[0m',
@@ -44,6 +104,24 @@ export class LoggerMiddleware implements NestMiddleware {
 
     // Extract module name from URL
     const path = originalUrl || url
+
+   
+    const ipAddress = this.resolveClientIp(req)
+    const location =
+      this.getHeader(
+        req,
+        'x-client-location',
+        'x-location',
+        'location'
+      ) ?? null
+
+    const timezone =
+      this.getHeader(
+        req,
+        'x-client-timezone',
+        'x-timezone',
+        'timezone'
+      ) ?? null
 
     // Skip logging for known harmless browser/tool requests
     const ignoredPaths = [
@@ -98,9 +176,9 @@ export class LoggerMiddleware implements NestMiddleware {
             endpoint: method + ' ' + path,
             success,
             statusCode,
-            ipAddress: (req.headers['ip-address'] as string) || req.ip || 'unknown',
-            location: (req.headers['location'] as string) || null,
-            timezone: (req.headers['timezone'] as string) || null,
+            ipAddress,
+            location,
+            timezone,
             resource,
             responseTime
           })
