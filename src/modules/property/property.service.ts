@@ -980,8 +980,8 @@ export class PropertyService implements IPropertyService {
         const parseBool = (val: any) => {
           if (val === null || val === undefined || val === '') return undefined
           const str = String(val).trim().toLowerCase()
-          if (str === 'true' || str === '1' || str === 'yes') return 'true'
-          if (str === 'false' || str === '0' || str === 'no') return 'false'
+          if (str === 'true' || str === '1' || str === 'yes' || str === 'y' || str === 'verified') return 'true'
+          if (str === 'false' || str === '0' || str === 'no' || str === 'n' || str === 'not verified' || str === 'access lost') return 'false'
           return undefined
         }
 
