@@ -1,27 +1,33 @@
 import {
-    Body,
-    Controller,
-    Headers,
-    HttpCode,
-    HttpStatus,
-    Inject,
-    Post,
-    UnauthorizedException
+  Body,
+  Controller,
+  Headers,
+  HttpCode,
+  HttpStatus,
+  Inject,
+  Post,
+  UnauthorizedException
 } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
-import { ApiBearerAuth, ApiHeader, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
+import {
+  ApiBearerAuth,
+  ApiHeader,
+  ApiOperation,
+  ApiResponse,
+  ApiTags
+} from '@nestjs/swagger'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
 import {
-    AuthResponseDto,
-    CreateSuperAdminDto,
-    InviteUserDto,
-    LoginRequestOtpDto,
-    RefreshTokenDto,
-    RequestPasswordResetDto,
-    ResendInvitationDto,
-    ResetPasswordDto,
-    VerifyInvitationDto,
-    VerifyLoginOtpDto
+  AuthResponseDto,
+  CreateSuperAdminDto,
+  InviteUserDto,
+  LoginRequestOtpDto,
+  RefreshTokenDto,
+  RequestPasswordResetDto,
+  ResendInvitationDto,
+  ResetPasswordDto,
+  VerifyInvitationDto,
+  VerifyLoginOtpDto
 } from './auth.dto'
 import type { IAuthService } from './auth.interface'
 import { CurrentUser } from './decorators/current-user.decorator'
@@ -74,12 +80,20 @@ export class AuthController {
   @Public(false)
   @HttpCode(HttpStatus.CREATED)
   @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ 
-    summary: 'Invite a new user (requires authentication and user permission level = all)', 
-    description: 'Invite a new user and optionally grant access to specific portfolios and properties. If portfolio_ids or property_ids are provided, a UserAccessedProperty record will be created for the user.'
+  @ApiOperation({
+    summary:
+      'Invite a new user (requires authentication and user permission level = all)',
+    description:
+      'Invite a new user and optionally grant access to specific portfolios and properties. If portfolio_ids or property_ids are provided, a UserAccessedProperty record will be created for the user.'
   })
-  @ApiResponse({ status: 201, description: 'User invited successfully with access permissions created' })
-  @ApiResponse({ status: 403, description: 'Forbidden - insufficient permission to invite users' })
+  @ApiResponse({
+    status: 201,
+    description: 'User invited successfully with access permissions created'
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - insufficient permission to invite users'
+  })
   async inviteUser(
     @Body() body: InviteUserDto,
     @CurrentUser() user: IUserWithPermissions
@@ -197,8 +211,15 @@ export class AuthController {
     description: 'Secret key to authorize super admin creation',
     required: true
   })
-  @ApiResponse({ status: 201, description: 'Super Admin created successfully', type: AuthResponseDto })
-  @ApiResponse({ status: 401, description: 'Invalid or missing super admin secret' })
+  @ApiResponse({
+    status: 201,
+    description: 'Super Admin created successfully',
+    type: AuthResponseDto
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Invalid or missing super admin secret'
+  })
   @ApiResponse({ status: 409, description: 'Super Admin already exists' })
   async createSuperAdmin(
     @Body() body: CreateSuperAdminDto,

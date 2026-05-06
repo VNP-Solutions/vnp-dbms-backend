@@ -22,12 +22,11 @@ export class PortfolioRepository implements IPortfolioRepository {
     if (!permission) return []
     if (permission.access_level === 'all') return 'all'
     if (permission.access_level === 'partial') {
-      const perms = await this.prisma.userFeatureAccessPermission.findMany({
-        where: { user_id: userId, portfolio_id: { not: null } },
+      const accessRecord = await this.prisma.userAccessedProperty.findFirst({
+        where: { user_id: userId },
         select: { portfolio_id: true }
       })
-      const ids = perms.map((p) => p.portfolio_id).filter(Boolean) as string[]
-      return [...new Set(ids)]
+      return accessRecord?.portfolio_id || []
     }
     return []
   }

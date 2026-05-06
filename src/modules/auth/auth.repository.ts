@@ -9,9 +9,9 @@ export class AuthRepository implements IAuthRepository {
 
   async findUserByEmail(email: string): Promise<UserWithRole | null> {
     const escapedEmail = email.replace(/\+/g, '\\+')
-    
+
     return this.prisma.user.findFirst({
-      where: { 
+      where: {
         email: {
           equals: escapedEmail,
           mode: 'insensitive'
