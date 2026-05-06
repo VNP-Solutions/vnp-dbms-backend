@@ -39,14 +39,29 @@ interface UserWithRole {
     description: string
     is_external: boolean
     can_access_mis?: boolean
-    portfolio_permission: { permission_level: string; access_level: string } | null
-    property_permission: { permission_level: string; access_level: string } | null
+    portfolio_permission: {
+      permission_level: string
+      access_level: string
+    } | null
+    property_permission: {
+      permission_level: string
+      access_level: string
+    } | null
     audit_permission: { permission_level: string; access_level: string } | null
     user_permission: { permission_level: string; access_level: string } | null
-    system_settings_permission: { permission_level: string; access_level: string } | null
-    bank_details_permission: { permission_level: string; access_level: string } | null
+    system_settings_permission: {
+      permission_level: string
+      access_level: string
+    } | null
+    bank_details_permission: {
+      permission_level: string
+      access_level: string
+    } | null
     roles_permission: { permission_level: string; access_level: string } | null
-    access_logs_permission: { permission_level: string; access_level: string } | null
+    access_logs_permission: {
+      permission_level: string
+      access_level: string
+    } | null
   }
   userProjectRoles?: Array<{
     id: string
@@ -62,14 +77,35 @@ interface UserWithRole {
       description: string
       is_external: boolean
       can_access_mis: boolean
-      portfolio_permission: { permission_level: string; access_level: string } | null
-      property_permission: { permission_level: string; access_level: string } | null
-      audit_permission: { permission_level: string; access_level: string } | null
+      portfolio_permission: {
+        permission_level: string
+        access_level: string
+      } | null
+      property_permission: {
+        permission_level: string
+        access_level: string
+      } | null
+      audit_permission: {
+        permission_level: string
+        access_level: string
+      } | null
       user_permission: { permission_level: string; access_level: string } | null
-      system_settings_permission: { permission_level: string; access_level: string } | null
-      bank_details_permission: { permission_level: string; access_level: string } | null
-      roles_permission: { permission_level: string; access_level: string } | null
-      access_logs_permission: { permission_level: string; access_level: string } | null
+      system_settings_permission: {
+        permission_level: string
+        access_level: string
+      } | null
+      bank_details_permission: {
+        permission_level: string
+        access_level: string
+      } | null
+      roles_permission: {
+        permission_level: string
+        access_level: string
+      } | null
+      access_logs_permission: {
+        permission_level: string
+        access_level: string
+      } | null
     }
     project_role: {
       id: string
@@ -194,9 +230,11 @@ export class AuthService implements IAuthService {
       invitation_sent_at: new Date()
     })
 
-    // Create UserAccessedProperty if portfolio_ids or property_ids are provided
-    if ((data.portfolio_ids && data.portfolio_ids.length > 0) || 
-        (data.property_ids && data.property_ids.length > 0)) {
+    // Create UserFeatureAccessPermission records if portfolio_ids or property_ids are provided
+    if (
+      (data.portfolio_ids && data.portfolio_ids.length > 0) ||
+      (data.property_ids && data.property_ids.length > 0)
+    ) {
       await this.authRepository.createUserAccessedProperties(
         newUser.id,
         data.portfolio_ids || [],
@@ -222,7 +260,9 @@ export class AuthService implements IAuthService {
       role.is_external
     )
 
-    console.log(`Invitation sent to ${data.email}. Temp password: ${tempPassword}`)
+    console.log(
+      `Invitation sent to ${data.email}. Temp password: ${tempPassword}`
+    )
 
     return {
       message: `Invitation sent successfully. Temporary password is valid for ${expiryDays} days.`
@@ -412,12 +452,16 @@ export class AuthService implements IAuthService {
 
       const newAccessToken = this.jwtService.sign(newPayload, {
         secret: this.configService.get('jwt.accessSecret', { infer: true }),
-        expiresIn: this.configService.get('jwt.accessExpiresIn', { infer: true })
+        expiresIn: this.configService.get('jwt.accessExpiresIn', {
+          infer: true
+        })
       })
 
       const newRefreshToken = this.jwtService.sign(newPayload, {
         secret: this.configService.get('jwt.refreshSecret', { infer: true }),
-        expiresIn: this.configService.get('jwt.refreshExpiresIn', { infer: true })
+        expiresIn: this.configService.get('jwt.refreshExpiresIn', {
+          infer: true
+        })
       })
 
       return { access_token: newAccessToken, refresh_token: newRefreshToken }
@@ -489,7 +533,8 @@ export class AuthService implements IAuthService {
       },
       create: {
         name: SUPER_ADMIN_ROLE_NAME,
-        description: 'Super Administrator with unrestricted access to all modules',
+        description:
+          'Super Administrator with unrestricted access to all modules',
         is_external: false,
         can_access_mis: true,
         is_active: true,
@@ -525,7 +570,7 @@ export class AuthService implements IAuthService {
       language: data.language,
       user_role_id: superAdminRole.id,
       password: hashedPassword,
-      is_verified: true   // No invitation flow — fully active from creation
+      is_verified: true // No invitation flow — fully active from creation
     })
 
     // 5. Fetch the full user (with role) and return auth tokens

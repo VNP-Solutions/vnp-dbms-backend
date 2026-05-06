@@ -26,31 +26,27 @@ export class PropertyRepository implements IPropertyRepository {
     const perm = user?.role?.property_permission
     if (!perm) return []
     if (perm.access_level === 'all') return 'all'
+    if (perm.access_level === 'partial') {
+      const accessRecord = await this.prisma.userAccessedProperty.findFirst({
+        where: { user_id: userId },
+        select: { property_id: true, portfolio_id: true }
+      })
 
-    const perms = await this.prisma.userFeatureAccessPermission.findMany({
-      where: { user_id: userId },
-      select: { property_id: true, portfolio_id: true, subportfolio_id: true }
-    })
+      if (!accessRecord) return []
 
-    const propertyIds = new Set<string>()
-    for (const p of perms) {
-      if (p.property_id) propertyIds.add(p.property_id)
-      if (p.portfolio_id) {
-        const props = await this.prisma.property.findMany({
-          where: { portfolio_id: p.portfolio_id },
+      const propertyIds = new Set<string>(accessRecord.property_id || [])
+
+      if (accessRecord.portfolio_id && accessRecord.portfolio_id.length > 0) {
+        const portfolioProperties = await this.prisma.property.findMany({
+          where: { portfolio_id: { in: accessRecord.portfolio_id } },
           select: { id: true }
         })
-        props.forEach((x) => propertyIds.add(x.id))
+        portfolioProperties.forEach((p) => propertyIds.add(p.id))
       }
-      if (p.subportfolio_id) {
-        const props = await this.prisma.property.findMany({
-          where: { subportfolio_id: p.subportfolio_id },
-          select: { id: true }
-        })
-        props.forEach((x) => propertyIds.add(x.id))
-      }
+
+      return Array.from(propertyIds)
     }
-    return Array.from(propertyIds)
+    return []
   }
 
   async create(data: CreatePropertyDto): Promise<PropertyWithRelations> {
@@ -211,12 +207,12 @@ export class PropertyRepository implements IPropertyRepository {
       return { portfolios, subportfolios }
     }
 
-    const perms = await this.prisma.userFeatureAccessPermission.findMany({
+    const accessRecord = await this.prisma.userAccessedProperty.findFirst({
       where: { user_id: userId },
-      select: { portfolio_id: true, subportfolio_id: true }
+      select: { portfolio_id: true }
     })
-    const portfolioIds = [...new Set(perms.map((p) => p.portfolio_id).filter(Boolean))] as string[]
-    const subportfolioIds = [...new Set(perms.map((p) => p.subportfolio_id).filter(Boolean))] as string[]
+
+    const portfolioIds = accessRecord?.portfolio_id || []
 
     const [portfolios, subportfolios] = await Promise.all([
       portfolioIds.length
@@ -225,21 +221,18 @@ export class PropertyRepository implements IPropertyRepository {
             select: { id: true, name: true }
           })
         : [],
-      subportfolioIds.length
+      portfolioIds.length
         ? this.prisma.subportfolio.findMany({
-            where: { OR: [{ id: { in: subportfolioIds } }, { portfolio_id: { in: portfolioIds } }] },
-            select: { id: true, name: true, portfolio_id: true }
-          })
-        : this.prisma.subportfolio.findMany({
             where: { portfolio_id: { in: portfolioIds } },
             select: { id: true, name: true, portfolio_id: true }
           })
+        : []
     ])
 
     return {
       portfolios,
       subportfolios: subportfolios.filter(
-        (s, i, arr) => arr.findIndex((x) => x.id === s.id) === i
+        (s: any, i: number, arr: any[]) => arr.findIndex((x: any) => x.id === s.id) === i
       )
     }
   }

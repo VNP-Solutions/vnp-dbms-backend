@@ -25,16 +25,16 @@ export class UserRepository implements IUserRepository {
     })
 
     const validRoleIds = users.map(u => u.user_role_id).filter(Boolean)
-    
+
     const [roles, inviters] = await Promise.all([
       this.prisma.userRole.findMany({
         where: { id: { in: validRoleIds } }
       }),
       this.prisma.user.findMany({
-        where: { 
-          id: { 
-            in: users.map(u => u.invited_by_id).filter(Boolean) as string[] 
-          } 
+        where: {
+          id: {
+            in: users.map(u => u.invited_by_id).filter(Boolean) as string[]
+          }
         },
         select: {
           id: true,
@@ -52,7 +52,9 @@ export class UserRepository implements IUserRepository {
       .filter(user => user.user_role_id && roleMap.has(user.user_role_id))
       .map(user => {
         const role = roleMap.get(user.user_role_id)!
-        const inviter = user.invited_by_id ? inviterMap.get(user.invited_by_id) : undefined
+        const inviter = user.invited_by_id
+          ? inviterMap.get(user.invited_by_id)
+          : undefined
 
         return {
           id: user.id,
@@ -100,7 +102,7 @@ export class UserRepository implements IUserRepository {
     })
 
     const validRoleIds = users.map(u => u.user_role_id).filter(Boolean)
-    
+
     const roles = await this.prisma.userRole.findMany({
       where: {
         id: { in: validRoleIds }
@@ -109,8 +111,10 @@ export class UserRepository implements IUserRepository {
     })
 
     const validRoleIdSet = new Set(roles.map(r => r.id))
-    
-    return users.filter(u => u.user_role_id && validRoleIdSet.has(u.user_role_id)).length
+
+    return users.filter(
+      u => u.user_role_id && validRoleIdSet.has(u.user_role_id)
+    ).length
   }
 
   async findById(id: string): Promise<UserWithDetails | null> {
@@ -181,22 +185,24 @@ export class UserRepository implements IUserRepository {
 
   async findUserWithAccessibleResources(id: string) {
     const user = await this.findById(id)
-    
+
     if (!user) {
       return null
     }
 
     // Extract property and portfolio IDs from UserAccessedProperty
-    const propertyIds = (user as any).userAccessedProperties?.flatMap(
-      (access: any) => access.property_id
-    ) || []
-    const portfolioIds = (user as any).userAccessedProperties?.flatMap(
-      (access: any) => access.portfolio_id
-    ) || []
+    const propertyIds =
+      (user as any).userAccessedProperties?.flatMap(
+        (access: any) => access.property_id
+      ) || []
+    const portfolioIds =
+      (user as any).userAccessedProperties?.flatMap(
+        (access: any) => access.portfolio_id
+      ) || []
 
     // Fetch properties and portfolios for UserAccessedProperty
     const [properties, portfolios] = await Promise.all([
-      propertyIds.length > 0 
+      propertyIds.length > 0
         ? this.prisma.property.findMany({
             where: { id: { in: propertyIds } },
             select: {
