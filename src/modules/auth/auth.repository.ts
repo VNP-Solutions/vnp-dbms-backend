@@ -8,8 +8,15 @@ export class AuthRepository implements IAuthRepository {
   constructor(@Inject(PrismaService) private prisma: PrismaService) {}
 
   async findUserByEmail(email: string): Promise<UserWithRole | null> {
-    return this.prisma.user.findUnique({
-      where: { email },
+    const escapedEmail = email.replace(/\+/g, '\\+')
+    
+    return this.prisma.user.findFirst({
+      where: { 
+        email: {
+          equals: escapedEmail,
+          mode: 'insensitive'
+        }
+      },
       include: {
         role: true,
         userProjectRoles: {
