@@ -56,7 +56,8 @@ export class ExternalPortfolioService {
         serviceType: {
           select: {
             id: true,
-            type: true
+            type: true,
+            is_active: true
           }
         },
         subportfolios: {
@@ -74,7 +75,8 @@ export class ExternalPortfolioService {
       service_type_id: portfolio.service_type_id,
       service_type: {
         id: portfolio.serviceType.id,
-        type: portfolio.serviceType.type
+        type: portfolio.serviceType.type,
+        is_active: portfolio.serviceType.is_active
       },
       is_active: portfolio.is_active,
       contact_email: portfolio.contact_email || undefined,
@@ -113,7 +115,8 @@ export class ExternalPortfolioService {
         serviceType: {
           select: {
             id: true,
-            type: true
+            type: true,
+            is_active: true
           }
         },
         subportfolios: {
@@ -135,7 +138,8 @@ export class ExternalPortfolioService {
       service_type_id: portfolio.service_type_id,
       service_type: {
         id: portfolio.serviceType.id,
-        type: portfolio.serviceType.type
+        type: portfolio.serviceType.type,
+        is_active: portfolio.serviceType.is_active
       },
       is_active: portfolio.is_active,
       contact_email: portfolio.contact_email || undefined,
