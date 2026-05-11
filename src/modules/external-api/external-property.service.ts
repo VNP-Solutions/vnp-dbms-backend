@@ -6,7 +6,7 @@ import type { IUserWithProjectRole } from '../../common/utils/project-context.ut
 import { getProjectAccessibleResources } from '../../common/utils/project-context.util'
 import type { Configuration } from '../../config/configuration'
 import { PrismaService } from '../prisma/prisma.service'
-import type { ExternalApiQueryDto, ExternalPropertyDto, UpdatePropertyCredentialsExternalDto } from './external-api.dto'
+import type { DecryptedPropertyCredential, ExternalApiQueryDto, ExternalPropertyDto, UpdatePropertyCredentialsExternalDto } from './external-api.dto'
 
 @Injectable()
 export class ExternalPropertyService {
@@ -29,34 +29,48 @@ export class ExternalPropertyService {
     }
   }
 
-  private decryptCredentials(credentials: any) {
-    if (!credentials) return undefined
+  private decryptCredentials(credentials: any): DecryptedPropertyCredential | null {
+    if (!credentials) return null
 
     return {
       id: credentials.id,
       property_id: credentials.property_id,
-      expediaUsername: credentials.expediaUsername || undefined,
+      expediaUsername: credentials.expediaUsername ?? null,
       expediaPassword: credentials.expediaPassword
-        ? EncryptionUtil.decrypt(credentials.expediaPassword, this.encryptionSecret)
-        : undefined,
-      agodaUsername: credentials.agodaUsername || undefined,
+        ? this.safeDecrypt(credentials.expediaPassword)
+        : null,
+      agodaUsername: credentials.agodaUsername ?? null,
       agodaPassword: credentials.agodaPassword
-        ? EncryptionUtil.decrypt(credentials.agodaPassword, this.encryptionSecret)
-        : undefined,
-      bookingUsername: credentials.bookingUsername || undefined,
+        ? this.safeDecrypt(credentials.agodaPassword)
+        : null,
+      bookingUsername: credentials.bookingUsername ?? null,
       bookingPassword: credentials.bookingPassword
-        ? EncryptionUtil.decrypt(credentials.bookingPassword, this.encryptionSecret)
-        : undefined,
-      expediaEmailAssociated: credentials.expediaEmailAssociated || undefined,
-      propertyContactEmail: credentials.propertyContactEmail || undefined,
-      portfolioContactEmail: credentials.portfolioContactEmail || undefined,
-      multiplePortfolioEmails: credentials.multiplePortfolioEmails || undefined,
-      case_contact_email: credentials.case_contact_email || undefined,
-      case_contact_name: credentials.case_contact_name || undefined,
-      case_contact_phone: credentials.case_contact_phone || undefined,
-      reporting_contact_name: credentials.reporting_contact_name || undefined,
-      reporting_contact_email: credentials.reporting_contact_email || undefined,
-      reporting_contact_phone: credentials.reporting_contact_phone || undefined
+        ? this.safeDecrypt(credentials.bookingPassword)
+        : null,
+      expediaSecondaryUsername: credentials.expediaSecondaryUsername ?? null,
+      expediaSecondaryPassword: credentials.expediaSecondaryPassword
+        ? this.safeDecrypt(credentials.expediaSecondaryPassword)
+        : null,
+      bookingSecondaryUsername: credentials.bookingSecondaryUsername ?? null,
+      bookingSecondaryPassword: credentials.bookingSecondaryPassword
+        ? this.safeDecrypt(credentials.bookingSecondaryPassword)
+        : null,
+      agodaSecondaryUsername: credentials.agodaSecondaryUsername ?? null,
+      agodaSecondaryPassword: credentials.agodaSecondaryPassword
+        ? this.safeDecrypt(credentials.agodaSecondaryPassword)
+        : null,
+      expediaEmailAssociated: credentials.expediaEmailAssociated ?? null,
+      propertyContactEmail: credentials.propertyContactEmail ?? null,
+      portfolioContactEmail: credentials.portfolioContactEmail ?? null,
+      multiplePortfolioEmails: credentials.multiplePortfolioEmails ?? [],
+      case_contact_email: credentials.case_contact_email ?? null,
+      case_contact_name: credentials.case_contact_name ?? null,
+      case_contact_phone: credentials.case_contact_phone ?? null,
+      reporting_contact_name: credentials.reporting_contact_name ?? null,
+      reporting_contact_email: credentials.reporting_contact_email ?? null,
+      reporting_contact_phone: credentials.reporting_contact_phone ?? null,
+      created_at: credentials.created_at?.toISOString?.() ?? credentials.created_at,
+      updated_at: credentials.updated_at?.toISOString?.() ?? credentials.updated_at
     }
   }
 
@@ -131,80 +145,79 @@ export class ExternalPropertyService {
     return properties.map(property => ({
       id: property.id,
       name: property.name,
-      card_descriptor: property.card_descriptor || undefined,
+      card_descriptor: property.card_descriptor ?? null,
       is_active: property.is_active,
-      next_due_date: property.next_due_date?.toISOString(),
+      next_due_date: property.next_due_date?.toISOString() ?? null,
       portfolio_id: property.portfolio.id,
       portfolio_name: property.portfolio.name,
-      service_type: property.service_type || undefined,
-      subportfolio_id: property.subportfolio?.id,
-      subportfolio_name: property.subportfolio?.name,
-      previous_portfolio_id: property.previous_portfolio_id || undefined,
-      show_in_portfolio: property.show_in_portfolio.length > 0 ? property.show_in_portfolio : undefined,
-      new_domain_email: property.new_domain_email || undefined,
-      others_case_emails: property.others_case_emails.length > 0 ? property.others_case_emails : undefined,
-      primary_case_email: property.primary_case_email || undefined,
-      portfolio_contact_email: property.portfolio_contact_email || undefined,
-      portfolio_contact: property.portfolio_contact || undefined,
-      webmail_password:
-        property.webmail_password
-          ? this.safeDecrypt(property.webmail_password)
-          : undefined,
-      description: property.description || undefined,
-      hotel_address: property.hotel_address || undefined,
-      property_identifier: property.property_identifier || undefined,
-      case_management_contact: property.case_management_contact || undefined,
-      access_contact: property.access_contact || undefined,
-      reporting_contact: property.reporting_contact || undefined,
-      expedia_processor: property.expedia_processor || undefined,
-      booking_processor: property.booking_processor || undefined,
-      agoda_processor: property.agoda_processor || undefined,
-      from: property.from || undefined,
-      to: property.to || undefined,
-      qp_username: property.qp_username || undefined,
-      qp_password: property.qp_password ? EncryptionUtil.decrypt(property.qp_password, this.encryptionSecret) : undefined,
-      qp_api_key: property.qp_api_key ? EncryptionUtil.decrypt(property.qp_api_key, this.encryptionSecret) : undefined,
-      fp_mid: property.fp_mid || undefined,
-      fp_username: property.fp_username || undefined,
-      fp_password: property.fp_password ? this.safeDecrypt(property.fp_password) : undefined,
-      stripe_account_email: property.stripe_account_email || undefined,
-      expedia_id: property.expedia_id || undefined,
-      expedia_status: property.expedia_status || undefined,
-      booking_id: property.booking_id || undefined,
-      booking_status: property.booking_status || undefined,
-      agoda_id: property.agoda_id || undefined,
-      agoda_status: property.agoda_status || undefined,
-      expedia_billing_type: property.expedia_billing_type || undefined,
-      expedia_service_type: property.expedia_service_type || undefined,
-      expedia_frequency: property.expedia_frequency || undefined,
-      expedia_access_level: property.expedia_access_level ?? undefined,
-      expedia_from: property.expedia_from || undefined,
-      expedia_to: property.expedia_to || undefined,
-      expedia_scheduler: property.expedia_scheduler ?? undefined,
-      expedia_duration: property.expedia_duration ?? undefined,
-      booking_billing_type: property.booking_billing_type || undefined,
-      booking_service_type: property.booking_service_type || undefined,
-      booking_frequency: property.booking_frequency || undefined,
-      booking_access_level: property.booking_access_level ?? undefined,
-      booking_from: property.booking_from || undefined,
-      booking_to: property.booking_to || undefined,
-      booking_scheduler: property.booking_scheduler ?? undefined,
-      booking_duration: property.booking_duration ?? undefined,
-      agoda_billing_type: property.agoda_billing_type || undefined,
-      agoda_service_type: property.agoda_service_type || undefined,
-      agoda_frequency: property.agoda_frequency || undefined,
-      agoda_access_level: property.agoda_access_level ?? undefined,
-      agoda_from: property.agoda_from || undefined,
-      agoda_to: property.agoda_to || undefined,
-      agoda_scheduler: property.agoda_scheduler ?? undefined,
-      agoda_duration: property.agoda_duration ?? undefined,
-      need_another_domain: property.need_another_domain ?? undefined,
-      booking_otp_phone: property.booking_otp_phone || undefined,
+      service_type: property.service_type ?? null,
+      subportfolio_id: property.subportfolio?.id ?? null,
+      subportfolio_name: property.subportfolio?.name ?? null,
+      previous_portfolio_id: property.previous_portfolio_id ?? null,
+      show_in_portfolio: property.show_in_portfolio.length > 0 ? property.show_in_portfolio : [],
+      new_domain_email: property.new_domain_email ?? null,
+      others_case_emails: property.others_case_emails.length > 0 ? property.others_case_emails : [],
+      primary_case_email: property.primary_case_email ?? null,
+      portfolio_contact_email: property.portfolio_contact_email ?? null,
+      portfolio_contact: property.portfolio_contact ?? null,
+      webmail_password: property.webmail_password
+        ? this.safeDecrypt(property.webmail_password)
+        : null,
+      description: property.description ?? null,
+      hotel_address: property.hotel_address ?? null,
+      property_identifier: property.property_identifier ?? null,
+      case_management_contact: property.case_management_contact ?? null,
+      access_contact: property.access_contact ?? null,
+      reporting_contact: property.reporting_contact ?? null,
+      expedia_processor: property.expedia_processor ?? null,
+      booking_processor: property.booking_processor ?? null,
+      agoda_processor: property.agoda_processor ?? null,
+      from: property.from ?? null,
+      to: property.to ?? null,
+      qp_username: property.qp_username ?? null,
+      qp_password: property.qp_password ? EncryptionUtil.decrypt(property.qp_password, this.encryptionSecret) : null,
+      qp_api_key: property.qp_api_key ? EncryptionUtil.decrypt(property.qp_api_key, this.encryptionSecret) : null,
+      fp_mid: property.fp_mid ?? null,
+      fp_username: property.fp_username ?? null,
+      fp_password: property.fp_password ? this.safeDecrypt(property.fp_password) : null,
+      stripe_account_email: property.stripe_account_email ?? null,
+      expedia_id: property.expedia_id ?? null,
+      expedia_status: property.expedia_status ?? null,
+      booking_id: property.booking_id ?? null,
+      booking_status: property.booking_status ?? null,
+      agoda_id: property.agoda_id ?? null,
+      agoda_status: property.agoda_status ?? null,
+      expedia_billing_type: property.expedia_billing_type ?? null,
+      expedia_service_type: property.expedia_service_type ?? null,
+      expedia_frequency: property.expedia_frequency ?? null,
+      expedia_access_level: property.expedia_access_level ?? null,
+      expedia_from: property.expedia_from ?? null,
+      expedia_to: property.expedia_to ?? null,
+      expedia_scheduler: property.expedia_scheduler ?? null,
+      expedia_duration: property.expedia_duration ?? null,
+      booking_billing_type: property.booking_billing_type ?? null,
+      booking_service_type: property.booking_service_type ?? null,
+      booking_frequency: property.booking_frequency ?? null,
+      booking_access_level: property.booking_access_level ?? null,
+      booking_from: property.booking_from ?? null,
+      booking_to: property.booking_to ?? null,
+      booking_scheduler: property.booking_scheduler ?? null,
+      booking_duration: property.booking_duration ?? null,
+      agoda_billing_type: property.agoda_billing_type ?? null,
+      agoda_service_type: property.agoda_service_type ?? null,
+      agoda_frequency: property.agoda_frequency ?? null,
+      agoda_access_level: property.agoda_access_level ?? null,
+      agoda_from: property.agoda_from ?? null,
+      agoda_to: property.agoda_to ?? null,
+      agoda_scheduler: property.agoda_scheduler ?? null,
+      agoda_duration: property.agoda_duration ?? null,
+      need_another_domain: property.need_another_domain ?? null,
+      booking_otp_phone: property.booking_otp_phone ?? null,
       created_at: property.created_at.toISOString(),
       updated_at: property.updated_at.toISOString(),
-      credentials: includeCredentials && (property as any).credentials?.[0]
+      credentials: (includeCredentials && (property as any).credentials?.[0]
         ? this.decryptCredentials((property as any).credentials[0])
-        : undefined
+        : null)
     }))
   }
 
@@ -258,80 +271,79 @@ export class ExternalPropertyService {
     return {
       id: property.id,
       name: property.name,
-      card_descriptor: property.card_descriptor || undefined,
+      card_descriptor: property.card_descriptor ?? null,
       is_active: property.is_active,
-      next_due_date: property.next_due_date?.toISOString(),
+      next_due_date: property.next_due_date?.toISOString() ?? null,
       portfolio_id: property.portfolio.id,
       portfolio_name: property.portfolio.name,
-      service_type: property.service_type || undefined,
-      subportfolio_id: property.subportfolio?.id,
-      subportfolio_name: property.subportfolio?.name,
-      previous_portfolio_id: property.previous_portfolio_id || undefined,
-      show_in_portfolio: property.show_in_portfolio.length > 0 ? property.show_in_portfolio : undefined,
-      new_domain_email: property.new_domain_email || undefined,
-      others_case_emails: property.others_case_emails.length > 0 ? property.others_case_emails : undefined,
-      primary_case_email: property.primary_case_email || undefined,
-      portfolio_contact_email: property.portfolio_contact_email || undefined,
-      portfolio_contact: property.portfolio_contact || undefined,
-      webmail_password:
-        property.webmail_password
-          ? this.safeDecrypt(property.webmail_password)
-          : undefined,
-      description: property.description || undefined,
-      hotel_address: property.hotel_address || undefined,
-      property_identifier: property.property_identifier || undefined,
-      case_management_contact: property.case_management_contact || undefined,
-      access_contact: property.access_contact || undefined,
-      reporting_contact: property.reporting_contact || undefined,
-      expedia_processor: property.expedia_processor || undefined,
-      booking_processor: property.booking_processor || undefined,
-      agoda_processor: property.agoda_processor || undefined,
-      from: property.from || undefined,
-      to: property.to || undefined,
-      qp_username: property.qp_username || undefined,
-      qp_password: property.qp_password ? EncryptionUtil.decrypt(property.qp_password, this.encryptionSecret) : undefined,
-      qp_api_key: property.qp_api_key ? EncryptionUtil.decrypt(property.qp_api_key, this.encryptionSecret) : undefined,
-      fp_mid: property.fp_mid || undefined,
-      fp_username: property.fp_username || undefined,
-      fp_password: property.fp_password ? this.safeDecrypt(property.fp_password) : undefined,
-      stripe_account_email: property.stripe_account_email || undefined,
-      expedia_id: property.expedia_id || undefined,
-      expedia_status: property.expedia_status || undefined,
-      booking_id: property.booking_id || undefined,
-      booking_status: property.booking_status || undefined,
-      agoda_id: property.agoda_id || undefined,
-      agoda_status: property.agoda_status || undefined,
-      expedia_billing_type: property.expedia_billing_type || undefined,
-      expedia_service_type: property.expedia_service_type || undefined,
-      expedia_frequency: property.expedia_frequency || undefined,
-      expedia_access_level: property.expedia_access_level ?? undefined,
-      expedia_from: property.expedia_from || undefined,
-      expedia_to: property.expedia_to || undefined,
-      expedia_scheduler: property.expedia_scheduler ?? undefined,
-      expedia_duration: property.expedia_duration ?? undefined,
-      booking_billing_type: property.booking_billing_type || undefined,
-      booking_service_type: property.booking_service_type || undefined,
-      booking_frequency: property.booking_frequency || undefined,
-      booking_access_level: property.booking_access_level ?? undefined,
-      booking_from: property.booking_from || undefined,
-      booking_to: property.booking_to || undefined,
-      booking_scheduler: property.booking_scheduler ?? undefined,
-      booking_duration: property.booking_duration ?? undefined,
-      agoda_billing_type: property.agoda_billing_type || undefined,
-      agoda_service_type: property.agoda_service_type || undefined,
-      agoda_frequency: property.agoda_frequency || undefined,
-      agoda_access_level: property.agoda_access_level ?? undefined,
-      agoda_from: property.agoda_from || undefined,
-      agoda_to: property.agoda_to || undefined,
-      agoda_scheduler: property.agoda_scheduler ?? undefined,
-      agoda_duration: property.agoda_duration ?? undefined,
-      need_another_domain: property.need_another_domain ?? undefined,
-      booking_otp_phone: property.booking_otp_phone || undefined,
+      service_type: property.service_type ?? null,
+      subportfolio_id: property.subportfolio?.id ?? null,
+      subportfolio_name: property.subportfolio?.name ?? null,
+      previous_portfolio_id: property.previous_portfolio_id ?? null,
+      show_in_portfolio: property.show_in_portfolio.length > 0 ? property.show_in_portfolio : [],
+      new_domain_email: property.new_domain_email ?? null,
+      others_case_emails: property.others_case_emails.length > 0 ? property.others_case_emails : [],
+      primary_case_email: property.primary_case_email ?? null,
+      portfolio_contact_email: property.portfolio_contact_email ?? null,
+      portfolio_contact: property.portfolio_contact ?? null,
+      webmail_password: property.webmail_password
+        ? this.safeDecrypt(property.webmail_password)
+        : null,
+      description: property.description ?? null,
+      hotel_address: property.hotel_address ?? null,
+      property_identifier: property.property_identifier ?? null,
+      case_management_contact: property.case_management_contact ?? null,
+      access_contact: property.access_contact ?? null,
+      reporting_contact: property.reporting_contact ?? null,
+      expedia_processor: property.expedia_processor ?? null,
+      booking_processor: property.booking_processor ?? null,
+      agoda_processor: property.agoda_processor ?? null,
+      from: property.from ?? null,
+      to: property.to ?? null,
+      qp_username: property.qp_username ?? null,
+      qp_password: property.qp_password ? EncryptionUtil.decrypt(property.qp_password, this.encryptionSecret) : null,
+      qp_api_key: property.qp_api_key ? EncryptionUtil.decrypt(property.qp_api_key, this.encryptionSecret) : null,
+      fp_mid: property.fp_mid ?? null,
+      fp_username: property.fp_username ?? null,
+      fp_password: property.fp_password ? this.safeDecrypt(property.fp_password) : null,
+      stripe_account_email: property.stripe_account_email ?? null,
+      expedia_id: property.expedia_id ?? null,
+      expedia_status: property.expedia_status ?? null,
+      booking_id: property.booking_id ?? null,
+      booking_status: property.booking_status ?? null,
+      agoda_id: property.agoda_id ?? null,
+      agoda_status: property.agoda_status ?? null,
+      expedia_billing_type: property.expedia_billing_type ?? null,
+      expedia_service_type: property.expedia_service_type ?? null,
+      expedia_frequency: property.expedia_frequency ?? null,
+      expedia_access_level: property.expedia_access_level ?? null,
+      expedia_from: property.expedia_from ?? null,
+      expedia_to: property.expedia_to ?? null,
+      expedia_scheduler: property.expedia_scheduler ?? null,
+      expedia_duration: property.expedia_duration ?? null,
+      booking_billing_type: property.booking_billing_type ?? null,
+      booking_service_type: property.booking_service_type ?? null,
+      booking_frequency: property.booking_frequency ?? null,
+      booking_access_level: property.booking_access_level ?? null,
+      booking_from: property.booking_from ?? null,
+      booking_to: property.booking_to ?? null,
+      booking_scheduler: property.booking_scheduler ?? null,
+      booking_duration: property.booking_duration ?? null,
+      agoda_billing_type: property.agoda_billing_type ?? null,
+      agoda_service_type: property.agoda_service_type ?? null,
+      agoda_frequency: property.agoda_frequency ?? null,
+      agoda_access_level: property.agoda_access_level ?? null,
+      agoda_from: property.agoda_from ?? null,
+      agoda_to: property.agoda_to ?? null,
+      agoda_scheduler: property.agoda_scheduler ?? null,
+      agoda_duration: property.agoda_duration ?? null,
+      need_another_domain: property.need_another_domain ?? null,
+      booking_otp_phone: property.booking_otp_phone ?? null,
       created_at: property.created_at.toISOString(),
       updated_at: property.updated_at.toISOString(),
-      credentials: includeCredentials && (property as any).credentials?.[0]
+      credentials: (includeCredentials && (property as any).credentials?.[0]
         ? this.decryptCredentials((property as any).credentials[0])
-        : undefined
+        : null)
     }
   }
 
@@ -417,6 +429,36 @@ export class ExternalPropertyService {
     if (credentialsData.bookingPassword) {
       encryptedData.bookingPassword = EncryptionUtil.encrypt(
         credentialsData.bookingPassword,
+        this.encryptionSecret
+      )
+    }
+
+    if (credentialsData.expediaSecondaryUsername !== undefined) {
+      encryptedData.expediaSecondaryUsername = credentialsData.expediaSecondaryUsername
+    }
+    if (credentialsData.expediaSecondaryPassword) {
+      encryptedData.expediaSecondaryPassword = EncryptionUtil.encrypt(
+        credentialsData.expediaSecondaryPassword,
+        this.encryptionSecret
+      )
+    }
+
+    if (credentialsData.bookingSecondaryUsername !== undefined) {
+      encryptedData.bookingSecondaryUsername = credentialsData.bookingSecondaryUsername
+    }
+    if (credentialsData.bookingSecondaryPassword) {
+      encryptedData.bookingSecondaryPassword = EncryptionUtil.encrypt(
+        credentialsData.bookingSecondaryPassword,
+        this.encryptionSecret
+      )
+    }
+
+    if (credentialsData.agodaSecondaryUsername !== undefined) {
+      encryptedData.agodaSecondaryUsername = credentialsData.agodaSecondaryUsername
+    }
+    if (credentialsData.agodaSecondaryPassword) {
+      encryptedData.agodaSecondaryPassword = EncryptionUtil.encrypt(
+        credentialsData.agodaSecondaryPassword,
         this.encryptionSecret
       )
     }
