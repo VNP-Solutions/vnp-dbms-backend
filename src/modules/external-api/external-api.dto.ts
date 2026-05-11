@@ -3,22 +3,30 @@ import { ProjectType } from '@prisma/client'
 export interface DecryptedPropertyCredential {
   id: string
   property_id: string
-  expediaUsername?: string
-  expediaPassword?: string
-  agodaUsername?: string
-  agodaPassword?: string
-  bookingUsername?: string
-  bookingPassword?: string
-  expediaEmailAssociated?: string
-  propertyContactEmail?: string
-  portfolioContactEmail?: string
-  multiplePortfolioEmails?: string[]
-  case_contact_email?: string
-  case_contact_name?: string
-  case_contact_phone?: string
-  reporting_contact_name?: string
-  reporting_contact_email?: string
-  reporting_contact_phone?: string
+  expediaUsername: string | null
+  expediaPassword: string | null
+  agodaUsername: string | null
+  agodaPassword: string | null
+  bookingUsername: string | null
+  bookingPassword: string | null
+  expediaSecondaryUsername: string | null
+  expediaSecondaryPassword: string | null
+  bookingSecondaryUsername: string | null
+  bookingSecondaryPassword: string | null
+  agodaSecondaryUsername: string | null
+  agodaSecondaryPassword: string | null
+  expediaEmailAssociated: string | null
+  propertyContactEmail: string | null
+  portfolioContactEmail: string | null
+  multiplePortfolioEmails: string[]
+  case_contact_email: string | null
+  case_contact_name: string | null
+  case_contact_phone: string | null
+  reporting_contact_name: string | null
+  reporting_contact_email: string | null
+  reporting_contact_phone: string | null
+  created_at: string
+  updated_at: string
 }
 
 export interface DecryptedPortfolioCredential {
@@ -45,14 +53,14 @@ export interface ExternalPortfolioDto {
     is_active: boolean
   }
   is_active: boolean
-  contact_email?: string
-  portfolio_contact_email?: string
-  portfolio_contact_name?: string
-  portfolio_contact_phone?: string
+  contact_email: string | null
+  portfolio_contact_email: string | null
+  portfolio_contact_name: string | null
+  portfolio_contact_phone: string | null
   is_commissionable: boolean
-  commission?: number
-  attachment?: string
-  contract_signed?: boolean
+  commission: number | null
+  attachment: string | null
+  contract_signed: boolean | null
   created_at: string
   updated_at: string
   total_properties: number
@@ -63,75 +71,75 @@ export interface ExternalPortfolioDto {
 export interface ExternalPropertyDto {
   id: string
   name: string
-  card_descriptor?: string
+  card_descriptor: string | null
   is_active: boolean
-  next_due_date?: string
+  next_due_date: string | null
   portfolio_id: string
   portfolio_name: string
-  service_type?: string
-  subportfolio_id?: string
-  subportfolio_name?: string
-  previous_portfolio_id?: string
-  show_in_portfolio?: string[]
-  new_domain_email?: string
-  others_case_emails?: string[]
-  primary_case_email?: string
-  portfolio_contact_email?: string
-  portfolio_contact?: string
-  webmail_password?: string
-  description?: string
-  hotel_address?: string
-  property_identifier?: string
-  case_management_contact?: string
-  access_contact?: string
-  reporting_contact?: string
-  expedia_processor?: string
-  booking_processor?: string
-  agoda_processor?: string
-  from?: string
-  to?: string
-  qp_username?: string
-  qp_password?: string
-  qp_api_key?: string
-  fp_mid?: string
-  fp_username?: string
-  fp_password?: string
-  stripe_account_email?: string
-  expedia_id?: number
-  expedia_status?: string
-  booking_id?: number
-  booking_status?: string
-  agoda_id?: number
-  agoda_status?: string
-  expedia_billing_type?: string
-  expedia_service_type?: string
-  expedia_frequency?: string
-  expedia_access_level?: boolean
-  expedia_from?: string
-  expedia_to?: string
-  expedia_scheduler?: boolean
-  expedia_duration?: number
-  booking_billing_type?: string
-  booking_service_type?: string
-  booking_frequency?: string
-  booking_access_level?: boolean
-  booking_from?: string
-  booking_to?: string
-  booking_scheduler?: boolean
-  booking_duration?: number
-  agoda_billing_type?: string
-  agoda_service_type?: string
-  agoda_frequency?: string
-  agoda_access_level?: boolean
-  agoda_from?: string
-  agoda_to?: string
-  agoda_scheduler?: boolean
-  agoda_duration?: number
-  need_another_domain?: boolean
-  booking_otp_phone?: string
+  service_type: string | null
+  subportfolio_id: string | null
+  subportfolio_name: string | null
+  previous_portfolio_id: string | null
+  show_in_portfolio: string[]
+  new_domain_email: string | null
+  others_case_emails: string[]
+  primary_case_email: string | null
+  portfolio_contact_email: string | null
+  portfolio_contact: string | null
+  webmail_password: string | null
+  description: string | null
+  hotel_address: string | null
+  property_identifier: string | null
+  case_management_contact: string | null
+  access_contact: string | null
+  reporting_contact: string | null
+  expedia_processor: string | null
+  booking_processor: string | null
+  agoda_processor: string | null
+  from: string | null
+  to: string | null
+  qp_username: string | null
+  qp_password: string | null
+  qp_api_key: string | null
+  fp_mid: string | null
+  fp_username: string | null
+  fp_password: string | null
+  stripe_account_email: string | null
+  expedia_id: number | null
+  expedia_status: string | null
+  booking_id: number | null
+  booking_status: string | null
+  agoda_id: number | null
+  agoda_status: string | null
+  expedia_billing_type: string | null
+  expedia_service_type: string | null
+  expedia_frequency: string | null
+  expedia_access_level: boolean | null
+  expedia_from: string | null
+  expedia_to: string | null
+  expedia_scheduler: boolean | null
+  expedia_duration: number | null
+  booking_billing_type: string | null
+  booking_service_type: string | null
+  booking_frequency: string | null
+  booking_access_level: boolean | null
+  booking_from: string | null
+  booking_to: string | null
+  booking_scheduler: boolean | null
+  booking_duration: number | null
+  agoda_billing_type: string | null
+  agoda_service_type: string | null
+  agoda_frequency: string | null
+  agoda_access_level: boolean | null
+  agoda_from: string | null
+  agoda_to: string | null
+  agoda_scheduler: boolean | null
+  agoda_duration: number | null
+  need_another_domain: boolean | null
+  booking_otp_phone: string | null
   created_at: string
   updated_at: string
-  credentials?: DecryptedPropertyCredential
+  credentials: DecryptedPropertyCredential | null
 }
 
 export interface ExternalSubportfolioDto {
@@ -160,6 +168,12 @@ export class UpdatePropertyCredentialsExternalDto {
   agodaPassword?: string
   bookingUsername?: string
   bookingPassword?: string
+  expediaSecondaryUsername?: string
+  expediaSecondaryPassword?: string
+  bookingSecondaryUsername?: string
+  bookingSecondaryPassword?: string
+  agodaSecondaryUsername?: string
+  agodaSecondaryPassword?: string
   expediaEmailAssociated?: string
   propertyContactEmail?: string
   portfolioContactEmail?: string
