@@ -16,7 +16,7 @@ import { ProjectRoleGuard } from '../../common/guards/project-role.guard'
 import type { IUserWithProjectRole } from '../../common/utils/project-context.util'
 import { CurrentUser } from '../auth/decorators/current-user.decorator'
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
-import type { UpdatePropertyCredentialsExternalDto } from './external-api.dto'
+import { UpdatePropertyCredentialsExternalDto } from './external-api.dto'
 import { ExternalPropertyService } from './external-property.service'
 
 @ApiTags('External API - Property')
@@ -152,23 +152,7 @@ export class ExternalPropertyController {
     description: 'Updates OTA credentials (Expedia, Agoda, Booking.com) for a property'
   })
   @ApiQuery({ name: 'project_type', enum: ProjectType, required: true })
-  @ApiBody({
-    schema: {
-      type: 'object',
-      properties: {
-        expediaUsername: { type: 'string', example: 'hotel@expedia.com' },
-        expediaPassword: { type: 'string', example: 'secure-password' },
-        agodaUsername: { type: 'string', example: 'hotel@agoda.com' },
-        agodaPassword: { type: 'string', example: 'secure-password' },
-        bookingUsername: { type: 'string', example: 'hotel@booking.com' },
-        bookingPassword: { type: 'string', example: 'secure-password' },
-        expediaEmailAssociated: { type: 'string', example: 'manager@hotel.com' },
-        propertyContactEmail: { type: 'string', example: 'contact@hotel.com' },
-        portfolioContactEmail: { type: 'string', example: 'portfolio@company.com' },
-        multiplePortfolioEmails: { type: 'array', items: { type: 'string' } }
-      }
-    }
-  })
+  @ApiBody({ type: UpdatePropertyCredentialsExternalDto })
   @ApiResponse({ status: 200, description: 'Credentials updated successfully' })
   @ApiResponse({ status: 404, description: 'Property not found or no access' })
   async updateCredentials(
