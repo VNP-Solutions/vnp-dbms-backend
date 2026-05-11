@@ -80,7 +80,7 @@ export class UserService implements IUserService {
     const { user, properties, portfolios, userProjectRoles } = result
 
     // Check if user has permission to view this user
-    const accessibleIds = await this.permissionService.getAccessibleResourceIds(
+    const accessibleIds = this.permissionService.getAccessibleResourceIds(
       currentUser,
       ModuleType.USER
     )
@@ -322,7 +322,7 @@ export class UserService implements IUserService {
   }
 
   async findAll(query: UserQueryDto, user: IUserWithPermissions) {
-    const accessibleIds = await this.permissionService.getAccessibleResourceIds(
+    const accessibleIds = this.permissionService.getAccessibleResourceIds(
       user,
       ModuleType.USER
     )

@@ -66,7 +66,7 @@ export class UserRoleService implements IUserRoleService {
   }
 
   async findAll(user: IUserWithPermissions) {
-    const accessibleIds = await this.permissionService.getAccessibleResourceIds(
+    const accessibleIds = this.permissionService.getAccessibleResourceIds(
       user,
       ModuleType.ROLES
     )

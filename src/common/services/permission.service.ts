@@ -158,10 +158,10 @@ export class PermissionService {
     return this.checkPartialAccess(user, module, resourceId)
   }
 
-  async getAccessibleResourceIds(
+  getAccessibleResourceIds(
     user: IUserWithPermissions,
     module: ModuleType
-  ): Promise<string[] | 'all'> {
+  ): string[] | 'all' {
     const permission = this.getModulePermission(user, module)
 
     if (!permission || permission.access_level === AccessLevel.none) {
