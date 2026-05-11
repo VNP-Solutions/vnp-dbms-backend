@@ -1,3 +1,4 @@
+import { IsArray, IsOptional, IsString } from 'class-validator'
 import { ProjectType } from '@prisma/client'
 
 export interface DecryptedPropertyCredential {
@@ -162,26 +163,69 @@ export interface ExternalApiQueryDto {
 }
 
 export class UpdatePropertyCredentialsExternalDto {
+  @IsOptional() @IsString()
   expediaUsername?: string
+
+  @IsOptional() @IsString()
   expediaPassword?: string
+
+  @IsOptional() @IsString()
   agodaUsername?: string
+
+  @IsOptional() @IsString()
   agodaPassword?: string
+
+  @IsOptional() @IsString()
   bookingUsername?: string
+
+  @IsOptional() @IsString()
   bookingPassword?: string
+
+  @IsOptional() @IsString()
   expediaSecondaryUsername?: string
+
+  @IsOptional() @IsString()
   expediaSecondaryPassword?: string
+
+  @IsOptional() @IsString()
   bookingSecondaryUsername?: string
+
+  @IsOptional() @IsString()
   bookingSecondaryPassword?: string
+
+  @IsOptional() @IsString()
   agodaSecondaryUsername?: string
+
+  @IsOptional() @IsString()
   agodaSecondaryPassword?: string
+
+  @IsOptional() @IsString()
   expediaEmailAssociated?: string
+
+  @IsOptional() @IsString()
   propertyContactEmail?: string
+
+  @IsOptional() @IsString()
   portfolioContactEmail?: string
+
+  @IsOptional() @IsArray() @IsString({ each: true })
   multiplePortfolioEmails?: string[]
+
+  @IsOptional() @IsString()
   case_contact_email?: string
+
+  @IsOptional() @IsString()
   case_contact_name?: string
+
+  @IsOptional() @IsString()
   case_contact_phone?: string
+
+  @IsOptional() @IsString()
   reporting_contact_name?: string
+
+  @IsOptional() @IsString()
   reporting_contact_email?: string
+
+  @IsOptional() @IsString()
   reporting_contact_phone?: string
 }
