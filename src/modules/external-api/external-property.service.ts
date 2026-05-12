@@ -347,6 +347,124 @@ export class ExternalPropertyService {
     }
   }
 
+  async findByOtaIdForExternalProject(
+    user: IUserWithProjectRole,
+    projectType: ProjectType,
+    otaChannel: 'expedia' | 'booking' | 'agoda',
+    otaId: string
+  ): Promise<ExternalPropertyDto | null> {
+    const accessibleResources = getProjectAccessibleResources(user, projectType)
+
+    const fieldMap = {
+      expedia: 'expedia_id',
+      booking: 'booking_id',
+      agoda: 'agoda_id'
+    } as const
+
+    const where: any = {
+      [fieldMap[otaChannel]]: otaId
+    }
+
+    if (accessibleResources.property_ids !== 'all') {
+      if (accessibleResources.property_ids.length === 0) return null
+      where.id = { in: accessibleResources.property_ids }
+    }
+
+    if (accessibleResources.portfolio_ids !== 'all') {
+      if (accessibleResources.portfolio_ids.length === 0) return null
+      where.portfolio_id = { in: accessibleResources.portfolio_ids }
+    }
+
+    const property = await this.prisma.property.findFirst({
+      where,
+      include: {
+        portfolio: { select: { id: true, name: true } },
+        subportfolio: { select: { id: true, name: true } },
+        credentials: true
+      }
+    })
+
+    if (!property) return null
+
+    return {
+      id: property.id,
+      name: property.name,
+      card_descriptor: property.card_descriptor ?? null,
+      is_active: property.is_active,
+      next_due_date: property.next_due_date?.toISOString() ?? null,
+      portfolio_id: property.portfolio.id,
+      portfolio_name: property.portfolio.name,
+      service_type: property.service_type ?? null,
+      subportfolio_id: property.subportfolio?.id ?? null,
+      subportfolio_name: property.subportfolio?.name ?? null,
+      previous_portfolio_id: property.previous_portfolio_id ?? null,
+      show_in_portfolio: property.show_in_portfolio.length > 0 ? property.show_in_portfolio : [],
+      new_domain_email: property.new_domain_email ?? null,
+      others_case_emails: property.others_case_emails.length > 0 ? property.others_case_emails : [],
+      primary_case_email: property.primary_case_email ?? null,
+      portfolio_contact_email: property.portfolio_contact_email ?? null,
+      portfolio_contact: property.portfolio_contact ?? null,
+      webmail_password: property.webmail_password
+        ? this.safeDecrypt(property.webmail_password)
+        : null,
+      description: property.description ?? null,
+      hotel_address: property.hotel_address ?? null,
+      property_identifier: property.property_identifier ?? null,
+      case_management_contact: property.case_management_contact ?? null,
+      access_contact: property.access_contact ?? null,
+      reporting_contact: property.reporting_contact ?? null,
+      expedia_processor: property.expedia_processor ?? null,
+      booking_processor: property.booking_processor ?? null,
+      agoda_processor: property.agoda_processor ?? null,
+      from: property.from ?? null,
+      to: property.to ?? null,
+      qp_username: property.qp_username ?? null,
+      qp_password: property.qp_password ? EncryptionUtil.decrypt(property.qp_password, this.encryptionSecret) : null,
+      qp_api_key: property.qp_api_key ? EncryptionUtil.decrypt(property.qp_api_key, this.encryptionSecret) : null,
+      fp_mid: property.fp_mid ?? null,
+      fp_username: property.fp_username ?? null,
+      fp_password: property.fp_password ? this.safeDecrypt(property.fp_password) : null,
+      stripe_account_email: property.stripe_account_email ?? null,
+      expedia_id: property.expedia_id ?? null,
+      expedia_status: property.expedia_status ?? null,
+      booking_id: property.booking_id ?? null,
+      booking_status: property.booking_status ?? null,
+      agoda_id: property.agoda_id ?? null,
+      agoda_status: property.agoda_status ?? null,
+      expedia_billing_type: property.expedia_billing_type ?? null,
+      expedia_service_type: property.expedia_service_type ?? null,
+      expedia_frequency: property.expedia_frequency ?? null,
+      expedia_access_level: property.expedia_access_level ?? null,
+      expedia_from: property.expedia_from ?? null,
+      expedia_to: property.expedia_to ?? null,
+      expedia_scheduler: property.expedia_scheduler ?? null,
+      expedia_duration: property.expedia_duration ?? null,
+      booking_billing_type: property.booking_billing_type ?? null,
+      booking_service_type: property.booking_service_type ?? null,
+      booking_frequency: property.booking_frequency ?? null,
+      booking_access_level: property.booking_access_level ?? null,
+      booking_from: property.booking_from ?? null,
+      booking_to: property.booking_to ?? null,
+      booking_scheduler: property.booking_scheduler ?? null,
+      booking_duration: property.booking_duration ?? null,
+      agoda_billing_type: property.agoda_billing_type ?? null,
+      agoda_service_type: property.agoda_service_type ?? null,
+      agoda_frequency: property.agoda_frequency ?? null,
+      agoda_access_level: property.agoda_access_level ?? null,
+      agoda_from: property.agoda_from ?? null,
+      agoda_to: property.agoda_to ?? null,
+      agoda_scheduler: property.agoda_scheduler ?? null,
+      agoda_duration: property.agoda_duration ?? null,
+      need_another_domain: property.need_another_domain ?? null,
+      booking_otp_phone: property.booking_otp_phone ?? null,
+      created_at: property.created_at.toISOString(),
+      updated_at: property.updated_at.toISOString(),
+      credentials: (property as any).credentials?.[0]
+        ? this.decryptCredentials((property as any).credentials[0])
+        : null
+    }
+  }
+
   async findByPortfolioForExternalProject(
     user: IUserWithProjectRole,
     projectType: ProjectType,
