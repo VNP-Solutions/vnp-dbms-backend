@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -113,6 +114,49 @@ export class ExternalPropertyController {
         include_credentials: includeCredentials
       }
     )
+  }
+
+  @Get('lookup-by-ota')
+  @ApiOperation({
+    summary: 'Find property by OTA channel ID (expedia/booking/agoda)',
+    description: 'Looks up a property by its OTA ID and returns it with decrypted credentials. Provide exactly one of: expedia, booking, or agoda query parameter.'
+  })
+  @ApiQuery({ name: 'project_type', enum: ProjectType, required: true })
+  @ApiQuery({ name: 'expedia', type: String, required: false, description: 'Expedia property ID' })
+  @ApiQuery({ name: 'booking', type: String, required: false, description: 'Booking.com property ID' })
+  @ApiQuery({ name: 'agoda', type: String, required: false, description: 'Agoda property ID' })
+  @ApiResponse({ status: 200, description: 'Property with credentials' })
+  @ApiResponse({ status: 400, description: 'Must provide exactly one OTA channel ID' })
+  @ApiResponse({ status: 404, description: 'Property not found or no access' })
+  async findByOtaId(
+    @CurrentUser() user: IUserWithProjectRole,
+    @ParseQuery() query: Record<string, any>
+  ) {
+    const projectType = query.project_type as ProjectType
+    const channels = ['expedia', 'booking', 'agoda'] as const
+    const provided = channels.filter(ch => query[ch])
+
+    if (provided.length !== 1) {
+      throw new BadRequestException(
+        'Provide exactly one OTA channel query parameter: expedia, booking, or agoda'
+      )
+    }
+
+    const channel = provided[0]
+    const otaId = query[channel] as string
+
+    const property = await this.externalPropertyService.findByOtaIdForExternalProject(
+      user,
+      projectType,
+      channel,
+      otaId
+    )
+
+    if (!property) {
+      throw new NotFoundException('Property not found or access denied')
+    }
+
+    return property
   }
 
   @Get(':id')
