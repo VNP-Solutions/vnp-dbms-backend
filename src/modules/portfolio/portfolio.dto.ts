@@ -18,10 +18,10 @@ export class CreatePortfolioDto {
   @IsNotEmpty()
   name: string
 
-  @ApiProperty({ example: '507f1f77bcf86cd799439011', description: 'Service type ID' })
+  @ApiProperty({ example: 'OTA', description: 'Service type name' })
   @IsString()
   @IsNotEmpty()
-  service_type_id: string
+  service_type: string
 
   @ApiProperty({ example: true, description: 'Whether portfolio is active' })
   @IsBoolean()
@@ -74,10 +74,10 @@ export class CreatePortfolioDto {
 export class UpdatePortfolioDto extends PartialType(CreatePortfolioDto) {}
 
 export class PortfolioQueryDto extends QueryDto {
-  @ApiPropertyOptional({ description: 'Filter by service type ID', example: '507f1f77bcf86cd799439011' })
+  @ApiPropertyOptional({ description: 'Filter by service type', example: 'OTA' })
   @IsOptional()
   @IsString()
-  service_type_id?: string
+  service_type?: string
 
   @ApiPropertyOptional({
     description: 'Filter by active status: All (both), true (active only), false (inactive only)',

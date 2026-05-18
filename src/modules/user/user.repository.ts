@@ -224,12 +224,7 @@ export class UserRepository implements IUserRepository {
             select: {
               id: true,
               name: true,
-              serviceType: {
-                select: {
-                  id: true,
-                  type: true
-                }
-              }
+              service_type: true
             },
             orderBy: { name: 'asc' }
           })
@@ -262,12 +257,7 @@ export class UserRepository implements IUserRepository {
                 select: {
                   id: true,
                   name: true,
-                  serviceType: {
-                    select: {
-                      id: true,
-                      type: true
-                    }
-                  }
+                  service_type: true
                 },
                 orderBy: { name: 'asc' }
               })

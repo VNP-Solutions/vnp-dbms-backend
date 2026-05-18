@@ -288,7 +288,7 @@ export class PropertyRepository implements IPropertyRepository {
           portfolio = await this.prisma.portfolio.create({
             data: {
               name: portfolioName,
-              service_type_id: defaultServiceType.id,
+              service_type: defaultServiceType.type,
               is_active: true,
               is_commissionable: false
             },

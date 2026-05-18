@@ -3,17 +3,13 @@ import { PaginatedResult } from '../../common/dto/query.dto'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
 import { CreatePortfolioDto, PortfolioQueryDto, UpdatePortfolioDto } from './portfolio.dto'
 
-export type PortfolioWithServiceType = Portfolio & {
-  serviceType: { id: string; type: string; is_active: boolean }
-}
-
-export type PortfolioWithCounts = PortfolioWithServiceType & {
+export type PortfolioWithCounts = Portfolio & {
   total_properties: number
   total_subportfolios: number
 }
 
 export interface IPortfolioRepository {
-  create(data: CreatePortfolioDto): Promise<PortfolioWithServiceType>
+  create(data: CreatePortfolioDto): Promise<Portfolio>
   findAll(queryOptions: {
     where: any
     skip?: number
@@ -23,7 +19,7 @@ export interface IPortfolioRepository {
   count(where: any): Promise<number>
   findById(id: string): Promise<PortfolioWithCounts | null>
   findByName(name: string): Promise<Portfolio | null>
-  update(id: string, data: UpdatePortfolioDto): Promise<PortfolioWithServiceType>
+  update(id: string, data: UpdatePortfolioDto): Promise<Portfolio>
   delete(id: string): Promise<Portfolio>
   countProperties(portfolioId: string): Promise<number>
   getAccessiblePortfolioIds(userId: string): Promise<string[] | 'all'>
@@ -42,11 +38,11 @@ export interface ImportPortfoliosResult {
 }
 
 export interface IPortfolioService {
-  create(data: CreatePortfolioDto, user: IUserWithPermissions): Promise<PortfolioWithServiceType>
+  create(data: CreatePortfolioDto, user: IUserWithPermissions): Promise<Portfolio>
   findAll(query: PortfolioQueryDto, user: IUserWithPermissions): Promise<PaginatedResult<PortfolioWithCounts>>
   findAllCached(user: IUserWithPermissions): Promise<PortfolioWithCounts[]>
   findOne(id: string, user: IUserWithPermissions): Promise<PortfolioWithCounts>
-  update(id: string, data: UpdatePortfolioDto, user: IUserWithPermissions): Promise<PortfolioWithServiceType>
+  update(id: string, data: UpdatePortfolioDto, user: IUserWithPermissions): Promise<Portfolio>
   remove(id: string, user: IUserWithPermissions): Promise<{ message: string }>
   importFromExcel(
     file: Express.Multer.File,
