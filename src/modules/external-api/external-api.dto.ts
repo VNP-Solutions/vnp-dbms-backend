@@ -47,12 +47,7 @@ export interface DecryptedPortfolioCredential {
 export interface ExternalPortfolioDto {
   id: string
   name: string
-  service_type_id: string
-  service_type: {
-    id: string
-    type: string
-    is_active: boolean
-  }
+  service_type: string
   is_active: boolean
   contact_email: string | null
   portfolio_contact_email: string | null

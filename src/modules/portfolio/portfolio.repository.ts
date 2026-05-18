@@ -1,7 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common'
+import { Portfolio } from '@prisma/client'
 import { PrismaService } from '../prisma/prisma.service'
 import { CreatePortfolioDto, UpdatePortfolioDto } from './portfolio.dto'
-import type { IPortfolioRepository, PortfolioWithCounts, PortfolioWithServiceType } from './portfolio.interface'
+import type { IPortfolioRepository, PortfolioWithCounts } from './portfolio.interface'
 
 @Injectable()
 export class PortfolioRepository implements IPortfolioRepository {
@@ -31,28 +32,10 @@ export class PortfolioRepository implements IPortfolioRepository {
     return []
   }
 
-  async create(data: CreatePortfolioDto): Promise<PortfolioWithServiceType> {
-    const { service_type_id, ...rest } = data
-    
-    const serviceType = await this.prisma.serviceType.findUnique({
-      where: { id: service_type_id }
-    })
-    
-    if (!serviceType) {
-      throw new Error(`ServiceType with ID ${service_type_id} not found`)
-    }
-
-    const createData: any = {
-      ...rest,
-      serviceType: { connect: { id: service_type_id } }
-    }
-
+  async create(data: CreatePortfolioDto): Promise<Portfolio> {
     return this.prisma.portfolio.create({
-      data: createData,
-      include: {
-        serviceType: { select: { id: true, type: true, is_active: true } }
-      }
-    }) as Promise<PortfolioWithServiceType>
+      data
+    })
   }
 
   async findAll(queryOptions: {
@@ -68,7 +51,6 @@ export class PortfolioRepository implements IPortfolioRepository {
       take,
       orderBy,
       include: {
-        serviceType: { select: { id: true, type: true, is_active: true } },
         _count: {
           select: { properties: true, subportfolios: true }
         }
@@ -90,7 +72,6 @@ export class PortfolioRepository implements IPortfolioRepository {
     const portfolio = await this.prisma.portfolio.findUnique({
       where: { id },
       include: {
-        serviceType: { select: { id: true, type: true, is_active: true } },
         _count: { select: { properties: true, subportfolios: true } }
       }
     })
@@ -107,33 +88,11 @@ export class PortfolioRepository implements IPortfolioRepository {
     return this.prisma.portfolio.findUnique({ where: { name } })
   }
 
-  async update(id: string, data: UpdatePortfolioDto): Promise<PortfolioWithServiceType> {
-    const { service_type_id, is_active, ...rest } = data
-    const updateData: any = { ...rest }
-    
-    if (service_type_id) {
-      const serviceType = await this.prisma.serviceType.findUnique({
-        where: { id: service_type_id }
-      })
-      
-      if (!serviceType) {
-        throw new Error(`ServiceType with ID ${service_type_id} not found`)
-      }
-      
-      updateData.serviceType = { connect: { id: service_type_id } }
-    }
-
-    if (is_active !== undefined) {
-      updateData.is_active = is_active
-    }
-
+  async update(id: string, data: UpdatePortfolioDto): Promise<Portfolio> {
     return this.prisma.portfolio.update({
       where: { id },
-      data: updateData,
-      include: {
-        serviceType: { select: { id: true, type: true, is_active: true } }
-      }
-    }) as Promise<PortfolioWithServiceType>
+      data
+    })
   }
 
   async delete(id: string) {

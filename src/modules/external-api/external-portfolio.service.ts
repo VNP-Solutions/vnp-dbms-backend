@@ -53,13 +53,6 @@ export class ExternalPortfolioService {
     const portfolios = await this.prisma.portfolio.findMany({
       where,
       include: {
-        serviceType: {
-          select: {
-            id: true,
-            type: true,
-            is_active: true
-          }
-        },
         subportfolios: {
           select: { id: true }
         },
@@ -72,12 +65,7 @@ export class ExternalPortfolioService {
     return portfolios.map(portfolio => ({
       id: portfolio.id,
       name: portfolio.name,
-      service_type_id: portfolio.service_type_id,
-      service_type: {
-        id: portfolio.serviceType.id,
-        type: portfolio.serviceType.type,
-        is_active: portfolio.serviceType.is_active
-      },
+      service_type: portfolio.service_type,
       is_active: portfolio.is_active,
       contact_email: portfolio.contact_email ?? null,
       portfolio_contact_email: portfolio.portfolio_contact_email ?? null,
@@ -112,13 +100,6 @@ export class ExternalPortfolioService {
     const portfolio = await this.prisma.portfolio.findUnique({
       where: { id: portfolioId },
       include: {
-        serviceType: {
-          select: {
-            id: true,
-            type: true,
-            is_active: true
-          }
-        },
         subportfolios: {
           select: { id: true }
         },
@@ -135,12 +116,7 @@ export class ExternalPortfolioService {
     return {
       id: portfolio.id,
       name: portfolio.name,
-      service_type_id: portfolio.service_type_id,
-      service_type: {
-        id: portfolio.serviceType.id,
-        type: portfolio.serviceType.type,
-        is_active: portfolio.serviceType.is_active
-      },
+      service_type: portfolio.service_type,
       is_active: portfolio.is_active,
       contact_email: portfolio.contact_email ?? null,
       portfolio_contact_email: portfolio.portfolio_contact_email ?? null,

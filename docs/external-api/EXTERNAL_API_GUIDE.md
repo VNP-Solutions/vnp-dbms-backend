@@ -52,11 +52,7 @@ GET /external/portfolio?project_type={DASHBOARD|PARSER}&is_active={true|false}&i
   {
     "id": "portfolio_id",
     "name": "Portfolio Name",
-    "service_type": {
-      "id": "service_type_id",
-      "type": "Service Type Name"
-    },
-    "currency": "USD",
+    "service_type": "OTA",
     "is_active": true,
     "contact_email": "contact@example.com",
     "portfolio_contact_email": "portfolio@example.com",

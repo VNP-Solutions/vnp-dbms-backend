@@ -62,7 +62,7 @@ export class PortfolioService implements IPortfolioService {
     }
 
     const additionalFilters: any = {}
-    if (query.service_type_id) additionalFilters.service_type_id = query.service_type_id
+    if (query.service_type) additionalFilters.service_type = query.service_type
     if (query.is_active !== undefined && query.is_active !== 'All') {
       additionalFilters.is_active = query.is_active
     }
@@ -80,11 +80,11 @@ export class PortfolioService implements IPortfolioService {
 
     const queryConfig = {
       searchFields: ['name'],
-      filterableFields: ['service_type_id', 'is_active'],
+      filterableFields: ['service_type', 'is_active'],
       sortableFields: ['name', 'created_at', 'updated_at', 'is_active', 'is_commissionable'],
       defaultSortField: 'created_at',
       defaultSortOrder: 'desc' as const,
-      nestedFieldMap: { service_type_name: 'serviceType.type' }
+      nestedFieldMap: {}
     }
 
     const baseWhere =
@@ -200,6 +200,7 @@ export class PortfolioService implements IPortfolioService {
     ) || 'Service Type'
 
     // Find or create default "OTA" service type
+    let defaultServiceTypeName = 'OTA'
     let defaultServiceType = await this.prisma.serviceType.findFirst({
       where: { type: { equals: 'OTA', mode: 'insensitive' } }
     })
@@ -219,6 +220,7 @@ export class PortfolioService implements IPortfolioService {
       })
       this.logger.log('Default "OTA" service type created successfully')
     }
+    defaultServiceTypeName = defaultServiceType.type
 
     let portfoliosCreated = 0
     const portfolios: any[] = []
@@ -254,17 +256,14 @@ export class PortfolioService implements IPortfolioService {
 
         const row = data[rowIndex] as any
 
-        let service_type_id = defaultServiceType.id
+        let service_type_name = defaultServiceTypeName
 
-        // Service type column value is always a human-readable name (e.g. "OTA").
-        // If provided but doesn't exist, create it.
         if (row?.[serviceTypeCol]) {
           const stName = String(row[serviceTypeCol]).trim()
           let st = await this.prisma.serviceType.findFirst({
             where: { type: { equals: stName, mode: 'insensitive' } }
           })
           if (!st) {
-            // Name provided but doesn't exist → create it
             this.logger.log(
               `ServiceType "${stName}" not found for portfolio "${name}" — creating it`
             )
@@ -281,9 +280,8 @@ export class PortfolioService implements IPortfolioService {
             })
             this.logger.log(`ServiceType "${stName}" created successfully`)
           }
-          service_type_id = st.id
+          service_type_name = st.type
         }
-        // If no serviceTypeCol / empty cell → keep defaultServiceType.id
 
         const valActive = row?.['Active status']
         const is_active = valActive !== undefined
@@ -302,7 +300,7 @@ export class PortfolioService implements IPortfolioService {
 
         const dto: CreatePortfolioDto = {
           name,
-          service_type_id,
+          service_type: service_type_name,
           is_active,
           is_commissionable,
           contact_email: row?.['Contact Email'] ? String(row['Contact Email']).trim() : undefined,

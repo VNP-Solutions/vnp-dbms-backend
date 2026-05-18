@@ -136,12 +136,7 @@ Body:
     {
       "id": "507f1f77bcf86cd799439011",
       "name": "Portfolio A",
-      "service_type_id": "507f1f77bcf86cd799439020",
-      "serviceType": {
-        "id": "507f1f77bcf86cd799439020",
-        "type": "OTA",
-        "is_active": true
-      },
+      "service_type": "OTA",
       "is_active": true,
       "is_commissionable": true,
       "created_at": "2024-01-15T10:30:00.000Z",

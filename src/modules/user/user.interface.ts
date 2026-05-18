@@ -124,10 +124,7 @@ export type UserWithAccessedProperties = UserWithDetails & {
     portfolios: Array<{
       id: string
       name: string
-      serviceType: {
-        id: string
-        type: string
-      }
+      service_type: string
     }>
     properties: Array<{
       id: string
@@ -150,10 +147,7 @@ export type UserWithAccessedProperties = UserWithDetails & {
       portfolios: Array<{
         id: string
         name: string
-        serviceType: {
-          id: string
-          type: string
-        }
+        service_type: string
       }>
     }>
   }
@@ -176,10 +170,7 @@ export interface IUserRepository {
     portfolios: Array<{
       id: string
       name: string
-      serviceType: {
-        id: string
-        type: string
-      }
+      service_type: string
     }>
     userProjectRoles: Array<{
       id: string
@@ -194,10 +185,7 @@ export interface IUserRepository {
       portfolios: Array<{
         id: string
         name: string
-        serviceType: {
-          id: string
-          type: string
-        }
+        service_type: string
       }>
     }>
   } | null>

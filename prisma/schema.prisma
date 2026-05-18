@@ -48,12 +48,14 @@ enum OtaBillingType {
   VCC
   DB
   EBS
+  REVIEW
 }
 
 enum OtaIntegrationFrequency {
   REGULAR
   ONE_TIME
   STOP
+  ON_DEMAND
 }
 
 model User {
@@ -240,7 +242,6 @@ model ServiceType {
   type       String      @unique
   is_active  Boolean
   order      Int         @default(0)
-  portfolios Portfolio[]
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -267,7 +268,7 @@ model Currency {
 model Portfolio {
   id                           String                        @id @default(auto()) @map("_id") @db.ObjectId
   name                         String                        @unique
-  service_type_id              String                        @db.ObjectId
+  service_type                 String
   is_active                    Boolean
   contact_email                String?
   portfolio_contact_email      String?
@@ -284,9 +285,7 @@ model Portfolio {
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
-  serviceType ServiceType @relation(fields: [service_type_id], references: [id])
-
-  @@index([service_type_id])
+  @@index([service_type])
   @@index([is_active])
   @@index([is_commissionable])
 }
