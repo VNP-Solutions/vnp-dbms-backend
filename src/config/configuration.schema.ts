@@ -86,6 +86,10 @@ export class ConfigurationSchema {
 
   @IsOptional()
   @IsString()
+  SCRAPER_BACKEND_URL?: string
+
+  @IsOptional()
+  @IsString()
   REDIS_HOST?: string
 
   @IsOptional()
