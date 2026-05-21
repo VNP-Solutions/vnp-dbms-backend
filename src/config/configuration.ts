@@ -41,6 +41,7 @@ export interface Configuration {
     workers: number
   }
   superAdminSecret: string
+  scraperBackendUrl: string
   redis: {
     host: string
     port: number
@@ -94,6 +95,7 @@ export default (): Configuration => ({
     workers: parseInt(process.env.PARALLEL_WORKERS || '8', 10)
   },
   superAdminSecret: process.env.SUPER_ADMIN_SECRET || '',
+  scraperBackendUrl: process.env.SCRAPER_BACKEND_URL || '',
   redis: {
     host: process.env.REDIS_HOST || 'localhost',
     port: parseInt(process.env.REDIS_PORT || '6379', 10),

@@ -1,5 +1,102 @@
-import { IsArray, IsOptional, IsString } from 'class-validator'
+import { ApiProperty } from '@nestjs/swagger'
+import { Type } from 'class-transformer'
+import {
+  IsArray,
+  IsDateString,
+  IsIn,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Max,
+  Min,
+  ValidateNested
+} from 'class-validator'
 import { ProjectType } from '@prisma/client'
+
+// ─── Recurring Jobs: DBMS Pre-Check ──────────────────────────────────────────
+
+export const RECURRING_JOB_POSTING_TYPES = ['OTA', 'OTA_PLUS'] as const
+export type RecurringJobPostingType =
+  (typeof RECURRING_JOB_POSTING_TYPES)[number]
+
+export class RecurringJobPropertyDto {
+  @ApiProperty({ example: 'Hotel Grandeur', description: 'Property name' })
+  @IsString()
+  @IsNotEmpty()
+  name: string
+
+  @ApiProperty({ example: 12345, description: 'Expedia property ID' })
+  @IsNumber()
+  expedia_id: number
+
+  @ApiProperty({
+    example: '2025-06-01',
+    description: 'Initial processing date (YYYY-MM-DD)'
+  })
+  @IsDateString()
+  initial_date: string
+
+  @ApiProperty({
+    example: '2025-06-15',
+    description: 'Recurring processing date (YYYY-MM-DD)'
+  })
+  @IsDateString()
+  recurring_date: string
+
+  @ApiProperty({
+    example: 3,
+    description: 'Duration in months (1–12)',
+    minimum: 1,
+    maximum: 12
+  })
+  @IsNumber()
+  @Min(1)
+  @Max(12)
+  duration: number
+
+  @ApiProperty({
+    example: 'OTA',
+    enum: RECURRING_JOB_POSTING_TYPES,
+    description: 'Posting type'
+  })
+  @IsIn([...RECURRING_JOB_POSTING_TYPES])
+  posting_type: RecurringJobPostingType
+
+  @ApiProperty({
+    example: 'VCC',
+    description:
+      'Billing type (DBMS-only; stripped before forwarding to scraper)'
+  })
+  @IsString()
+  @IsNotEmpty()
+  billing_type: string
+}
+
+export class DbmsPreCheckDto {
+  @ApiProperty({
+    type: [RecurringJobPropertyDto],
+    description: 'List of properties to pre-check'
+  })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => RecurringJobPropertyDto)
+  properties: RecurringJobPropertyDto[]
+}
+
+/** Shape forwarded to scraper backend — billing_type excluded */
+export interface ScraperIngestProperty {
+  name: string
+  expedia_id: number
+  initial_date: string
+  recurring_date: string
+  duration: number
+  posting_type: RecurringJobPostingType
+}
+
+export interface ScraperIngestPayload {
+  properties: ScraperIngestProperty[]
+}
 
 export interface DecryptedPropertyCredential {
   id: string
