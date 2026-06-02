@@ -479,6 +479,7 @@ export class CreatePropertyDto {
   @Type(() => Number)
   expedia_duration?: number
 
+<<<<<<< Updated upstream
   @ApiPropertyOptional({ description: 'Expedia DB duration in days', example: 30 })
   @IsNumber()
   @IsOptional()
@@ -486,14 +487,29 @@ export class CreatePropertyDto {
   expedia_db_duration?: number
 
   @ApiPropertyOptional({ description: 'Expedia service fee' })
+=======
+  @ApiPropertyOptional({ example: '5%', description: 'Expedia service fee' })
+>>>>>>> Stashed changes
   @IsString()
   @IsOptional()
   expedia_service_fee?: string
 
+<<<<<<< Updated upstream
   @ApiPropertyOptional({ description: 'Expedia priority' })
   @IsString()
   @IsOptional()
   expedia_priority?: string
+=======
+  @ApiPropertyOptional({
+    example: 'HIGH',
+    description: 'Expedia priority',
+    enum: ['HIGH', 'NORMAL']
+  })
+  @Transform(({ value }) => value?.toString().toUpperCase())
+  @IsOptional()
+  @IsIn(['HIGH', 'NORMAL'])
+  expedia_priority?: 'HIGH' | 'NORMAL'
+>>>>>>> Stashed changes
 
   @ApiPropertyOptional({ description: 'Expedia CRS' })
   @IsString()
@@ -505,37 +521,74 @@ export class CreatePropertyDto {
   @IsOptional()
   expedia_crs_db?: string
 
+<<<<<<< Updated upstream
   @ApiPropertyOptional({ description: 'Expedia run date (YYYY-MM-DD)', example: '2024-01-01' })
+=======
+  @ApiPropertyOptional({ description: 'Expedia run date (YYYY-MM-DD)' })
+>>>>>>> Stashed changes
   @IsString()
   @IsOptional()
   expedia_run_date?: string
 
+<<<<<<< Updated upstream
   @ApiPropertyOptional({ description: 'Expedia run date DB (YYYY-MM-DD)', example: '2024-01-01' })
+=======
+  @ApiPropertyOptional({ description: 'Expedia run date (DB)' })
+>>>>>>> Stashed changes
   @IsString()
   @IsOptional()
   expedia_run_date_db?: string
 
+<<<<<<< Updated upstream
   @ApiPropertyOptional({ description: 'Expedia revised date (YYYY-MM-DD)', example: '2024-01-15' })
+=======
+  @ApiPropertyOptional({ description: 'Expedia revised from date (YYYY-MM-DD)' })
+>>>>>>> Stashed changes
   @IsString()
   @IsOptional()
   expedia_revised_date?: string
 
+<<<<<<< Updated upstream
   @ApiPropertyOptional({ description: 'Expedia scheduler review' })
+=======
+  @ApiPropertyOptional({ description: 'Expedia scheduler — Review' })
+>>>>>>> Stashed changes
   @IsString()
   @IsOptional()
   expedia_scheduler_review?: string
 
+<<<<<<< Updated upstream
   @ApiPropertyOptional({ description: 'Expedia scheduler (DB)' })
+=======
+  @ApiPropertyOptional({ description: 'Expedia scheduler — DB' })
+>>>>>>> Stashed changes
   @IsString()
   @IsOptional()
   expedia_scheduler_db?: string
 
+<<<<<<< Updated upstream
   @ApiPropertyOptional({ description: 'Expedia scheduler review (DB)' })
+=======
+  @ApiPropertyOptional({ description: 'Expedia scheduler — Review DB' })
+>>>>>>> Stashed changes
   @IsString()
   @IsOptional()
   expedia_scheduler_review_db?: string
 
+<<<<<<< Updated upstream
   @ApiPropertyOptional({ description: 'Expedia credential verified' })
+=======
+  @ApiPropertyOptional({
+    example: 1,
+    description: 'Expedia reporting DB duration (months, e.g. 1, 3, 6, 12)'
+  })
+  @IsNumber()
+  @IsOptional()
+  @Type(() => Number)
+  expedia_db_duration?: number
+
+  @ApiPropertyOptional({ description: 'Expedia credentials verified' })
+>>>>>>> Stashed changes
   @IsString()
   @IsOptional()
   expedia_credential_verified?: string
@@ -545,12 +598,20 @@ export class CreatePropertyDto {
   @IsOptional()
   expedia_otp_number?: string
 
+<<<<<<< Updated upstream
   @ApiPropertyOptional({ description: 'From date DB (YYYY-MM-DD)', example: '2024-01-01' })
+=======
+  @ApiPropertyOptional({ description: 'Historical review DB from (YYYY-MM-DD)' })
+>>>>>>> Stashed changes
   @IsString()
   @IsOptional()
   from_db?: string
 
+<<<<<<< Updated upstream
   @ApiPropertyOptional({ description: 'To date DB (YYYY-MM-DD)', example: '2024-12-31' })
+=======
+  @ApiPropertyOptional({ description: 'Historical review DB to (YYYY-MM-DD)' })
+>>>>>>> Stashed changes
   @IsString()
   @IsOptional()
   to_db?: string
@@ -622,37 +683,71 @@ export class CreatePropertyDto {
   @Type(() => Number)
   booking_duration?: number
 
+<<<<<<< Updated upstream
   @ApiPropertyOptional({ description: 'Booking service fee' })
+=======
+  @ApiPropertyOptional({ example: '5%', description: 'Booking.com service fee' })
+>>>>>>> Stashed changes
   @IsString()
   @IsOptional()
   booking_service_fee?: string
 
+<<<<<<< Updated upstream
   @ApiPropertyOptional({ description: 'Booking priority' })
   @IsString()
   @IsOptional()
   booking_priority?: string
 
   @ApiPropertyOptional({ description: 'Booking CRS' })
+=======
+  @ApiPropertyOptional({
+    example: 'NORMAL',
+    description: 'Booking.com priority',
+    enum: ['HIGH', 'NORMAL']
+  })
+  @Transform(({ value }) => value?.toString().toUpperCase())
+  @IsOptional()
+  @IsIn(['HIGH', 'NORMAL'])
+  booking_priority?: 'HIGH' | 'NORMAL'
+
+  @ApiPropertyOptional({ description: 'Booking.com CRS' })
+>>>>>>> Stashed changes
   @IsString()
   @IsOptional()
   booking_crs?: string
 
+<<<<<<< Updated upstream
   @ApiPropertyOptional({ description: 'Booking run date (YYYY-MM-DD)', example: '2024-01-01' })
+=======
+  @ApiPropertyOptional({ description: 'Booking.com run date (YYYY-MM-DD)' })
+>>>>>>> Stashed changes
   @IsString()
   @IsOptional()
   booking_run_date?: string
 
+<<<<<<< Updated upstream
   @ApiPropertyOptional({ description: 'Booking revised date (YYYY-MM-DD)', example: '2024-01-15' })
+=======
+  @ApiPropertyOptional({ description: 'Booking.com revised from date (YYYY-MM-DD)' })
+>>>>>>> Stashed changes
   @IsString()
   @IsOptional()
   booking_revised_date?: string
 
+<<<<<<< Updated upstream
   @ApiPropertyOptional({ description: 'Booking credential verified' })
+=======
+  @ApiPropertyOptional({ description: 'Booking.com credentials verified' })
+>>>>>>> Stashed changes
   @IsString()
   @IsOptional()
   booking_credential_verified?: string
 
+<<<<<<< Updated upstream
   @ApiPropertyOptional({ description: 'Booking OTP number' })
+=======
+  @ApiPropertyOptional({ description: 'Booking.com OTP number' })
+>>>>>>> Stashed changes
   @IsString()
   @IsOptional()
   booking_otp_number?: string
@@ -724,32 +819,60 @@ export class CreatePropertyDto {
   @Type(() => Number)
   agoda_duration?: number
 
+<<<<<<< Updated upstream
   @ApiPropertyOptional({ description: 'Agoda service fee' })
+=======
+  @ApiPropertyOptional({ example: '5%', description: 'Agoda service fee' })
+>>>>>>> Stashed changes
   @IsString()
   @IsOptional()
   agoda_service_fee?: string
 
+<<<<<<< Updated upstream
   @ApiPropertyOptional({ description: 'Agoda priority' })
   @IsString()
   @IsOptional()
   agoda_priority?: string
+=======
+  @ApiPropertyOptional({
+    example: 'HIGH',
+    description: 'Agoda priority',
+    enum: ['HIGH', 'NORMAL']
+  })
+  @Transform(({ value }) => value?.toString().toUpperCase())
+  @IsOptional()
+  @IsIn(['HIGH', 'NORMAL'])
+  agoda_priority?: 'HIGH' | 'NORMAL'
+>>>>>>> Stashed changes
 
   @ApiPropertyOptional({ description: 'Agoda CRS' })
   @IsString()
   @IsOptional()
   agoda_crs?: string
 
+<<<<<<< Updated upstream
   @ApiPropertyOptional({ description: 'Agoda run date (YYYY-MM-DD)', example: '2024-01-01' })
+=======
+  @ApiPropertyOptional({ description: 'Agoda run date (YYYY-MM-DD)' })
+>>>>>>> Stashed changes
   @IsString()
   @IsOptional()
   agoda_run_date?: string
 
+<<<<<<< Updated upstream
   @ApiPropertyOptional({ description: 'Agoda revised date (YYYY-MM-DD)', example: '2024-01-15' })
+=======
+  @ApiPropertyOptional({ description: 'Agoda revised from date (YYYY-MM-DD)' })
+>>>>>>> Stashed changes
   @IsString()
   @IsOptional()
   agoda_revised_date?: string
 
+<<<<<<< Updated upstream
   @ApiPropertyOptional({ description: 'Agoda credential verified' })
+=======
+  @ApiPropertyOptional({ description: 'Agoda credentials verified' })
+>>>>>>> Stashed changes
   @IsString()
   @IsOptional()
   agoda_credential_verified?: string
@@ -759,11 +882,14 @@ export class CreatePropertyDto {
   @IsOptional()
   agoda_otp_number?: string
 
+<<<<<<< Updated upstream
   @ApiPropertyOptional({ description: 'Sales representative name' })
   @IsString()
   @IsOptional()
   sales_rep?: string
 
+=======
+>>>>>>> Stashed changes
   @ApiPropertyOptional({
     example: true,
     description: 'Need another domain for OTA integrations'
@@ -779,6 +905,11 @@ export class CreatePropertyDto {
   @IsString()
   @IsOptional()
   booking_otp_phone?: string
+
+  @ApiPropertyOptional({ description: 'Sales representative' })
+  @IsString()
+  @IsOptional()
+  sales_rep?: string
 
   @ApiPropertyOptional({
     description: 'Property credentials (OTA login details)',
@@ -1136,7 +1267,37 @@ export const PROPERTY_FILTER_FIELD_NAMES = [
   'agoda_duration',
   'need_another_domain',
   'created_at',
-  'updated_at'
+  'updated_at',
+  'expedia_service_fee',
+  'booking_service_fee', 
+  'agoda_service_fee',
+  'expedia_priority', 
+  'booking_priority', 
+  'agoda_priority',
+  'expedia_crs', 
+  'expedia_crs_db', 
+  'booking_crs', 
+  'agoda_crs',
+  'expedia_run_date', 
+  'expedia_run_date_db', 
+  'booking_run_date', 
+  'agoda_run_date',
+  'expedia_revised_date', 
+  'booking_revised_date', 
+  'agoda_revised_date',
+  'expedia_scheduler_review', 
+  'expedia_scheduler_db', 
+  'expedia_scheduler_review_db',
+  'expedia_db_duration',
+  'expedia_credential_verified', 
+  'booking_credential_verified', 
+  'agoda_credential_verified',
+  'expedia_otp_number', 
+  'booking_otp_number', 
+  'agoda_otp_number',
+  'from_db', 
+  'to_db',
+  'sales_rep'
 ] as const
 
 export type PropertyFilterFieldName = (typeof PROPERTY_FILTER_FIELD_NAMES)[number]
@@ -1199,6 +1360,28 @@ function swaggerExampleForFilterName(name: PropertyFilterFieldName): {
     name === 'to'
   )
     return { in: ['2024-01-01', '2024-12-31'] }
+  if (name.endsWith('_priority')) return { in: ['HIGH', 'NORMAL'] }
+  if (name === 'expedia_db_duration') return { in: [1, 3, 6, 12] }
+  if (
+    name === 'from_db' ||
+    name === 'to_db' ||
+    name.endsWith('_run_date') ||
+    name === 'expedia_run_date_db' ||
+    name.endsWith('_revised_date')
+  ) {
+    return { in: ['2026-1-1', '2026-06-1'] }
+  }
+  if (
+    name.endsWith('_credential_verified') ||
+    name.endsWith('_otp_number') ||
+    name.endsWith('_service_fee') ||
+    name.endsWith('_crs') ||
+    name === 'expedia_crs_db' ||
+    name.startsWith('expedia_scheduler_') ||
+    name === 'sales_rep'
+  ) {
+    return { in: [`example-${name}`] }
+  }
   return { in: [`example-${name}`] }
 }
 
@@ -1578,6 +1761,95 @@ export class AllDataForGlobalFilterResponseDto {
 
   @ApiProperty({ type: [String] })
   agoda_secondary_username: string[]
+
+  @ApiProperty({ type: [String] }) 
+  expedia_service_fee: string[]
+  
+  @ApiProperty({ type: [String] }) 
+  booking_service_fee: string[]
+ 
+  @ApiProperty({ type: [String] }) 
+  agoda_service_fee: string[]
+
+  @ApiProperty({ type: [String] }) 
+  expedia_priority: string[]
+  
+  @ApiProperty({ type: [String] }) 
+  booking_priority: string[]
+  
+  @ApiProperty({ type: [String] }) 
+  agoda_priority: string[]
+
+  @ApiProperty({ type: [String] }) 
+  expedia_crs: string[]
+ 
+  @ApiProperty({ type: [String] }) 
+  expedia_crs_db: string[]
+  
+  @ApiProperty({ type: [String] }) 
+  booking_crs: string[]
+ 
+  @ApiProperty({ type: [String] }) 
+  agoda_crs: string[]
+
+  @ApiProperty({ type: [String] }) 
+  expedia_run_date: string[]
+  
+  @ApiProperty({ type: [String] }) 
+  expedia_run_date_db: string[]
+  
+  @ApiProperty({ type: [String] }) 
+  booking_run_date: string[]
+  
+  @ApiProperty({ type: [String] }) 
+  agoda_run_date: string[]
+
+  @ApiProperty({ type: [String] }) 
+  expedia_revised_date: string[]
+  
+  @ApiProperty({ type: [String] }) 
+  booking_revised_date: string[]
+  
+  @ApiProperty({ type: [String] }) 
+  agoda_revised_date: string[]
+
+  @ApiProperty({ type: [String] }) 
+  expedia_scheduler_review: string[]
+  
+  @ApiProperty({ type: [String] }) 
+  expedia_scheduler_db: string[]
+ 
+  @ApiProperty({ type: [String] }) 
+  expedia_scheduler_review_db: string[]
+
+  @ApiProperty({ type: [String], description: 'Stringified integers' })
+  expedia_db_duration: string[]
+
+  @ApiProperty({ type: [String] }) 
+  expedia_credential_verified: string[]
+  
+  @ApiProperty({ type: [String] }) 
+  booking_credential_verified: string[]
+  
+  @ApiProperty({ type: [String] }) 
+  agoda_credential_verified: string[]
+
+  @ApiProperty({ type: [String] }) 
+  expedia_otp_number: string[]
+  
+  @ApiProperty({ type: [String] }) 
+  booking_otp_number: string[]
+  
+  @ApiProperty({ type: [String] }) 
+  agoda_otp_number: string[]
+
+  @ApiProperty({ type: [String] }) 
+  from_db: string[]
+  
+  @ApiProperty({ type: [String] }) 
+  to_db: string[]
+
+  @ApiProperty({ type: [String] }) sales_rep: string[]
 }
 
 export class ExportPropertyExcelDto extends PropertyFilterDto {

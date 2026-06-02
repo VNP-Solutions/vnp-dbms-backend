@@ -144,7 +144,37 @@ export class PropertyRepository implements IPropertyRepository {
       agoda_otp_number: data.agoda_otp_number,
       sales_rep: data.sales_rep,
       need_another_domain: data.need_another_domain,
-      booking_otp_phone: data.booking_otp_phone
+      booking_otp_phone: data.booking_otp_phone,
+      expedia_service_fee: data.expedia_service_fee,
+      expedia_priority: data.expedia_priority,
+      expedia_crs: data.expedia_crs,
+      expedia_crs_db: data.expedia_crs_db,
+      expedia_run_date: data.expedia_run_date,
+      expedia_run_date_db: data.expedia_run_date_db,
+      expedia_revised_date: data.expedia_revised_date,
+      expedia_scheduler_review: data.expedia_scheduler_review,
+      expedia_scheduler_db: data.expedia_scheduler_db,
+      expedia_scheduler_review_db: data.expedia_scheduler_review_db,
+      expedia_db_duration: data.expedia_db_duration,
+      expedia_credential_verified: data.expedia_credential_verified,
+      expedia_otp_number: data.expedia_otp_number,
+      booking_service_fee: data.booking_service_fee,
+      booking_priority: data.booking_priority,
+      booking_crs: data.booking_crs,
+      booking_run_date: data.booking_run_date,
+      booking_revised_date: data.booking_revised_date,
+      booking_credential_verified: data.booking_credential_verified,
+      booking_otp_number: data.booking_otp_number,
+      agoda_service_fee: data.agoda_service_fee,
+      agoda_priority: data.agoda_priority,
+      agoda_crs: data.agoda_crs,
+      agoda_run_date: data.agoda_run_date,
+      agoda_revised_date: data.agoda_revised_date,
+      agoda_credential_verified: data.agoda_credential_verified,
+      agoda_otp_number: data.agoda_otp_number,
+      from_db: data.from_db,
+      to_db: data.to_db,
+      sales_rep: data.sales_rep,
     }
     if (data.subportfolio_id) payload.subportfolio_id = data.subportfolio_id
 
@@ -431,16 +461,77 @@ export class PropertyRepository implements IPropertyRepository {
         propertyPayload.need_another_domain = row.needAnotherDomain === 'true'
       if (row.bookingOtpPhone)
         propertyPayload.booking_otp_phone = row.bookingOtpPhone
+      if (row.expediaServiceFee) 
+        propertyPayload.expedia_service_fee = row.expediaServiceFee
+      if (row.expediaPriority) 
+        propertyPayload.expedia_priority = row.expediaPriority
+      if (row.expediaCrs) 
+        propertyPayload.expedia_crs = row.expediaCrs
+      if (row.expediaCrsDb) 
+        propertyPayload.expedia_crs_db = row.expediaCrsDb
+      if (row.expediaRunDate) 
+        propertyPayload.expedia_run_date = row.expediaRunDate
+      if (row.expediaRunDateDb) 
+        propertyPayload.expedia_run_date_db = row.expediaRunDateDb
+      if (row.expediaRevisedDate) 
+        propertyPayload.expedia_revised_date = row.expediaRevisedDate
+      if (row.expediaSchedulerReview) 
+        propertyPayload.expedia_scheduler_review = row.expediaSchedulerReview
+      if (row.expediaSchedulerDb) 
+        propertyPayload.expedia_scheduler_db = row.expediaSchedulerDb
+      if (row.expediaSchedulerReviewDb) 
+        propertyPayload.expedia_scheduler_review_db = row.expediaSchedulerReviewDb
+      if (row.expediaDbDuration) 
+        propertyPayload.expedia_db_duration = parseInt(row.expediaDbDuration) || undefined
+      if (row.expediaCredentialVerified) 
+        propertyPayload.expedia_credential_verified = row.expediaCredentialVerified
+      if (row.expediaOtpNumber) 
+        propertyPayload.expedia_otp_number = row.expediaOtpNumber
+      if (row.bookingServiceFee) 
+        propertyPayload.booking_service_fee = row.bookingServiceFee
+      if (row.bookingPriority) 
+        propertyPayload.booking_priority = row.bookingPriority
+      if (row.bookingCrs) 
+        propertyPayload.booking_crs = row.bookingCrs
+      if (row.bookingRunDate) 
+        propertyPayload.booking_run_date = row.bookingRunDate
+      if (row.bookingRevisedDate) 
+        propertyPayload.booking_revised_date = row.bookingRevisedDate
+      if (row.bookingCredentialVerified) 
+        propertyPayload.booking_credential_verified = row.bookingCredentialVerified
+      if (row.bookingOtpNumber) 
+        propertyPayload.booking_otp_number = row.bookingOtpNumber
+      if (row.agodaServiceFee) 
+        propertyPayload.agoda_service_fee = row.agodaServiceFee
+      if (row.agodaPriority) 
+        propertyPayload.agoda_priority = row.agodaPriority
+      if (row.agodaCrs) 
+        propertyPayload.agoda_crs = row.agodaCrs
+      if (row.agodaRunDate) 
+        propertyPayload.agoda_run_date = row.agodaRunDate
+      if (row.agodaRevisedDate) 
+        propertyPayload.agoda_revised_date = row.agodaRevisedDate
+      if (row.agodaCredentialVerified) 
+        propertyPayload.agoda_credential_verified = row.agodaCredentialVerified
+      if (row.agodaOtpNumber) 
+        propertyPayload.agoda_otp_number = row.agodaOtpNumber
+      if (row.fromDb) 
+        propertyPayload.from_db = row.fromDb
+      if (row.toDb) 
+        propertyPayload.to_db = row.toDb
+      if (row.salesRep) 
+        propertyPayload.sales_rep = row.salesRep
       if (row.caseContactEmail)
         propertyPayload.primary_case_email = row.caseContactEmail
-
       if (row.serviceTypeName) {
         propertyPayload.service_type = row.serviceTypeName.trim()
       }
-
-      if (!propertyPayload.expedia_status) propertyPayload.expedia_status = 'Access Required'
-      if (!propertyPayload.booking_status) propertyPayload.booking_status = 'Access Required'
-      if (!propertyPayload.agoda_status) propertyPayload.agoda_status = 'Access Required'
+      if (!propertyPayload.expedia_status) 
+        propertyPayload.expedia_status = 'Access Required'
+      if (!propertyPayload.booking_status) 
+        propertyPayload.booking_status = 'Access Required'
+      if (!propertyPayload.agoda_status) 
+        propertyPayload.agoda_status = 'Access Required'
 
       try {
         const created = await this.prisma.property.create({

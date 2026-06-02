@@ -253,6 +253,31 @@ export class PropertyService implements IPropertyService {
           }
         }
 
+        if (name === 'from_db') {
+          const toFilter = filterMap.get('to_db')
+          if (toFilter && toFilter.in && toFilter.in.length > 0) {
+            const fromDate = String(values[0])
+            const toDate = String(toFilter.in[0])
+            whereConditions.push({
+              AND: [
+                { from_db: { lte: toDate } },
+                { to_db: { gte: fromDate } }
+              ]
+            })
+            processedFilters.add('from_db')
+            processedFilters.add('to_db')
+            continue
+          }
+        }
+        
+        if (name === 'to_db') {
+          const fromFilter = filterMap.get('from_db')
+          if (fromFilter && fromFilter.in && fromFilter.in.length > 0) {
+            processedFilters.add('to_db')
+            continue
+          }
+        }
+
         switch (name) {
           case 'portfolio_id':
             whereConditions.push({
@@ -447,6 +472,101 @@ export class PropertyService implements IPropertyService {
             if (condition) whereConditions.push(condition)
             break
           }
+          case 'expedia_service_fee':
+            whereConditions.push({ expedia_service_fee: { in: values } })
+            break
+          case 'booking_service_fee':
+            whereConditions.push({ booking_service_fee: { in: values } })
+            break
+          case 'agoda_service_fee':
+            whereConditions.push({ agoda_service_fee: { in: values } })
+            break
+
+          case 'expedia_priority':
+            whereConditions.push({ expedia_priority: { in: values } })
+            break
+          case 'booking_priority':
+            whereConditions.push({ booking_priority: { in: values } })
+            break
+          case 'agoda_priority':
+            whereConditions.push({ agoda_priority: { in: values } })
+            break
+
+          case 'expedia_crs':
+            whereConditions.push({ expedia_crs: { in: values } })
+            break
+          case 'expedia_crs_db':
+            whereConditions.push({ expedia_crs_db: { in: values } })
+            break
+          case 'booking_crs':
+            whereConditions.push({ booking_crs: { in: values } })
+            break
+          case 'agoda_crs':
+            whereConditions.push({ agoda_crs: { in: values } })
+            break
+
+          case 'expedia_run_date':
+            whereConditions.push({ expedia_run_date: { in: values } })
+            break
+          case 'expedia_run_date_db':
+            whereConditions.push({ expedia_run_date_db: { in: values } })
+            break
+          case 'booking_run_date':
+            whereConditions.push({ booking_run_date: { in: values } })
+            break
+          case 'agoda_run_date':
+            whereConditions.push({ agoda_run_date: { in: values } })
+            break
+
+          case 'expedia_revised_date':
+            whereConditions.push({ expedia_revised_date: { in: values } })
+            break
+          case 'booking_revised_date':
+            whereConditions.push({ booking_revised_date: { in: values } })
+            break
+          case 'agoda_revised_date':
+            whereConditions.push({ agoda_revised_date: { in: values } })
+            break
+
+          case 'expedia_scheduler_review':
+            whereConditions.push({ expedia_scheduler_review: { in: values } })
+            break
+          case 'expedia_scheduler_db':
+            whereConditions.push({ expedia_scheduler_db: { in: values } })
+            break
+          case 'expedia_scheduler_review_db':
+            whereConditions.push({ expedia_scheduler_review_db: { in: values } })
+            break
+
+          case 'expedia_db_duration': {
+            const nums = this.intValuesForInClause(values)
+            if (nums.length) whereConditions.push({ expedia_db_duration: { in: nums } })
+            break
+          }
+
+          case 'expedia_credential_verified':
+            whereConditions.push({ expedia_credential_verified: { in: values } })
+            break
+          case 'booking_credential_verified':
+            whereConditions.push({ booking_credential_verified: { in: values } })
+            break
+          case 'agoda_credential_verified':
+            whereConditions.push({ agoda_credential_verified: { in: values } })
+            break
+
+          case 'expedia_otp_number':
+            whereConditions.push({ expedia_otp_number: { in: values } })
+            break
+          case 'booking_otp_number':
+            whereConditions.push({ booking_otp_number: { in: values } })
+            break
+          case 'agoda_otp_number':
+            whereConditions.push({ agoda_otp_number: { in: values } })
+            break
+
+          case 'sales_rep':
+            whereConditions.push({ sales_rep: { in: values } })
+            break
         }
       }
     }
@@ -1201,7 +1321,70 @@ export class PropertyService implements IPropertyService {
             : undefined,
           serviceTypeName: r['Service Type']
             ? String(r['Service Type']).trim()
-            : undefined
+            : undefined,
+            expediaServiceFee: r['Expedia Service Fee']
+            ? String(r['Expedia Service Fee']).trim() : undefined,
+          bookingServiceFee: r['Booking Service Fee']
+            ? String(r['Booking Service Fee']).trim() : undefined,
+          agodaServiceFee: r['Agoda Service Fee']
+            ? String(r['Agoda Service Fee']).trim() : undefined,
+          
+          expediaPriority: r['Expedia Priority']
+            ? String(r['Expedia Priority']).trim().toUpperCase() : undefined,
+          bookingPriority: r['Booking Priority']
+            ? String(r['Booking Priority']).trim().toUpperCase() : undefined,
+          agodaPriority: r['Agoda Priority']
+            ? String(r['Agoda Priority']).trim().toUpperCase() : undefined,
+          
+          expediaCrs: r['Expedia CRS'] ? String(r['Expedia CRS']).trim() : undefined,
+          expediaCrsDb: r['Expedia CRS DB'] ? String(r['Expedia CRS DB']).trim() : undefined,
+          bookingCrs: r['Booking CRS'] ? String(r['Booking CRS']).trim() : undefined,
+          agodaCrs: r['Agoda CRS'] ? String(r['Agoda CRS']).trim() : undefined,
+          
+          expediaRunDate: r['Expedia Run Date']
+            ? String(r['Expedia Run Date']).trim() : undefined,
+          expediaRunDateDb: r['Expedia Run Date DB']
+            ? String(r['Expedia Run Date DB']).trim() : undefined,
+          bookingRunDate: r['Booking Run Date']
+            ? String(r['Booking Run Date']).trim() : undefined,
+          agodaRunDate: r['Agoda Run Date']
+            ? String(r['Agoda Run Date']).trim() : undefined,
+          
+          expediaRevisedDate: r['Expedia Revised Date']
+            ? String(r['Expedia Revised Date']).trim() : undefined,
+          bookingRevisedDate: r['Booking Revised Date']
+            ? String(r['Booking Revised Date']).trim() : undefined,
+          agodaRevisedDate: r['Agoda Revised Date']
+            ? String(r['Agoda Revised Date']).trim() : undefined,
+          
+          expediaSchedulerReview: r['Expedia Scheduler Review']
+            ? String(r['Expedia Scheduler Review']).trim() : undefined,
+          expediaSchedulerDb: r['Expedia Scheduler DB']
+            ? String(r['Expedia Scheduler DB']).trim() : undefined,
+          expediaSchedulerReviewDb: r['Expedia Scheduler Review DB']
+            ? String(r['Expedia Scheduler Review DB']).trim() : undefined,
+          
+          expediaDbDuration: r['Expedia DB Duration']
+            ? String(r['Expedia DB Duration']).trim() : undefined,
+          
+          expediaCredentialVerified: r['Expedia Credentials Verified']
+            ? String(r['Expedia Credentials Verified']).trim() : undefined,
+          bookingCredentialVerified: r['Booking Credentials Verified']
+            ? String(r['Booking Credentials Verified']).trim() : undefined,
+          agodaCredentialVerified: r['Agoda Credentials Verified']
+            ? String(r['Agoda Credentials Verified']).trim() : undefined,
+          
+          expediaOtpNumber: r['Expedia OTP Number']
+            ? String(r['Expedia OTP Number']).trim() : undefined,
+          bookingOtpNumber: r['Booking OTP Number']
+            ? String(r['Booking OTP Number']).trim() : undefined,
+          agodaOtpNumber: r['Agoda OTP Number']
+            ? String(r['Agoda OTP Number']).trim() : undefined,
+          
+          fromDb: r['From DB'] ? String(r['From DB']).trim() : undefined,
+          toDb: r['To DB'] ? String(r['To DB']).trim() : undefined,
+          
+          salesRep: r['Sales Rep'] ? String(r['Sales Rep']).trim() : undefined
         } satisfies ImportPropertyRow
       })
       .filter(Boolean) as ImportPropertyRow[]
@@ -1792,6 +1975,46 @@ export class PropertyService implements IPropertyService {
     const uniqueBookingSecondaryUsernames = new Set<string>()
     const uniqueAgodaSecondaryUsernames = new Set<string>()
 
+    const uniqueExpediaServiceFees = new Set<string>()
+    const uniqueBookingServiceFees = new Set<string>()
+    const uniqueAgodaServiceFees = new Set<string>()
+
+    const uniqueExpediaPriorities = new Set<string>()
+    const uniqueBookingPriorities = new Set<string>()
+    const uniqueAgodaPriorities = new Set<string>()
+
+    const uniqueExpediaCrs = new Set<string>()
+    const uniqueExpediaCrsDb = new Set<string>()
+    const uniqueBookingCrs = new Set<string>()
+    const uniqueAgodaCrs = new Set<string>()
+
+    const uniqueExpediaRunDates = new Set<string>()
+    const uniqueExpediaRunDatesDb = new Set<string>()
+    const uniqueBookingRunDates = new Set<string>()
+    const uniqueAgodaRunDates = new Set<string>()
+
+    const uniqueExpediaRevisedDates = new Set<string>()
+    const uniqueBookingRevisedDates = new Set<string>()
+    const uniqueAgodaRevisedDates = new Set<string>()
+
+    const uniqueExpediaSchedulerReview = new Set<string>()
+    const uniqueExpediaSchedulerDb = new Set<string>()
+    const uniqueExpediaSchedulerReviewDb = new Set<string>()
+
+    const uniqueExpediaDbDurations = new Set<string>()
+
+    const uniqueExpediaCredentialVerified = new Set<string>()
+    const uniqueBookingCredentialVerified = new Set<string>()
+    const uniqueAgodaCredentialVerified = new Set<string>()
+
+    const uniqueExpediaOtpNumbers = new Set<string>()
+    const uniqueBookingOtpNumbers = new Set<string>()
+    const uniqueAgodaOtpNumbers = new Set<string>()
+
+    const uniqueFromDb = new Set<string>()
+    const uniqueToDb = new Set<string>()
+
+    const uniqueSalesReps = new Set<string>()
     portfolios.forEach((portfolio: any) => {
       if (portfolio.id && portfolio.name) {
         portfolioMap.set(portfolio.id, {
@@ -1924,7 +2147,47 @@ export class PropertyService implements IPropertyService {
         uniqueNeedAnotherDomain.add(String(property.need_another_domain))
       if (property.booking_otp_phone)
         uniqueBookingOtpPhone.add(property.booking_otp_phone)
-
+      if (property.expedia_service_fee) uniqueExpediaServiceFees.add(property.expedia_service_fee)
+      if (property.booking_service_fee) uniqueBookingServiceFees.add(property.booking_service_fee)
+      if (property.agoda_service_fee) uniqueAgodaServiceFees.add(property.agoda_service_fee)
+      
+      if (property.expedia_priority) uniqueExpediaPriorities.add(property.expedia_priority)
+      if (property.booking_priority) uniqueBookingPriorities.add(property.booking_priority)
+      if (property.agoda_priority) uniqueAgodaPriorities.add(property.agoda_priority)
+      
+      if (property.expedia_crs) uniqueExpediaCrs.add(property.expedia_crs)
+      if (property.expedia_crs_db) uniqueExpediaCrsDb.add(property.expedia_crs_db)
+      if (property.booking_crs) uniqueBookingCrs.add(property.booking_crs)
+      if (property.agoda_crs) uniqueAgodaCrs.add(property.agoda_crs)
+      
+      if (property.expedia_run_date) uniqueExpediaRunDates.add(property.expedia_run_date)
+      if (property.expedia_run_date_db) uniqueExpediaRunDatesDb.add(property.expedia_run_date_db)
+      if (property.booking_run_date) uniqueBookingRunDates.add(property.booking_run_date)
+      if (property.agoda_run_date) uniqueAgodaRunDates.add(property.agoda_run_date)
+      
+      if (property.expedia_revised_date) uniqueExpediaRevisedDates.add(property.expedia_revised_date)
+      if (property.booking_revised_date) uniqueBookingRevisedDates.add(property.booking_revised_date)
+      if (property.agoda_revised_date) uniqueAgodaRevisedDates.add(property.agoda_revised_date)
+      
+      if (property.expedia_scheduler_review) uniqueExpediaSchedulerReview.add(property.expedia_scheduler_review)
+      if (property.expedia_scheduler_db) uniqueExpediaSchedulerDb.add(property.expedia_scheduler_db)
+      if (property.expedia_scheduler_review_db) uniqueExpediaSchedulerReviewDb.add(property.expedia_scheduler_review_db)
+      
+      if (property.expedia_db_duration != null)
+        uniqueExpediaDbDurations.add(String(property.expedia_db_duration))
+      
+      if (property.expedia_credential_verified) uniqueExpediaCredentialVerified.add(property.expedia_credential_verified)
+      if (property.booking_credential_verified) uniqueBookingCredentialVerified.add(property.booking_credential_verified)
+      if (property.agoda_credential_verified) uniqueAgodaCredentialVerified.add(property.agoda_credential_verified)
+      
+      if (property.expedia_otp_number) uniqueExpediaOtpNumbers.add(property.expedia_otp_number)
+      if (property.booking_otp_number) uniqueBookingOtpNumbers.add(property.booking_otp_number)
+      if (property.agoda_otp_number) uniqueAgodaOtpNumbers.add(property.agoda_otp_number)
+      
+      if (property.from_db) uniqueFromDb.add(property.from_db)
+      if (property.to_db) uniqueToDb.add(property.to_db)
+      
+      if (property.sales_rep) uniqueSalesReps.add(property.sales_rep)
       const cred =
         Array.isArray(property.credentials) && property.credentials.length > 0
           ? property.credentials[0]
@@ -2011,7 +2274,47 @@ export class PropertyService implements IPropertyService {
       ).sort(),
       agoda_secondary_username: Array.from(
         uniqueAgodaSecondaryUsernames
-      ).sort()
+      ).sort(),
+      expedia_service_fee: Array.from(uniqueExpediaServiceFees).sort(),
+      booking_service_fee: Array.from(uniqueBookingServiceFees).sort(),
+      agoda_service_fee: Array.from(uniqueAgodaServiceFees).sort(),
+
+      expedia_priority: Array.from(uniqueExpediaPriorities).sort(),
+      booking_priority: Array.from(uniqueBookingPriorities).sort(),
+      agoda_priority: Array.from(uniqueAgodaPriorities).sort(),
+
+      expedia_crs: Array.from(uniqueExpediaCrs).sort(),
+      expedia_crs_db: Array.from(uniqueExpediaCrsDb).sort(),
+      booking_crs: Array.from(uniqueBookingCrs).sort(),
+      agoda_crs: Array.from(uniqueAgodaCrs).sort(),
+
+      expedia_run_date: Array.from(uniqueExpediaRunDates).sort(),
+      expedia_run_date_db: Array.from(uniqueExpediaRunDatesDb).sort(),
+      booking_run_date: Array.from(uniqueBookingRunDates).sort(),
+      agoda_run_date: Array.from(uniqueAgodaRunDates).sort(),
+
+      expedia_revised_date: Array.from(uniqueExpediaRevisedDates).sort(),
+      booking_revised_date: Array.from(uniqueBookingRevisedDates).sort(),
+      agoda_revised_date: Array.from(uniqueAgodaRevisedDates).sort(),
+
+      expedia_scheduler_review: Array.from(uniqueExpediaSchedulerReview).sort(),
+      expedia_scheduler_db: Array.from(uniqueExpediaSchedulerDb).sort(),
+      expedia_scheduler_review_db: Array.from(uniqueExpediaSchedulerReviewDb).sort(),
+
+      expedia_db_duration: Array.from(uniqueExpediaDbDurations).sort(),
+
+      expedia_credential_verified: Array.from(uniqueExpediaCredentialVerified).sort(),
+      booking_credential_verified: Array.from(uniqueBookingCredentialVerified).sort(),
+      agoda_credential_verified: Array.from(uniqueAgodaCredentialVerified).sort(),
+
+      expedia_otp_number: Array.from(uniqueExpediaOtpNumbers).sort(),
+      booking_otp_number: Array.from(uniqueBookingOtpNumbers).sort(),
+      agoda_otp_number: Array.from(uniqueAgodaOtpNumbers).sort(),
+
+      from_db: Array.from(uniqueFromDb).sort(),
+      to_db: Array.from(uniqueToDb).sort(),
+
+      sales_rep: Array.from(uniqueSalesReps).sort(),
     }
   }
 
