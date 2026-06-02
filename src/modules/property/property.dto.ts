@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger'
-import { Transform, Type } from 'class-transformer'
 import { OtaBillingType, OtaIntegrationFrequency } from '@prisma/client'
+import { Transform, Type } from 'class-transformer'
 import {
   IsArray,
   IsBoolean,
@@ -479,6 +479,82 @@ export class CreatePropertyDto {
   @Type(() => Number)
   expedia_duration?: number
 
+  @ApiPropertyOptional({ description: 'Expedia DB duration in days', example: 30 })
+  @IsNumber()
+  @IsOptional()
+  @Type(() => Number)
+  expedia_db_duration?: number
+
+  @ApiPropertyOptional({ description: 'Expedia service fee' })
+  @IsString()
+  @IsOptional()
+  expedia_service_fee?: string
+
+  @ApiPropertyOptional({ description: 'Expedia priority' })
+  @IsString()
+  @IsOptional()
+  expedia_priority?: string
+
+  @ApiPropertyOptional({ description: 'Expedia CRS' })
+  @IsString()
+  @IsOptional()
+  expedia_crs?: string
+
+  @ApiPropertyOptional({ description: 'Expedia CRS (DB)' })
+  @IsString()
+  @IsOptional()
+  expedia_crs_db?: string
+
+  @ApiPropertyOptional({ description: 'Expedia run date (YYYY-MM-DD)', example: '2024-01-01' })
+  @IsString()
+  @IsOptional()
+  expedia_run_date?: string
+
+  @ApiPropertyOptional({ description: 'Expedia run date DB (YYYY-MM-DD)', example: '2024-01-01' })
+  @IsString()
+  @IsOptional()
+  expedia_run_date_db?: string
+
+  @ApiPropertyOptional({ description: 'Expedia revised date (YYYY-MM-DD)', example: '2024-01-15' })
+  @IsString()
+  @IsOptional()
+  expedia_revised_date?: string
+
+  @ApiPropertyOptional({ description: 'Expedia scheduler review' })
+  @IsString()
+  @IsOptional()
+  expedia_scheduler_review?: string
+
+  @ApiPropertyOptional({ description: 'Expedia scheduler (DB)' })
+  @IsString()
+  @IsOptional()
+  expedia_scheduler_db?: string
+
+  @ApiPropertyOptional({ description: 'Expedia scheduler review (DB)' })
+  @IsString()
+  @IsOptional()
+  expedia_scheduler_review_db?: string
+
+  @ApiPropertyOptional({ description: 'Expedia credential verified' })
+  @IsString()
+  @IsOptional()
+  expedia_credential_verified?: string
+
+  @ApiPropertyOptional({ description: 'Expedia OTP number' })
+  @IsString()
+  @IsOptional()
+  expedia_otp_number?: string
+
+  @ApiPropertyOptional({ description: 'From date DB (YYYY-MM-DD)', example: '2024-01-01' })
+  @IsString()
+  @IsOptional()
+  from_db?: string
+
+  @ApiPropertyOptional({ description: 'To date DB (YYYY-MM-DD)', example: '2024-12-31' })
+  @IsString()
+  @IsOptional()
+  to_db?: string
+
   @ApiPropertyOptional({
     example: 'DB',
     enum: OtaBillingType
@@ -545,6 +621,41 @@ export class CreatePropertyDto {
   @IsOptional()
   @Type(() => Number)
   booking_duration?: number
+
+  @ApiPropertyOptional({ description: 'Booking service fee' })
+  @IsString()
+  @IsOptional()
+  booking_service_fee?: string
+
+  @ApiPropertyOptional({ description: 'Booking priority' })
+  @IsString()
+  @IsOptional()
+  booking_priority?: string
+
+  @ApiPropertyOptional({ description: 'Booking CRS' })
+  @IsString()
+  @IsOptional()
+  booking_crs?: string
+
+  @ApiPropertyOptional({ description: 'Booking run date (YYYY-MM-DD)', example: '2024-01-01' })
+  @IsString()
+  @IsOptional()
+  booking_run_date?: string
+
+  @ApiPropertyOptional({ description: 'Booking revised date (YYYY-MM-DD)', example: '2024-01-15' })
+  @IsString()
+  @IsOptional()
+  booking_revised_date?: string
+
+  @ApiPropertyOptional({ description: 'Booking credential verified' })
+  @IsString()
+  @IsOptional()
+  booking_credential_verified?: string
+
+  @ApiPropertyOptional({ description: 'Booking OTP number' })
+  @IsString()
+  @IsOptional()
+  booking_otp_number?: string
 
   @ApiPropertyOptional({
     example: 'EBS',
@@ -613,6 +724,46 @@ export class CreatePropertyDto {
   @Type(() => Number)
   agoda_duration?: number
 
+  @ApiPropertyOptional({ description: 'Agoda service fee' })
+  @IsString()
+  @IsOptional()
+  agoda_service_fee?: string
+
+  @ApiPropertyOptional({ description: 'Agoda priority' })
+  @IsString()
+  @IsOptional()
+  agoda_priority?: string
+
+  @ApiPropertyOptional({ description: 'Agoda CRS' })
+  @IsString()
+  @IsOptional()
+  agoda_crs?: string
+
+  @ApiPropertyOptional({ description: 'Agoda run date (YYYY-MM-DD)', example: '2024-01-01' })
+  @IsString()
+  @IsOptional()
+  agoda_run_date?: string
+
+  @ApiPropertyOptional({ description: 'Agoda revised date (YYYY-MM-DD)', example: '2024-01-15' })
+  @IsString()
+  @IsOptional()
+  agoda_revised_date?: string
+
+  @ApiPropertyOptional({ description: 'Agoda credential verified' })
+  @IsString()
+  @IsOptional()
+  agoda_credential_verified?: string
+
+  @ApiPropertyOptional({ description: 'Agoda OTP number' })
+  @IsString()
+  @IsOptional()
+  agoda_otp_number?: string
+
+  @ApiPropertyOptional({ description: 'Sales representative name' })
+  @IsString()
+  @IsOptional()
+  sales_rep?: string
+
   @ApiPropertyOptional({
     example: true,
     description: 'Need another domain for OTA integrations'
@@ -640,6 +791,29 @@ export class CreatePropertyDto {
 }
 
 export class UpdatePropertyDto extends PartialType(CreatePropertyDto) {}
+
+export class BulkUpdateResultDto {
+  @ApiProperty({ example: 10, description: 'Total number of rows processed' })
+  totalRows: number
+
+  @ApiProperty({ example: 8, description: 'Number of properties successfully updated' })
+  successCount: number
+
+  @ApiProperty({ example: 2, description: 'Number of rows that failed' })
+  failureCount: number
+
+  @ApiProperty({
+    example: [{ row: 3, propertyName: 'Hotel X', error: 'Property not found' }],
+    description: 'List of errors encountered during update'
+  })
+  errors: Array<{ row: number; propertyName: string; error: string }>
+
+  @ApiProperty({
+    example: ['Grand Hotel', 'Ocean View Resort'],
+    description: 'List of successfully updated property names'
+  })
+  successfulUpdates: string[]
+}
 
 export const REQUIRED_FIELD_VALUES = [
   'expedia',
@@ -1404,4 +1578,10 @@ export class AllDataForGlobalFilterResponseDto {
 
   @ApiProperty({ type: [String] })
   agoda_secondary_username: string[]
+}
+
+export class ExportPropertyExcelDto extends PropertyFilterDto {
+  // page and limit are not applicable for export — all matching records are always returned
+  declare page?: never
+  declare limit?: never
 }

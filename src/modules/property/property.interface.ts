@@ -1,7 +1,7 @@
 import { Property } from '@prisma/client'
 import { PaginatedResult } from '../../common/dto/query.dto'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
-import { CreatePropertyDto, PropertyFilterDto, UpdatePropertyDto } from './property.dto'
+import { BulkUpdateResultDto, CreatePropertyDto, ExportPropertyExcelDto, PropertyFilterDto, UpdatePropertyDto } from './property.dto'
 
 export type PropertyWithRelations = Property & {
   portfolio: { id: string; name: string }
@@ -209,5 +209,10 @@ export interface IPropertyService {
     file: Express.Multer.File,
     user: IUserWithPermissions
   ): Promise<ImportPropertiesResult>
+  bulkUpdate(
+    file: Express.Multer.File,
+    user: IUserWithPermissions
+  ): Promise<BulkUpdateResultDto>
   getAllDataForGlobalFilter(user: IUserWithPermissions): Promise<AllDataForGlobalFilterResponse>
+  exportToExcelAndEmail(dto: ExportPropertyExcelDto, user: IUserWithPermissions): Promise<{ message: string }>
 }
