@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger'
+import { ProjectType } from '@prisma/client'
 import { Type } from 'class-transformer'
 import {
   IsArray,
@@ -12,7 +13,6 @@ import {
   Min,
   ValidateNested
 } from 'class-validator'
-import { ProjectType } from '@prisma/client'
 
 // ─── Recurring Jobs: DBMS Pre-Check ──────────────────────────────────────────
 
@@ -212,6 +212,21 @@ export interface ExternalPropertyDto {
   expedia_to: string | null
   expedia_scheduler: boolean | null
   expedia_duration: number | null
+  expedia_db_duration: number | null
+  expedia_service_fee: string | null
+  expedia_priority: string | null
+  expedia_crs: string | null
+  expedia_crs_db: string | null
+  expedia_run_date: string | null
+  expedia_run_date_db: string | null
+  expedia_revised_date: string | null
+  expedia_scheduler_review: string | null
+  expedia_scheduler_db: string | null
+  expedia_scheduler_review_db: string | null
+  expedia_credential_verified: string | null
+  expedia_otp_number: string | null
+  from_db: string | null
+  to_db: string | null
   booking_billing_type: string | null
   booking_service_type: string | null
   booking_frequency: string | null
@@ -220,6 +235,13 @@ export interface ExternalPropertyDto {
   booking_to: string | null
   booking_scheduler: boolean | null
   booking_duration: number | null
+  booking_service_fee: string | null
+  booking_priority: string | null
+  booking_crs: string | null
+  booking_run_date: string | null
+  booking_revised_date: string | null
+  booking_credential_verified: string | null
+  booking_otp_number: string | null
   agoda_billing_type: string | null
   agoda_service_type: string | null
   agoda_frequency: string | null
@@ -228,6 +250,14 @@ export interface ExternalPropertyDto {
   agoda_to: string | null
   agoda_scheduler: boolean | null
   agoda_duration: number | null
+  agoda_service_fee: string | null
+  agoda_priority: string | null
+  agoda_crs: string | null
+  agoda_run_date: string | null
+  agoda_revised_date: string | null
+  agoda_credential_verified: string | null
+  agoda_otp_number: string | null
+  sales_rep: string | null
   need_another_domain: boolean | null
   booking_otp_phone: string | null
   created_at: string

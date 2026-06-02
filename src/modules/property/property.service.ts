@@ -11,6 +11,7 @@ import { createHash } from 'crypto'
 import * as XLSX from 'xlsx'
 import type { PaginatedResult } from '../../common/dto/query.dto'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
+import { EmailUtil } from '../../common/utils/email.util'
 import { EncryptionUtil } from '../../common/utils/encryption.util'
 import type { IAuthRepository } from '../auth/auth.interface'
 import type { IPortfolioService } from '../portfolio/portfolio.interface'
@@ -18,12 +19,15 @@ import { PrismaService } from '../prisma/prisma.service'
 import type { IPropertyCredentialsService } from '../property-credentials/property-credentials.interface'
 import { RedisService } from '../redis/redis.service'
 import {
+  BulkUpdateResultDto,
   CreatePropertyDto,
+  ExportPropertyExcelDto,
   GetPropertyCredentialDto,
   PropertyFilterDto,
   RequiredFieldType,
   UpdatePropertyDto
 } from './property.dto'
+import { mapPropertyToExcelRow } from '../../common/utils/property-excel.util'
 import type {
   ImportPropertiesResult,
   ImportPropertyRow,
@@ -52,7 +56,8 @@ export class PropertyService implements IPropertyService {
     private readonly portfolioService: IPortfolioService,
     private readonly encryptionUtil: EncryptionUtil,
     private readonly prisma: PrismaService,
-    private readonly redisService: RedisService
+    private readonly redisService: RedisService,
+    private readonly emailUtil: EmailUtil
   ) {}
 
   async create(
@@ -912,6 +917,55 @@ export class PropertyService implements IPropertyService {
   }
 
   // ──────────────────────────────────────────────────────────────────────────
+  // Export flow — generate Excel from filtered properties and email it
+  // ──────────────────────────────────────────────────────────────────────────
+
+  async exportToExcelAndEmail(
+    dto: ExportPropertyExcelDto,
+    user: IUserWithPermissions
+  ): Promise<{ message: string }> {
+    // Step 1 — apply filters (masking doesn't matter here; we only need the IDs)
+    const filterDto: PropertyFilterDto = { ...dto, page: undefined, limit: undefined }
+    const filtered = await this.findAllWithFilters(filterDto, user)
+    const filteredData = filtered.data as any[]
+
+    if (filteredData.length === 0) {
+      return { message: 'No properties matched the given filters. Email not sent.' }
+    }
+
+    // Step 2 — re-fetch the same properties directly from the repo (bypassing the
+    // masking layer), then decrypt every credential field explicitly.
+    const ids = filteredData.map((p: any) => p.id)
+    const raw = await this.repo.findAll({ where: { id: { in: ids } }, orderBy: { created_at: 'desc' } })
+    const properties = raw.map(p => this.decryptCredentialsForResponse(p))
+
+    const rows = properties.map(p => mapPropertyToExcelRow(p))
+
+    const worksheet = XLSX.utils.json_to_sheet(rows)
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Properties')
+
+    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer
+
+    const filename = `properties-export-${new Date().toISOString().slice(0, 10)}.xlsx`
+
+    await this.emailUtil.sendEmail(
+      user.email,
+      `VNP Solutions – Property Export (${properties.length} records)`,
+      `Please find attached the property data export containing ${properties.length} record(s) generated on ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}.\n\nWarm regards,\nVNP Solutions`,
+      [
+        {
+          filename,
+          content: buffer,
+          contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        }
+      ]
+    )
+
+    return { message: `Excel report with ${properties.length} record(s) sent to ${user.email}` }
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────
   // Import flow  (vnp-parser-backend thin-service convention)
   // ──────────────────────────────────────────────────────────────────────────
 
@@ -1155,6 +1209,396 @@ export class PropertyService implements IPropertyService {
     const result = await this.repo.importProperties(rows)
     await this.redisService.deleteByPattern(ALL_PATTERN)
     return result
+  }
+
+  async bulkUpdate(
+    file: Express.Multer.File,
+    user: IUserWithPermissions
+  ): Promise<BulkUpdateResultDto> {
+    if (!file) {
+      throw new BadRequestException('No file provided')
+    }
+
+    const buffer = file.buffer || (file as any).buffer
+    if (!buffer || buffer.length === 0) {
+      throw new BadRequestException('File buffer is empty')
+    }
+
+    const nameLower = file.originalname.toLowerCase()
+    if (
+      !nameLower.endsWith('.xlsx') &&
+      !nameLower.endsWith('.xls') &&
+      !nameLower.endsWith('.csv')
+    ) {
+      throw new BadRequestException(
+        'File must be an Excel or CSV file (.xlsx, .xls, or .csv)'
+      )
+    }
+
+    const result: BulkUpdateResultDto = {
+      totalRows: 0,
+      successCount: 0,
+      failureCount: 0,
+      errors: [],
+      successfulUpdates: []
+    }
+
+    // Helper to find a column value with flexible header matching (case-insensitive, strips asterisks)
+    const findValue = (row: Record<string, any>, names: string[]): string | undefined => {
+      for (const name of names) {
+        const val = row[name]
+        if (val !== undefined && val !== null && val !== '') {
+          const trimmed = String(val).trim()
+          if (trimmed !== '') return trimmed
+        }
+      }
+      const rowKeys = Object.keys(row)
+      for (const name of names) {
+        for (const key of rowKeys) {
+          const cleanKey = key.split('*')[0].trim()
+          if (cleanKey.toLowerCase() === name.toLowerCase()) {
+            const val = row[key]
+            if (val !== undefined && val !== null && val !== '') {
+              const trimmed = String(val).trim()
+              if (trimmed !== '') return trimmed
+            }
+          }
+        }
+      }
+      return undefined
+    }
+
+    // Helper to get raw value (preserves type for dates and numbers)
+    const getRawValue = (row: Record<string, any>, names: string[]): any => {
+      for (const name of names) {
+        const val = row[name]
+        if (val !== undefined && val !== null && val !== '') return val
+      }
+      const rowKeys = Object.keys(row)
+      for (const name of names) {
+        for (const key of rowKeys) {
+          const cleanKey = key.split('*')[0].trim()
+          if (cleanKey.toLowerCase() === name.toLowerCase()) {
+            const val = row[key]
+            if (val !== undefined && val !== null && val !== '') return val
+          }
+        }
+      }
+      return undefined
+    }
+
+    // Parse date from mm/dd/yyyy string or Excel serial number
+    const parseDate = (dateValue: any): Date | null => {
+      if (!dateValue) return null
+      try {
+        if (dateValue instanceof Date) {
+          return isNaN(dateValue.getTime()) ? null : dateValue
+        }
+        if (typeof dateValue === 'number') {
+          const excelEpoch = new Date(1899, 11, 30)
+          const date = new Date(excelEpoch.getTime() + dateValue * 24 * 60 * 60 * 1000)
+          return !isNaN(date.getTime()) && date.getFullYear() >= 1900 && date.getFullYear() <= 2100
+            ? date
+            : null
+        }
+        const dateString = String(dateValue).trim()
+        const parts = dateString.split('/')
+        if (parts.length === 3) {
+          const month = parseInt(parts[0], 10)
+          const day = parseInt(parts[1], 10)
+          const year = parseInt(parts[2], 10)
+          if (!isNaN(month) && !isNaN(day) && !isNaN(year) && year >= 1900 && year <= 2100) {
+            return new Date(year, month - 1, day)
+          }
+        }
+        const date = new Date(dateString)
+        return !isNaN(date.getTime()) && date.getFullYear() >= 1900 && date.getFullYear() <= 2100
+          ? date
+          : null
+      } catch {
+        return null
+      }
+    }
+
+    try {
+      let workbook: XLSX.WorkBook
+      if (nameLower.endsWith('.csv')) {
+        workbook = XLSX.read(buffer.toString('utf-8'), { type: 'string' })
+      } else {
+        workbook = XLSX.read(buffer, { type: 'buffer' })
+      }
+
+      const sheetName = workbook.SheetNames[0]
+      if (!sheetName) {
+        throw new BadRequestException('File contains no worksheets')
+      }
+
+      const worksheet = workbook.Sheets[sheetName]
+      const data: Record<string, any>[] = XLSX.utils.sheet_to_json(worksheet)
+
+      if (!data || data.length === 0) {
+        throw new BadRequestException('File is empty or contains no data rows')
+      }
+
+      result.totalRows = data.length
+
+      // Fetch accessible IDs once for the whole batch
+      const accessibleIds = await this.repo.getAccessiblePropertyIds(user.id)
+
+      for (let i = 0; i < data.length; i++) {
+        const row = data[i]
+        const rowNumber = i + 2 // Row 1 is the header in Excel
+
+        try {
+          // Match by property_identifier first; fall back to name
+          const propertyIdentifier = findValue(row, ['Property Identifier', 'Property identifier', 'Identifier'])
+          const propertyName = findValue(row, ['Property Name', 'Property name', 'Name'])
+
+          if (!propertyIdentifier && !propertyName) {
+            result.errors.push({ row: rowNumber, propertyName: 'Unknown', error: 'Either Property Identifier or Property Name is required' })
+            result.failureCount++
+            continue
+          }
+
+          let existingProperty: any
+          const rowLabel = propertyIdentifier ?? propertyName!
+
+          if (propertyIdentifier) {
+            existingProperty = await this.prisma.property.findFirst({ where: { property_identifier: propertyIdentifier } })
+            if (!existingProperty) {
+              result.errors.push({ row: rowNumber, propertyName: rowLabel, error: `Property not found with identifier: ${propertyIdentifier}` })
+              result.failureCount++
+              continue
+            }
+          } else {
+            existingProperty = await this.repo.findByName(propertyName!)
+            if (!existingProperty) {
+              result.errors.push({ row: rowNumber, propertyName: rowLabel, error: `Property not found: ${propertyName}` })
+              result.failureCount++
+              continue
+            }
+          }
+
+          // Check access permission
+          if (accessibleIds !== 'all' && !accessibleIds.includes(existingProperty.id)) {
+            result.errors.push({ row: rowNumber, propertyName: existingProperty.name, error: 'You do not have permission to update this property' })
+            result.failureCount++
+            continue
+          }
+
+          const propertyId = existingProperty.id
+          const updateData: Record<string, any> = {}
+
+          // Rename: only possible when matched by property_identifier.
+          // The "Property Name" column then carries the new name.
+          if (propertyIdentifier && propertyName && propertyName !== existingProperty.name) {
+            const nameConflict = await this.repo.findByName(propertyName)
+            if (nameConflict && nameConflict.id !== propertyId) {
+              result.errors.push({ row: rowNumber, propertyName: existingProperty.name, error: `Another property already has the name: ${propertyName}` })
+              result.failureCount++
+              continue
+            }
+            updateData.name = propertyName
+          }
+
+          // Hotel address
+          const hotelAddress = findValue(row, ['Hotel Address', 'Hotel address', 'Address', 'Property Address'])
+          if (hotelAddress !== undefined) updateData.hotel_address = hotelAddress
+
+          // Card descriptor
+          const cardDescriptor = findValue(row, ['Card Descriptor', 'Card descriptor', 'Descriptor'])
+          if (cardDescriptor !== undefined) updateData.card_descriptor = cardDescriptor
+
+          // Description
+          const description = findValue(row, ['Description', 'Desc'])
+          if (description !== undefined) updateData.description = description
+
+          // Service type
+          const serviceType = findValue(row, ['Service Type', 'Service type'])
+          if (serviceType !== undefined) updateData.service_type = serviceType
+
+          // Next due date
+          const nextDueDateRaw = getRawValue(row, ['Next Due Date', 'Next due date', 'Due Date'])
+          if (nextDueDateRaw) {
+            const nextDueDate = parseDate(nextDueDateRaw)
+            if (!nextDueDate) {
+              result.errors.push({ row: rowNumber, propertyName: existingProperty.name, error: 'Invalid date format for Next Due Date (expected mm/dd/yyyy)' })
+              result.failureCount++
+              continue
+            }
+            updateData.next_due_date = nextDueDate.toISOString()
+          }
+
+          // Portfolio (look up by name)
+          const portfolioName = findValue(row, ['Portfolio', 'Portfolio Name', 'Portfolio name'])
+          if (portfolioName) {
+            const portfolio = await this.prisma.portfolio.findFirst({ where: { name: portfolioName } })
+            if (!portfolio) {
+              result.errors.push({ row: rowNumber, propertyName: existingProperty.name, error: `Portfolio not found: ${portfolioName}` })
+              result.failureCount++
+              continue
+            }
+            updateData.portfolio_id = portfolio.id
+          }
+
+          // Case management contact
+          const caseContact = findValue(row, ['Case Management Contact', 'Case management contact', 'Case Contact'])
+          if (caseContact !== undefined) updateData.case_management_contact = caseContact
+
+          // Access contact
+          const accessContact = findValue(row, ['Access Contact', 'Access contact'])
+          if (accessContact !== undefined) updateData.access_contact = accessContact
+
+          // Reporting contact
+          const reportingContact = findValue(row, ['Reporting Contact', 'Reporting contact'])
+          if (reportingContact !== undefined) updateData.reporting_contact = reportingContact
+
+          // Processors
+          const expediaProcessor = findValue(row, ['Expedia Processor', 'Expedia processor'])
+          if (expediaProcessor !== undefined) updateData.expedia_processor = expediaProcessor
+
+          const bookingProcessor = findValue(row, ['Booking Processor', 'Booking processor'])
+          if (bookingProcessor !== undefined) updateData.booking_processor = bookingProcessor
+
+          const agodaProcessor = findValue(row, ['Agoda Processor', 'Agoda processor'])
+          if (agodaProcessor !== undefined) updateData.agoda_processor = agodaProcessor
+
+          // FP MID
+          const fpMid = findValue(row, ['FP MID', 'FP Mid', 'fp_mid'])
+          if (fpMid !== undefined) updateData.fp_mid = fpMid
+
+          // Stripe account email
+          const stripeEmail = findValue(row, ['Stripe Account Email', 'Stripe account email', 'Stripe Email'])
+          if (stripeEmail !== undefined) updateData.stripe_account_email = stripeEmail
+
+          // New domains email
+          const newDomainsEmail = findValue(row, ['New Domains Email', 'New domains email', 'new_domain_email'])
+          if (newDomainsEmail !== undefined) updateData.new_domain_email = newDomainsEmail
+
+          // Portfolio contact
+          const portfolioContact = findValue(row, ['Portfolio Contact', 'Portfolio contact'])
+          if (portfolioContact !== undefined) updateData.portfolio_contact = portfolioContact
+
+          // Portfolio contact email
+          const portfolioContactEmail = findValue(row, ['Portfolio Contact Email', 'Portfolio contact email'])
+          if (portfolioContactEmail !== undefined) updateData.portfolio_contact_email = portfolioContactEmail
+
+          // is_active flag
+          const isActiveStr = findValue(row, ['Is Active', 'is_active', 'Active'])
+          if (isActiveStr !== undefined) {
+            const lower = isActiveStr.toLowerCase()
+            if (lower === 'true' || lower === '1' || lower === 'yes') updateData.is_active = true
+            else if (lower === 'false' || lower === '0' || lower === 'no') updateData.is_active = false
+          }
+
+          // ── Credential fields ──────────────────────────────────────────────
+          const expediaUsername = findValue(row, ['Expedia Username', 'Expedia username'])
+          const expediaPassword = findValue(row, ['Expedia Password', 'Expedia password'])
+          const agodaUsername = findValue(row, ['Agoda Username', 'Agoda username'])
+          const agodaPassword = findValue(row, ['Agoda Password', 'Agoda password'])
+          const bookingUsername = findValue(row, ['Booking Username', 'Booking username'])
+          const bookingPassword = findValue(row, ['Booking Password', 'Booking password'])
+          const expediaSecondaryUsername = findValue(row, ['Expedia Secondary Username', 'Expedia secondary username'])
+          const expediaSecondaryPassword = findValue(row, ['Expedia Secondary Password', 'Expedia secondary password'])
+          const bookingSecondaryUsername = findValue(row, ['Booking Secondary Username', 'Booking secondary username'])
+          const bookingSecondaryPassword = findValue(row, ['Booking Secondary Password', 'Booking secondary password'])
+          const agodaSecondaryUsername = findValue(row, ['Agoda Secondary Username', 'Agoda secondary username'])
+          const agodaSecondaryPassword = findValue(row, ['Agoda Secondary Password', 'Agoda secondary password'])
+
+          // Validate credential pairs: if one is provided, the other must be too
+          if (!!expediaUsername !== !!expediaPassword) {
+            result.errors.push({ row: rowNumber, propertyName: existingProperty.name, error: 'Expedia username and password must be provided together' })
+            result.failureCount++
+            continue
+          }
+          if (!!bookingUsername !== !!bookingPassword) {
+            result.errors.push({ row: rowNumber, propertyName: existingProperty.name, error: 'Booking username and password must be provided together' })
+            result.failureCount++
+            continue
+          }
+          if (!!expediaSecondaryUsername !== !!expediaSecondaryPassword) {
+            result.errors.push({ row: rowNumber, propertyName: existingProperty.name, error: 'Expedia secondary username and password must be provided together' })
+            result.failureCount++
+            continue
+          }
+          if (!!bookingSecondaryUsername !== !!bookingSecondaryPassword) {
+            result.errors.push({ row: rowNumber, propertyName: existingProperty.name, error: 'Booking secondary username and password must be provided together' })
+            result.failureCount++
+            continue
+          }
+
+          const hasCredentialsUpdate =
+            expediaUsername || expediaPassword ||
+            agodaUsername || agodaPassword ||
+            bookingUsername || bookingPassword ||
+            expediaSecondaryUsername || expediaSecondaryPassword ||
+            bookingSecondaryUsername || bookingSecondaryPassword ||
+            agodaSecondaryUsername || agodaSecondaryPassword
+
+          const hasPropertyUpdate = Object.keys(updateData).length > 0
+
+          if (!hasPropertyUpdate && !hasCredentialsUpdate) {
+            result.errors.push({ row: rowNumber, propertyName: existingProperty.name, error: 'No fields to update (all cells are empty)' })
+            result.failureCount++
+            continue
+          }
+
+          // Apply property-level update
+          if (hasPropertyUpdate) {
+            await this.repo.update(propertyId, updateData)
+          }
+
+          // Apply credentials update
+          if (hasCredentialsUpdate) {
+            const credentialsData: Record<string, any> = {}
+            if (expediaUsername !== undefined) credentialsData.expediaUsername = expediaUsername
+            if (expediaPassword) credentialsData.expediaPassword = this.encryptionUtil.encrypt(expediaPassword)
+            if (agodaUsername !== undefined) credentialsData.agodaUsername = agodaUsername
+            if (agodaPassword) credentialsData.agodaPassword = this.encryptionUtil.encrypt(agodaPassword)
+            if (bookingUsername !== undefined) credentialsData.bookingUsername = bookingUsername
+            if (bookingPassword) credentialsData.bookingPassword = this.encryptionUtil.encrypt(bookingPassword)
+            if (expediaSecondaryUsername !== undefined) credentialsData.expediaSecondaryUsername = expediaSecondaryUsername
+            if (expediaSecondaryPassword) credentialsData.expediaSecondaryPassword = this.encryptionUtil.encrypt(expediaSecondaryPassword)
+            if (bookingSecondaryUsername !== undefined) credentialsData.bookingSecondaryUsername = bookingSecondaryUsername
+            if (bookingSecondaryPassword) credentialsData.bookingSecondaryPassword = this.encryptionUtil.encrypt(bookingSecondaryPassword)
+            if (agodaSecondaryUsername !== undefined) credentialsData.agodaSecondaryUsername = agodaSecondaryUsername
+            if (agodaSecondaryPassword) credentialsData.agodaSecondaryPassword = this.encryptionUtil.encrypt(agodaSecondaryPassword)
+
+            const existingCredentials = await this.credentialsService.findByPropertyId(propertyId)
+            if (existingCredentials) {
+              await this.credentialsService.update(existingCredentials.id, credentialsData)
+            } else {
+              await this.credentialsService.create({ ...credentialsData, property_id: propertyId })
+            }
+          }
+
+          // Invalidate Redis cache for this property and the all-properties list
+          await Promise.all([
+            this.redisService.del(CACHE_KEY(propertyId)),
+            this.redisService.deleteByPattern(ALL_PATTERN)
+          ])
+
+          result.successCount++
+          result.successfulUpdates.push(existingProperty.name)
+        } catch (error) {
+          const nameFromRow =
+            findValue(row, ['Property Identifier', 'Property identifier', 'Identifier']) ||
+            findValue(row, ['Property Name', 'Property name', 'Name']) ||
+            'Unknown'
+          result.errors.push({
+            row: rowNumber,
+            propertyName: nameFromRow,
+            error: error instanceof Error ? error.message : 'Unknown error occurred'
+          })
+          result.failureCount++
+        }
+      }
+
+      return result
+    } catch (error) {
+      if (error instanceof BadRequestException) throw error
+      throw new BadRequestException(`Failed to process file: ${(error as Error).message}`)
+    }
   }
 
   async bulkDelete(

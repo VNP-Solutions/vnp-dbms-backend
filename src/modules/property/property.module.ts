@@ -1,4 +1,5 @@
 import { Module, forwardRef } from '@nestjs/common'
+import { EmailUtil } from '../../common/utils/email.util'
 import { EncryptionUtil } from '../../common/utils/encryption.util'
 import { AuthModule } from '../auth/auth.module'
 import { PropertyCredentialsModule } from '../property-credentials/property-credentials.module'
@@ -17,7 +18,8 @@ import { PropertyService } from './property.service'
     { provide: 'IPropertyRepository', useClass: PropertyRepository },
     PrismaService,
     EncryptionUtil,
-    RedisService
+    RedisService,
+    EmailUtil
   ],
   exports: [{ provide: 'IPropertyService', useClass: PropertyService }]
 })
