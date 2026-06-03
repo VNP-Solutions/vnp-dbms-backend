@@ -27,7 +27,7 @@ import {
   RequiredFieldType,
   UpdatePropertyDto
 } from './property.dto'
-import { mapPropertyToExcelRow } from '../../common/utils/property-excel.util'
+import { mapPropertyToExcelRow, PROPERTY_EXCEL_HEADERS } from '../../common/utils/property-excel.util'
 import type {
   ImportPropertiesResult,
   ImportPropertyRow,
@@ -941,7 +941,9 @@ export class PropertyService implements IPropertyService {
 
     const rows = properties.map(p => mapPropertyToExcelRow(p))
 
-    const worksheet = XLSX.utils.json_to_sheet(rows)
+    const worksheet = XLSX.utils.json_to_sheet(rows, {
+      header: [...PROPERTY_EXCEL_HEADERS]
+    })
     const workbook = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Properties')
 
