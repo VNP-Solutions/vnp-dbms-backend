@@ -485,10 +485,11 @@ export class CreatePropertyDto {
   @Type(() => Number)
   expedia_db_duration?: number
 
-  @ApiPropertyOptional({ description: 'Expedia service fee' })
-  @IsString()
+  @ApiPropertyOptional({ description: 'Expedia service fee', example: 10 })
+  @IsNumber()
   @IsOptional()
-  expedia_service_fee?: string
+  @Type(() => Number)
+  expedia_service_fee?: number
 
   @ApiPropertyOptional({ description: 'Expedia priority' })
   @IsString()
@@ -505,40 +506,60 @@ export class CreatePropertyDto {
   @IsOptional()
   expedia_crs_db?: string
 
-  @ApiPropertyOptional({ description: 'Expedia run date (YYYY-MM-DD)', example: '2024-01-01' })
+  @ApiPropertyOptional({ description: 'Expedia Run Date From (YYYY-MM-DD)', example: '2024-01-01' })
   @IsString()
   @IsOptional()
-  expedia_run_date?: string
+  expedia_run_date_from?: string
 
-  @ApiPropertyOptional({ description: 'Expedia run date DB (YYYY-MM-DD)', example: '2024-01-01' })
+  @ApiPropertyOptional({ description: 'Expedia Run Date To (YYYY-MM-DD)', example: '2024-12-31' })
   @IsString()
   @IsOptional()
-  expedia_run_date_db?: string
+  expedia_run_date_to?: string
+
+  @ApiPropertyOptional({ description: 'Expedia Run Date DB From (YYYY-MM-DD)', example: '2024-01-01' })
+  @IsString()
+  @IsOptional()
+  expedia_run_date_db_from?: string
+
+  @ApiPropertyOptional({ description: 'Expedia Run Date DB To (YYYY-MM-DD)', example: '2024-12-31' })
+  @IsString()
+  @IsOptional()
+  expedia_run_date_db_to?: string
 
   @ApiPropertyOptional({ description: 'Expedia revised date (YYYY-MM-DD)', example: '2024-01-15' })
   @IsString()
   @IsOptional()
   expedia_revised_date?: string
 
-  @ApiPropertyOptional({ description: 'Expedia scheduler review' })
+  @ApiPropertyOptional({ description: 'Expedia Scheduler Review From (YYYY-MM-DD)', example: '2024-01-01' })
   @IsString()
   @IsOptional()
-  expedia_scheduler_review?: string
+  expedia_scheduler_review_from?: string
+
+  @ApiPropertyOptional({ description: 'Expedia Scheduler Review To (YYYY-MM-DD)', example: '2024-12-31' })
+  @IsString()
+  @IsOptional()
+  expedia_scheduler_review_to?: string
 
   @ApiPropertyOptional({ description: 'Expedia scheduler (DB)' })
   @IsString()
   @IsOptional()
   expedia_scheduler_db?: string
 
-  @ApiPropertyOptional({ description: 'Expedia scheduler review (DB)' })
+  @ApiPropertyOptional({ description: 'Expedia Scheduler Review DB From (YYYY-MM-DD)', example: '2024-01-01' })
   @IsString()
   @IsOptional()
-  expedia_scheduler_review_db?: string
+  expedia_scheduler_review_db_from?: string
 
-  @ApiPropertyOptional({ description: 'Expedia credential verified' })
+  @ApiPropertyOptional({ description: 'Expedia Scheduler Review DB To (YYYY-MM-DD)', example: '2024-12-31' })
   @IsString()
   @IsOptional()
-  expedia_credential_verified?: string
+  expedia_scheduler_review_db_to?: string
+
+  @ApiPropertyOptional({ description: 'Expedia credential verified', example: true })
+  @IsBoolean()
+  @IsOptional()
+  expedia_credential_verified?: boolean
 
   @ApiPropertyOptional({ description: 'Expedia OTP number' })
   @IsString()
@@ -622,10 +643,11 @@ export class CreatePropertyDto {
   @Type(() => Number)
   booking_duration?: number
 
-  @ApiPropertyOptional({ description: 'Booking service fee' })
-  @IsString()
+  @ApiPropertyOptional({ description: 'Booking service fee', example: 10 })
+  @IsNumber()
   @IsOptional()
-  booking_service_fee?: string
+  @Type(() => Number)
+  booking_service_fee?: number
 
   @ApiPropertyOptional({ description: 'Booking priority' })
   @IsString()
@@ -647,10 +669,10 @@ export class CreatePropertyDto {
   @IsOptional()
   booking_revised_date?: string
 
-  @ApiPropertyOptional({ description: 'Booking credential verified' })
-  @IsString()
+  @ApiPropertyOptional({ description: 'Booking credential verified', example: true })
+  @IsBoolean()
   @IsOptional()
-  booking_credential_verified?: string
+  booking_credential_verified?: boolean
 
   @ApiPropertyOptional({ description: 'Booking OTP number' })
   @IsString()
@@ -724,10 +746,11 @@ export class CreatePropertyDto {
   @Type(() => Number)
   agoda_duration?: number
 
-  @ApiPropertyOptional({ description: 'Agoda service fee' })
-  @IsString()
+  @ApiPropertyOptional({ description: 'Agoda service fee', example: 10 })
+  @IsNumber()
   @IsOptional()
-  agoda_service_fee?: string
+  @Type(() => Number)
+  agoda_service_fee?: number
 
   @ApiPropertyOptional({ description: 'Agoda priority' })
   @IsString()
@@ -749,10 +772,10 @@ export class CreatePropertyDto {
   @IsOptional()
   agoda_revised_date?: string
 
-  @ApiPropertyOptional({ description: 'Agoda credential verified' })
-  @IsString()
+  @ApiPropertyOptional({ description: 'Agoda credential verified', example: true })
+  @IsBoolean()
   @IsOptional()
-  agoda_credential_verified?: string
+  agoda_credential_verified?: boolean
 
   @ApiPropertyOptional({ description: 'Agoda OTP number' })
   @IsString()
