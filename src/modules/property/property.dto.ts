@@ -485,10 +485,11 @@ export class CreatePropertyDto {
   @Type(() => Number)
   expedia_db_duration?: number
 
-  @ApiPropertyOptional({ description: 'Expedia service fee' })
-  @IsString()
+  @ApiPropertyOptional({ description: 'Expedia service fee', example: 10 })
+  @IsNumber()
   @IsOptional()
-  expedia_service_fee?: string
+  @Type(() => Number)
+  expedia_service_fee?: number
 
   @ApiPropertyOptional({ description: 'Expedia priority' })
   @IsString()
@@ -555,10 +556,10 @@ export class CreatePropertyDto {
   @IsOptional()
   expedia_scheduler_review_db_to?: string
 
-  @ApiPropertyOptional({ description: 'Expedia credential verified' })
-  @IsString()
+  @ApiPropertyOptional({ description: 'Expedia credential verified', example: true })
+  @IsBoolean()
   @IsOptional()
-  expedia_credential_verified?: string
+  expedia_credential_verified?: boolean
 
   @ApiPropertyOptional({ description: 'Expedia OTP number' })
   @IsString()
@@ -642,10 +643,11 @@ export class CreatePropertyDto {
   @Type(() => Number)
   booking_duration?: number
 
-  @ApiPropertyOptional({ description: 'Booking service fee' })
-  @IsString()
+  @ApiPropertyOptional({ description: 'Booking service fee', example: 10 })
+  @IsNumber()
   @IsOptional()
-  booking_service_fee?: string
+  @Type(() => Number)
+  booking_service_fee?: number
 
   @ApiPropertyOptional({ description: 'Booking priority' })
   @IsString()
@@ -667,10 +669,10 @@ export class CreatePropertyDto {
   @IsOptional()
   booking_revised_date?: string
 
-  @ApiPropertyOptional({ description: 'Booking credential verified' })
-  @IsString()
+  @ApiPropertyOptional({ description: 'Booking credential verified', example: true })
+  @IsBoolean()
   @IsOptional()
-  booking_credential_verified?: string
+  booking_credential_verified?: boolean
 
   @ApiPropertyOptional({ description: 'Booking OTP number' })
   @IsString()
@@ -744,10 +746,11 @@ export class CreatePropertyDto {
   @Type(() => Number)
   agoda_duration?: number
 
-  @ApiPropertyOptional({ description: 'Agoda service fee' })
-  @IsString()
+  @ApiPropertyOptional({ description: 'Agoda service fee', example: 10 })
+  @IsNumber()
   @IsOptional()
-  agoda_service_fee?: string
+  @Type(() => Number)
+  agoda_service_fee?: number
 
   @ApiPropertyOptional({ description: 'Agoda priority' })
   @IsString()
@@ -769,10 +772,10 @@ export class CreatePropertyDto {
   @IsOptional()
   agoda_revised_date?: string
 
-  @ApiPropertyOptional({ description: 'Agoda credential verified' })
-  @IsString()
+  @ApiPropertyOptional({ description: 'Agoda credential verified', example: true })
+  @IsBoolean()
   @IsOptional()
-  agoda_credential_verified?: string
+  agoda_credential_verified?: boolean
 
   @ApiPropertyOptional({ description: 'Agoda OTP number' })
   @IsString()

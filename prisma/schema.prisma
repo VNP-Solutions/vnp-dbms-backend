@@ -370,7 +370,7 @@ model Property {
   expedia_to           String?
   expedia_scheduler    Boolean?
   expedia_duration     Int?
-  expedia_service_fee  String?
+  expedia_service_fee  Int?
   expedia_priority     String?
   expedia_crs          String?
   expedia_crs_db       String?
@@ -385,7 +385,7 @@ model Property {
   expedia_scheduler_review_db_from String?
   expedia_scheduler_review_db_to   String?
   expedia_db_duration         Int?
-  expedia_credential_verified String?
+  expedia_credential_verified Boolean?
   expedia_otp_number         String?
   from_db                    String?
   to_db                      String?
@@ -399,12 +399,12 @@ model Property {
   booking_to           String?
   booking_scheduler    Boolean?
   booking_duration     Int?
-  booking_service_fee  String?
+  booking_service_fee  Int?
   booking_priority     String?
   booking_crs          String?
   booking_run_date     String?
   booking_revised_date String?
-  booking_credential_verified String?
+  booking_credential_verified Boolean?
   booking_otp_number         String?
 
   // Agoda integration detail
@@ -416,12 +416,12 @@ model Property {
   agoda_to           String?
   agoda_scheduler    Boolean?
   agoda_duration     Int?
-  agoda_service_fee  String?
+  agoda_service_fee  Int?
   agoda_priority     String?
   agoda_crs          String?
   agoda_run_date     String?
   agoda_revised_date String?
-  agoda_credential_verified String?
+  agoda_credential_verified Boolean?
   agoda_otp_number         String?
 
   sales_rep   String?
