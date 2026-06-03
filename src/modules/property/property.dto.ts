@@ -505,35 +505,55 @@ export class CreatePropertyDto {
   @IsOptional()
   expedia_crs_db?: string
 
-  @ApiPropertyOptional({ description: 'Expedia run date (YYYY-MM-DD)', example: '2024-01-01' })
+  @ApiPropertyOptional({ description: 'Expedia Run Date From (YYYY-MM-DD)', example: '2024-01-01' })
   @IsString()
   @IsOptional()
-  expedia_run_date?: string
+  expedia_run_date_from?: string
 
-  @ApiPropertyOptional({ description: 'Expedia run date DB (YYYY-MM-DD)', example: '2024-01-01' })
+  @ApiPropertyOptional({ description: 'Expedia Run Date To (YYYY-MM-DD)', example: '2024-12-31' })
   @IsString()
   @IsOptional()
-  expedia_run_date_db?: string
+  expedia_run_date_to?: string
+
+  @ApiPropertyOptional({ description: 'Expedia Run Date DB From (YYYY-MM-DD)', example: '2024-01-01' })
+  @IsString()
+  @IsOptional()
+  expedia_run_date_db_from?: string
+
+  @ApiPropertyOptional({ description: 'Expedia Run Date DB To (YYYY-MM-DD)', example: '2024-12-31' })
+  @IsString()
+  @IsOptional()
+  expedia_run_date_db_to?: string
 
   @ApiPropertyOptional({ description: 'Expedia revised date (YYYY-MM-DD)', example: '2024-01-15' })
   @IsString()
   @IsOptional()
   expedia_revised_date?: string
 
-  @ApiPropertyOptional({ description: 'Expedia scheduler review' })
+  @ApiPropertyOptional({ description: 'Expedia Scheduler Review From (YYYY-MM-DD)', example: '2024-01-01' })
   @IsString()
   @IsOptional()
-  expedia_scheduler_review?: string
+  expedia_scheduler_review_from?: string
+
+  @ApiPropertyOptional({ description: 'Expedia Scheduler Review To (YYYY-MM-DD)', example: '2024-12-31' })
+  @IsString()
+  @IsOptional()
+  expedia_scheduler_review_to?: string
 
   @ApiPropertyOptional({ description: 'Expedia scheduler (DB)' })
   @IsString()
   @IsOptional()
   expedia_scheduler_db?: string
 
-  @ApiPropertyOptional({ description: 'Expedia scheduler review (DB)' })
+  @ApiPropertyOptional({ description: 'Expedia Scheduler Review DB From (YYYY-MM-DD)', example: '2024-01-01' })
   @IsString()
   @IsOptional()
-  expedia_scheduler_review_db?: string
+  expedia_scheduler_review_db_from?: string
+
+  @ApiPropertyOptional({ description: 'Expedia Scheduler Review DB To (YYYY-MM-DD)', example: '2024-12-31' })
+  @IsString()
+  @IsOptional()
+  expedia_scheduler_review_db_to?: string
 
   @ApiPropertyOptional({ description: 'Expedia credential verified' })
   @IsString()

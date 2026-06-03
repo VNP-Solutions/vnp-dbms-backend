@@ -217,12 +217,16 @@ export interface ExternalPropertyDto {
   expedia_priority: string | null
   expedia_crs: string | null
   expedia_crs_db: string | null
-  expedia_run_date: string | null
-  expedia_run_date_db: string | null
+  expedia_run_date_from: string | null
+  expedia_run_date_to: string | null
+  expedia_run_date_db_from: string | null
+  expedia_run_date_db_to: string | null
   expedia_revised_date: string | null
-  expedia_scheduler_review: string | null
+  expedia_scheduler_review_from: string | null
+  expedia_scheduler_review_to: string | null
   expedia_scheduler_db: string | null
-  expedia_scheduler_review_db: string | null
+  expedia_scheduler_review_db_from: string | null
+  expedia_scheduler_review_db_to: string | null
   expedia_credential_verified: string | null
   expedia_otp_number: string | null
   from_db: string | null
