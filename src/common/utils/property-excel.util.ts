@@ -1,3 +1,5 @@
+import * as XLSX from 'xlsx-js-style'
+
 /** Column order matches templates/property-import-template.xlsx (DBMS Templates). */
 export const PROPERTY_EXCEL_HEADERS = [
   'Portfolio',
@@ -77,10 +79,50 @@ export const PROPERTY_EXCEL_HEADERS = [
   'FP Password'
 ] as const
 
+/** Header background colors from DBMS Templates sheet (gid=1851433537). */
+const HEADER_BG_RANGES: { from: number; to: number; color: string | null }[] = [
+  { from: 0, to: 3, color: null },
+  { from: 4, to: 36, color: 'FFFF00' },
+  { from: 37, to: 50, color: 'C1E4F5' },
+  { from: 51, to: 63, color: 'FAE2D5' },
+  { from: 64, to: 74, color: 'C1F0C8' }
+]
+
+const HEADER_CELL_STYLE = {
+  font: { bold: true, sz: 13, name: 'Arial' },
+  alignment: { vertical: 'center', wrapText: true }
+}
+
+const DATA_CELL_STYLE = {
+  font: { sz: 13, name: 'Arial' },
+  alignment: { vertical: 'center', wrapText: true }
+}
+
 function formatCell(value: unknown): string | number {
   if (value === null || value === undefined) return ''
   if (typeof value === 'boolean') return value ? 'Yes' : 'No'
   return value as string | number
+}
+
+function headerBackgroundColor(colIndex: number): string | null {
+  for (const range of HEADER_BG_RANGES) {
+    if (colIndex >= range.from && colIndex <= range.to) return range.color
+  }
+  return null
+}
+
+function headerCellStyle(colIndex: number) {
+  const bg = headerBackgroundColor(colIndex)
+  if (!bg) return HEADER_CELL_STYLE
+  return {
+    ...HEADER_CELL_STYLE,
+    fill: { fgColor: { rgb: bg }, patternType: 'solid' as const }
+  }
+}
+
+function columnWidth(header: string, values: (string | number)[]): number {
+  const maxLen = Math.max(header.length, ...values.map(v => String(v ?? '').length))
+  return Math.min(Math.max(maxLen + 2, 12), 60)
 }
 
 export function mapPropertyToExcelRow(property: any): Record<string, string | number> {
@@ -163,4 +205,44 @@ export function mapPropertyToExcelRow(property: any): Record<string, string | nu
     'FP Username': property.fp_username ?? '',
     'FP Password': property.fp_password ?? ''
   }
+}
+
+export function buildPropertyExportWorkbook(
+  rows: Record<string, string | number>[]
+): XLSX.WorkBook {
+  const headers = [...PROPERTY_EXCEL_HEADERS]
+  const worksheet = XLSX.utils.json_to_sheet(rows, { header: headers })
+  const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1')
+  const columnValues: (string | number)[][] = headers.map(() => [])
+
+  for (let c = 0; c < headers.length; c++) {
+    const headerAddr = XLSX.utils.encode_cell({ r: 0, c })
+    const headerCell = worksheet[headerAddr]
+    if (headerCell) headerCell.s = headerCellStyle(c)
+  }
+
+  for (let r = 1; r <= range.e.r; r++) {
+    for (let c = 0; c < headers.length; c++) {
+      const addr = XLSX.utils.encode_cell({ r, c })
+      const cell = worksheet[addr]
+      if (!cell) continue
+      cell.s = DATA_CELL_STYLE
+      columnValues[c].push(cell.v as string | number)
+    }
+  }
+
+  worksheet['!cols'] = headers.map((header, index) => ({
+    wch: columnWidth(header, columnValues[index])
+  }))
+
+  const workbook = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Properties')
+  return workbook
+}
+
+export function writePropertyExportBuffer(
+  rows: Record<string, string | number>[]
+): Buffer {
+  const workbook = buildPropertyExportWorkbook(rows)
+  return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer
 }

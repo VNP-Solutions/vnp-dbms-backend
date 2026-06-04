@@ -27,7 +27,7 @@ import {
   RequiredFieldType,
   UpdatePropertyDto
 } from './property.dto'
-import { mapPropertyToExcelRow, PROPERTY_EXCEL_HEADERS } from '../../common/utils/property-excel.util'
+import { mapPropertyToExcelRow, writePropertyExportBuffer } from '../../common/utils/property-excel.util'
 import type {
   ImportPropertiesResult,
   ImportPropertyRow,
@@ -940,14 +940,7 @@ export class PropertyService implements IPropertyService {
     const properties = raw.map(p => this.decryptCredentialsForResponse(p))
 
     const rows = properties.map(p => mapPropertyToExcelRow(p))
-
-    const worksheet = XLSX.utils.json_to_sheet(rows, {
-      header: [...PROPERTY_EXCEL_HEADERS]
-    })
-    const workbook = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Properties')
-
-    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer
+    const buffer = writePropertyExportBuffer(rows)
 
     const filename = `properties-export-${new Date().toISOString().slice(0, 10)}.xlsx`
 
