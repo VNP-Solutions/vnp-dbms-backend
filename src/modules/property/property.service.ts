@@ -27,7 +27,7 @@ import {
   RequiredFieldType,
   UpdatePropertyDto
 } from './property.dto'
-import { mapPropertyToExcelRow, PROPERTY_EXCEL_HEADERS } from '../../common/utils/property-excel.util'
+import { mapPropertyToExcelRow, writePropertyExportBuffer } from '../../common/utils/property-excel.util'
 import type {
   ImportPropertiesResult,
   ImportPropertyRow,
@@ -1054,14 +1054,7 @@ export class PropertyService implements IPropertyService {
     const properties = raw.map(p => this.decryptCredentialsForResponse(p))
 
     const rows = properties.map(p => mapPropertyToExcelRow(p))
-
-    const worksheet = XLSX.utils.json_to_sheet(rows, {
-      header: [...PROPERTY_EXCEL_HEADERS]
-    })
-    const workbook = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Properties')
-
-    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer
+    const buffer = writePropertyExportBuffer(rows)
 
     const filename = `properties-export-${new Date().toISOString().slice(0, 10)}.xlsx`
 
@@ -1466,7 +1459,7 @@ export class PropertyService implements IPropertyService {
         const rowNumber = i + 2 // Row 1 is the header in Excel
 
         try {
-          // Match by property_identifier first; fall back to name
+          // Match by property_identifier first; fall back to name when not found
           const propertyIdentifier = findValue(row, ['Property Identifier', 'Property identifier', 'Identifier'])
           const propertyName = findValue(row, ['Property Name', 'Property name', 'Name'])
 
@@ -1477,22 +1470,30 @@ export class PropertyService implements IPropertyService {
           }
 
           let existingProperty: any
+          let matchedByIdentifier = false
           const rowLabel = propertyIdentifier ?? propertyName!
 
           if (propertyIdentifier) {
             existingProperty = await this.prisma.property.findFirst({ where: { property_identifier: propertyIdentifier } })
-            if (!existingProperty) {
-              result.errors.push({ row: rowNumber, propertyName: rowLabel, error: `Property not found with identifier: ${propertyIdentifier}` })
-              result.failureCount++
-              continue
+            if (existingProperty) {
+              matchedByIdentifier = true
             }
-          } else {
-            existingProperty = await this.repo.findByName(propertyName!)
-            if (!existingProperty) {
-              result.errors.push({ row: rowNumber, propertyName: rowLabel, error: `Property not found: ${propertyName}` })
-              result.failureCount++
-              continue
-            }
+          }
+
+          if (!existingProperty && propertyName) {
+            existingProperty = await this.repo.findByName(propertyName)
+          }
+
+          if (!existingProperty) {
+            result.errors.push({
+              row: rowNumber,
+              propertyName: rowLabel,
+              error: propertyIdentifier
+                ? `Property not found with identifier: ${propertyIdentifier}${propertyName ? ` or name: ${propertyName}` : ''}`
+                : `Property not found: ${propertyName}`
+            })
+            result.failureCount++
+            continue
           }
 
           // Check access permission
@@ -1507,7 +1508,7 @@ export class PropertyService implements IPropertyService {
 
           // Rename: only possible when matched by property_identifier.
           // The "Property Name" column then carries the new name.
-          if (propertyIdentifier && propertyName && propertyName !== existingProperty.name) {
+          if (matchedByIdentifier && propertyName && propertyName !== existingProperty.name) {
             const nameConflict = await this.repo.findByName(propertyName)
             if (nameConflict && nameConflict.id !== propertyId) {
               result.errors.push({ row: rowNumber, propertyName: existingProperty.name, error: `Another property already has the name: ${propertyName}` })
@@ -1515,6 +1516,28 @@ export class PropertyService implements IPropertyService {
               continue
             }
             updateData.name = propertyName
+          }
+
+          // Assign or update property_identifier when matched by name (not by identifier lookup)
+          if (!matchedByIdentifier && propertyIdentifier) {
+            if (propertyIdentifier !== existingProperty.property_identifier) {
+              const identifierConflict = await this.prisma.property.findFirst({
+                where: {
+                  property_identifier: propertyIdentifier,
+                  id: { not: propertyId }
+                }
+              })
+              if (identifierConflict) {
+                result.errors.push({
+                  row: rowNumber,
+                  propertyName: existingProperty.name,
+                  error: `Another property already has the identifier: ${propertyIdentifier}`
+                })
+                result.failureCount++
+                continue
+              }
+              updateData.property_identifier = propertyIdentifier
+            }
           }
 
           // Hotel address
