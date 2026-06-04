@@ -489,7 +489,7 @@ export class CreatePropertyDto {
   @IsNumber()
   @IsOptional()
   @Type(() => Number)
-  expedia_service_fee?: number
+  expedia_service_fee?: String
 
   @ApiPropertyOptional({ description: 'Expedia priority' })
   @IsString()
@@ -1159,7 +1159,30 @@ export const PROPERTY_FILTER_FIELD_NAMES = [
   'agoda_duration',
   'need_another_domain',
   'created_at',
-  'updated_at'
+  'updated_at',
+  'expedia_service_fee',
+  'expedia_priority',
+  'from_db',
+  'to_db',
+  'expedia_revised_date',
+  'expedia_scheduler_review_from',
+  'expedia_scheduler_review_to',
+  'expedia_scheduler_review_db_from',
+  'expedia_scheduler_review_db_to',
+  'expedia_crs',
+  'expedia_crs_db',
+  'expedia_run_date_from',
+  'expedia_run_date_to',
+  'expedia_run_date_db_from',
+  'expedia_run_date_db_to',
+  'expedia_db_duration',
+  'expedia_credential_verified',
+  'expedia_otp_number',
+  'booking_service_fee',
+  'booking_credential_verified',
+  'agoda_service_fee',
+  'agoda_credential_verified',
+  'sales_rep'
 ] as const
 
 export type PropertyFilterFieldName = (typeof PROPERTY_FILTER_FIELD_NAMES)[number]
