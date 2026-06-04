@@ -163,6 +163,25 @@ export interface AllDataForGlobalFilterResponse {
   expedia_secondary_username: string[]
   booking_secondary_username: string[]
   agoda_secondary_username: string[]
+  expedia_service_fee: string[]
+  expedia_priority: string[]
+  from_db: string[]
+  to_db: string[]
+  expedia_revised_date: { min: string | null; max: string | null }
+  expedia_scheduler_review: string[]
+  expedia_scheduler_review_db: string[]
+  expedia_crs: string[]
+  expedia_crs_db: string[]
+  expedia_run_date: string[]
+  expedia_run_date_db: string[]
+  expedia_db_duration: string[]
+  expedia_credential_verified: string[]
+  expedia_otp_number: string[]
+  booking_service_fee: string[]
+  booking_credential_verified: string[]
+  agoda_service_fee: string[]
+  agoda_credential_verified: string[]
+  sales_rep: string[]
 }
 
 export interface IPropertyRepository {

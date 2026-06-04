@@ -325,6 +325,13 @@ export class PropertyService implements IPropertyService {
           }
           continue
         }
+        if (name === 'expedia_revised_date_from' || name === 'expedia_revised_date_to') {
+          if (!processedFilters.has(name)) {
+            applySingleFieldRange('expedia_revised_date',
+              'expedia_revised_date_from', 'expedia_revised_date_to')
+          }
+          continue
+        }
 
         switch (name) {
           case 'portfolio_id':
@@ -525,9 +532,6 @@ export class PropertyService implements IPropertyService {
             break
           case 'expedia_priority':
             whereConditions.push({ expedia_priority: { in: values } })
-            break
-          case 'expedia_revised_date':
-            whereConditions.push({ expedia_revised_date: { in: values } })
             break
           case 'expedia_crs':
             whereConditions.push({ expedia_crs: { in: values } })
@@ -1846,7 +1850,8 @@ export class PropertyService implements IPropertyService {
     const uniqueExpediaPriorities = new Set<string>()
     const uniqueFromDb = new Set<string>()
     const uniqueToDb = new Set<string>()
-    const uniqueExpediaRevisedDates = new Set<string>()
+    let revisedDateMin: string | null = null
+    let revisedDateMax: string | null = null
     const uniqueExpediaSchedulerReviews = new Set<string>()
     const uniqueExpediaSchedulerReviewDbs = new Set<string>()
     const uniqueExpediaCrs = new Set<string>()
@@ -2078,8 +2083,12 @@ export class PropertyService implements IPropertyService {
         uniqueFromDb.add(property.from_db)
       if (property.to_db)
         uniqueToDb.add(property.to_db)
-      if (property.expedia_revised_date)
-        uniqueExpediaRevisedDates.add(property.expedia_revised_date)
+      if (property.expedia_revised_date) {
+        if (revisedDateMin === null || property.expedia_revised_date < revisedDateMin)
+          revisedDateMin = property.expedia_revised_date
+        if (revisedDateMax === null || property.expedia_revised_date > revisedDateMax)
+          revisedDateMax = property.expedia_revised_date
+      }
       if (property.expedia_scheduler_review)
         uniqueExpediaSchedulerReviews.add(property.expedia_scheduler_review)
       if (property.expedia_scheduler_review_db)
@@ -2189,7 +2198,7 @@ export class PropertyService implements IPropertyService {
       expedia_priority: Array.from(uniqueExpediaPriorities).sort(),
       from_db:  Array.from(uniqueFromDb).sort(),
       to_db:  Array.from(uniqueToDb).sort(),
-      expedia_revised_date: Array.from(uniqueExpediaRevisedDates).sort(),
+      expedia_revised_date: { min: revisedDateMin, max: revisedDateMax },
       expedia_scheduler_review: Array.from(uniqueExpediaSchedulerReviews).sort(),
       expedia_scheduler_review_db:  Array.from(uniqueExpediaSchedulerReviewDbs).sort(),
       expedia_crs:  Array.from(uniqueExpediaCrs).sort(),

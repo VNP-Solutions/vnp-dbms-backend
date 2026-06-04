@@ -1164,7 +1164,8 @@ export const PROPERTY_FILTER_FIELD_NAMES = [
   'expedia_priority',
   'from_db',
   'to_db',
-  'expedia_revised_date',
+  'expedia_revised_date_from',
+  'expedia_revised_date_to',
   'expedia_scheduler_review_from',
   'expedia_scheduler_review_to',
   'expedia_scheduler_review_db_from',
@@ -1531,6 +1532,16 @@ export class AllDataForGlobalFilterResponseDto {
 
   @ApiProperty({ type: [String] })
   expedia_to: string[]
+
+  @ApiProperty({
+    description: 'Min/max of expedia_revised_date across accessible properties',
+    type: 'object',
+    properties: {
+      min: { type: 'string', nullable: true, example: '2026-01-10' },
+      max: { type: 'string', nullable: true, example: '2026-06-03' }
+    }
+  })
+  expedia_revised_date: { min: string | null; max: string | null }
 
   @ApiProperty({ type: [String] })
   expedia_duration: string[]
