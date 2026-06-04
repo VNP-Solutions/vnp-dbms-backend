@@ -139,13 +139,16 @@ export class PropertyController {
     Upload an Excel (.xlsx, .xls) or CSV file to bulk update existing properties.
 
     Property matching (checked in this order):
-    1. Property Identifier/Property identifier/Identifier — preferred lookup key (read-only; cannot be changed)
-    2. Property Name/Property name/Name — fallback when no identifier is provided
+    1. Property Identifier/Property identifier/Identifier — preferred lookup key
+    2. Property Name/Property name/Name — fallback when identifier is missing or not found
 
     Renaming:
     - Only possible when matched by Property Identifier.
     - Provide the new name in the "Property Name" column.
     - When matched by name, the Property Name column is used for lookup only and cannot be updated.
+
+    Property Identifier assignment:
+    - When matched by Property Name, the Property Identifier column can be used to assign or update the identifier (including when the current value is empty).
 
     Optional property columns (only updated when the cell has a value):
     - Hotel Address/Address/Property Address
