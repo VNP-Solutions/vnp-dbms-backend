@@ -148,7 +148,9 @@ export class PropertyController {
     - When matched by name, the Property Name column is used for lookup only and cannot be updated.
 
     Property Identifier assignment:
-    - When matched by Property Name, the Property Identifier column can be used to assign or update the identifier (including when the current value is empty).
+    - Only when matched by Property Name and the property has no existing identifier (null/empty).
+    - If the property already has an identifier, the row is rejected with an error.
+    - Property Identifier cannot be changed once set.
 
     Optional property columns (only updated when the cell has a value):
     - Hotel Address/Address/Property Address

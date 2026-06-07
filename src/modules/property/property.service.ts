@@ -1518,26 +1518,50 @@ export class PropertyService implements IPropertyService {
             updateData.name = propertyName
           }
 
-          // Assign or update property_identifier when matched by name (not by identifier lookup)
+          // Assign property_identifier only when matched by name and the property has no identifier yet
           if (!matchedByIdentifier && propertyIdentifier) {
-            if (propertyIdentifier !== existingProperty.property_identifier) {
-              const identifierConflict = await this.prisma.property.findFirst({
-                where: {
-                  property_identifier: propertyIdentifier,
-                  id: { not: propertyId }
-                }
+            const existingIdentifier = existingProperty.property_identifier
+            const hasExistingIdentifier =
+              existingIdentifier !== null &&
+              existingIdentifier !== undefined &&
+              String(existingIdentifier).trim() !== ''
+
+            if (hasExistingIdentifier) {
+              result.errors.push({
+                row: rowNumber,
+                propertyName: existingProperty.name,
+                error: 'Property identifier already exists and cannot be updated'
               })
-              if (identifierConflict) {
-                result.errors.push({
-                  row: rowNumber,
-                  propertyName: existingProperty.name,
-                  error: `Another property already has the identifier: ${propertyIdentifier}`
-                })
-                result.failureCount++
-                continue
-              }
-              updateData.property_identifier = propertyIdentifier
+              result.failureCount++
+              continue
             }
+
+            if (!propertyName) {
+              result.errors.push({
+                row: rowNumber,
+                propertyName: existingProperty.name,
+                error: 'Property Name is required to assign a property identifier'
+              })
+              result.failureCount++
+              continue
+            }
+
+            const identifierConflict = await this.prisma.property.findFirst({
+              where: {
+                property_identifier: propertyIdentifier,
+                id: { not: propertyId }
+              }
+            })
+            if (identifierConflict) {
+              result.errors.push({
+                row: rowNumber,
+                propertyName: existingProperty.name,
+                error: `Another property already has the identifier: ${propertyIdentifier}`
+              })
+              result.failureCount++
+              continue
+            }
+            updateData.property_identifier = propertyIdentifier
           }
 
           // Hotel address
