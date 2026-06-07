@@ -1199,6 +1199,9 @@ export class PropertyService implements IPropertyService {
             : undefined,
           serviceTypeName: r['Service Type']
             ? String(r['Service Type']).trim()
+            : undefined,
+          currency: r['Currency']
+            ? String(r['Currency']).trim()
             : undefined
         } satisfies ImportPropertyRow
       })
@@ -1444,6 +1447,10 @@ export class PropertyService implements IPropertyService {
           // Service type
           const serviceType = findValue(row, ['Service Type', 'Service type'])
           if (serviceType !== undefined) updateData.service_type = serviceType
+
+          // Currency
+          const currency = findValue(row, ['Currency', 'currency'])
+          if (currency !== undefined) updateData.currency = currency
 
           // Next due date
           const nextDueDateRaw = getRawValue(row, ['Next Due Date', 'Next due date', 'Due Date'])

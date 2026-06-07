@@ -442,6 +442,7 @@ export class PropertyRepository implements IPropertyRepository {
       if (row.serviceTypeName) {
         propertyPayload.service_type = row.serviceTypeName.trim()
       }
+      if (row.currency) propertyPayload.currency = row.currency.trim()
 
       if (!propertyPayload.expedia_status) propertyPayload.expedia_status = 'Access Required'
       if (!propertyPayload.booking_status) propertyPayload.booking_status = 'Access Required'

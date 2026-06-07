@@ -231,6 +231,14 @@ export class CreatePropertyDto {
   service_type?: string
 
   @ApiPropertyOptional({
+    example: 'USD',
+    description: 'Currency code'
+  })
+  @IsString()
+  @IsOptional()
+  currency?: string
+
+  @ApiPropertyOptional({
     example: 'PROP-12345',
     description: 'External property / PMS identifier'
   })
@@ -781,14 +789,6 @@ export class CreatePropertyDto {
   @IsString()
   @IsOptional()
   agoda_otp_number?: string
-
-  @ApiPropertyOptional({
-    example: 'USD',
-    description: 'Currency code'
-  })
-  @IsString()
-  @IsOptional()
-  currency?: string
 
   @ApiPropertyOptional({ description: 'Sales representative name' })
   @IsString()

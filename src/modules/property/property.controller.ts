@@ -98,7 +98,7 @@ export class PropertyController {
   @ApiOperation({
     summary: 'Bulk import properties from Excel',
     description:
-      'Upload Excel file with Property Name (required), Portfolio (required, auto-creates if missing). Optional: Property Address, Card Descriptor, Description, Property Identifier, Portfolio Contact, Expedia/Booking/Agoda IDs/Statuses/Usernames/Passwords, Expedia/Booking/Agoda Secondary Username/Password, Need Another Domain (true/false), Booking OTP Phone, Case Management/Access/Reporting Contacts, Portfolio/Case Contact Emails, QP Username/Password/Api Key, FP Username/Password/MID, Stripe Account Email, New Domains Email, Webmail Password, Expedia/Booking/Agoda Processors (QuantumPay/Stripe/FreedomPay), Expedia/Booking/Agoda Billing Type (VCC/DB/EBS), Service Type, Frequency (REGULAR/ONE_TIME/STOP), Access Level (true/false), Expedia/Booking/Agoda From/To dates (OTA-specific), Scheduler (true/false), Duration (number). Passwords auto-encrypted. Existing property names skipped.'
+      'Upload Excel file with Property Name (required), Portfolio (required, auto-creates if missing). Optional: Property Address, Card Descriptor, Description, Property Identifier, Portfolio Contact, Currency, Expedia/Booking/Agoda IDs/Statuses/Usernames/Passwords, Expedia/Booking/Agoda Secondary Username/Password, Need Another Domain (true/false), Booking OTP Phone, Case Management/Access/Reporting Contacts, Portfolio/Case Contact Emails, QP Username/Password/Api Key, FP Username/Password/MID, Stripe Account Email, New Domains Email, Webmail Password, Expedia/Booking/Agoda Processors (QuantumPay/Stripe/FreedomPay), Expedia/Booking/Agoda Billing Type (VCC/DB/EBS), Service Type, Frequency (REGULAR/ONE_TIME/STOP), Access Level (true/false), Expedia/Booking/Agoda From/To dates (OTA-specific), Scheduler (true/false), Duration (number). Passwords auto-encrypted. Existing property names skipped.'
   })
   @ApiBody({
     schema: {
@@ -157,6 +157,7 @@ export class PropertyController {
     - Portfolio/Portfolio Name: links to an existing portfolio by name
     - Description/Desc
     - Service Type
+    - Currency
     - Case Management Contact
     - Access Contact
     - Reporting Contact

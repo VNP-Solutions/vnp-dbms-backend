@@ -78,6 +78,7 @@ export interface ImportPropertyRow {
   needAnotherDomain?: string
   bookingOtpPhone?: string
   serviceTypeName?: string
+  currency?: string
 }
 
 export interface ImportPropertiesResult {
