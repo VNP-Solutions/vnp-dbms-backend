@@ -315,6 +315,7 @@ model Property {
   portfolio_id          String        @db.ObjectId
   portfolio             Portfolio     @relation(fields: [portfolio_id], references: [id], onDelete: Cascade)
   service_type          String?
+  currency              String?
   subportfolio_id       String?       @db.ObjectId
   subportfolio          Subportfolio? @relation(fields: [subportfolio_id], references: [id], onDelete: SetNull)
   previous_portfolio_id String?       @db.ObjectId

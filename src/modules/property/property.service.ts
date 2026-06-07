@@ -358,6 +358,9 @@ export class PropertyService implements IPropertyService {
           case 'service_type':
             whereConditions.push({ service_type: { in: values } })
             break
+          case 'currency':
+            whereConditions.push({ currency: { in: values } })
+            break
           case 'property_identifier':
             whereConditions.push({ property_identifier: { in: values } })
             break
@@ -1798,6 +1801,7 @@ export class PropertyService implements IPropertyService {
       { id: string; name: string; portfolio_id: string }
     >()
     const uniqueServiceTypes = new Set<string>()
+    const uniqueCurrencies = new Set<string>()
     const uniqueDescriptions = new Set<string>()
     const uniqueExpediaStatuses = new Set<string>()
     const uniqueBookingStatuses = new Set<string>()
@@ -1834,6 +1838,8 @@ export class PropertyService implements IPropertyService {
       if (property.portfolio_id) portfolioIdSet.add(property.portfolio_id)
       if (property.service_type)
         uniqueServiceTypes.add(property.service_type)
+      if (property.currency)
+        uniqueCurrencies.add(property.currency)
       if (property.expedia_id) uniqueExpediaIds.add(property.expedia_id)
       if (property.booking_id) uniqueBookingIds.add(property.booking_id)
       if (property.agoda_id) uniqueAgodaIds.add(property.agoda_id)
@@ -1998,6 +2004,7 @@ export class PropertyService implements IPropertyService {
       property_identifier: Array.from(uniquePropertyIdentifiers).sort(),
       portfolio_contact: Array.from(uniquePortfolioContacts).sort(),
       service_type: Array.from(uniqueServiceTypes).sort(),
+      currency: Array.from(uniqueCurrencies).sort(),
       fp_username: Array.from(uniqueFpUsernames).sort(),
       qp_username: Array.from(uniqueQpUsernames).sort(),
       previous_portfolio_id: Array.from(uniquePreviousPortfolioIds).sort(),

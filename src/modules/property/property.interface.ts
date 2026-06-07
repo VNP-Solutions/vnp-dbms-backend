@@ -130,6 +130,7 @@ export interface AllDataForGlobalFilterResponse {
   property_identifier: string[]
   portfolio_contact: string[]
   service_type: string[]
+  currency: string[]
   fp_username: string[]
   qp_username: string[]
   previous_portfolio_id: string[]

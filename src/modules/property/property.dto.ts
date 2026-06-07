@@ -782,6 +782,14 @@ export class CreatePropertyDto {
   @IsOptional()
   agoda_otp_number?: string
 
+  @ApiPropertyOptional({
+    example: 'USD',
+    description: 'Currency code'
+  })
+  @IsString()
+  @IsOptional()
+  currency?: string
+
   @ApiPropertyOptional({ description: 'Sales representative name' })
   @IsString()
   @IsOptional()
@@ -1109,6 +1117,7 @@ export const PROPERTY_FILTER_FIELD_NAMES = [
   'property_id',
   'subportfolio_id',
   'service_type',
+  'currency',
   'property_identifier',
   'portfolio_contact',
   'expedia_id',
@@ -1180,6 +1189,8 @@ function swaggerExampleForFilterName(name: PropertyFilterFieldName): {
     return { in: [OID] }
   if (name === 'service_type')
     return { in: ['OTA', 'OTA_PLUS', 'ESP'] }
+  if (name === 'currency')
+    return { in: ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'CHF', 'INR'] }
   if (
     name === 'expedia_id' ||
     name === 'booking_id' ||
@@ -1481,6 +1492,9 @@ export class AllDataForGlobalFilterResponseDto {
 
   @ApiProperty({ type: [String] })
   service_type: string[]
+
+  @ApiProperty({ type: [String] })
+  currency: string[]
 
   @ApiProperty({ type: [String] })
   fp_username: string[]

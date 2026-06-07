@@ -54,6 +54,7 @@ export class PropertyRepository implements IPropertyRepository {
       name: data.name,
       portfolio_id: data.portfolio_id,
       service_type: data.service_type,
+      currency: data.currency,
       card_descriptor: data.card_descriptor,
       is_active: data.is_active ?? true,
       next_due_date: data.next_due_date ? new Date(data.next_due_date) : undefined,
