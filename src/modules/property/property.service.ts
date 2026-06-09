@@ -2611,18 +2611,22 @@ export class PropertyService implements IPropertyService {
     values: (string | number | boolean)[]
   ): any {
     const bools = this.booleanValuesForInClause(values)
-    
+
     // If no valid boolean values, return null (no filter)
     if (bools.length === 0) return null
-    
+
     // If both true and false are present, no filter needed (matches all)
     if (bools.length === 2) return null
-    
-    // If only one value, use equals
+
     if (bools.length === 1) {
-      return { [fieldName]: { equals: bools[0] } }
+      // For false filters on nullable boolean fields, treat null as false so
+      // records that were never explicitly set are included in the result.
+      if (bools[0] === false) {
+        return { OR: [{ [fieldName]: { equals: false } }, { [fieldName]: null }] }
+      }
+      return { [fieldName]: { equals: true } }
     }
-    
+
     return null
   }
 
