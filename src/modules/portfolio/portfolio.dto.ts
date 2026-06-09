@@ -1,6 +1,7 @@
 import { PartialType } from '@nestjs/mapped-types'
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import {
+  IsArray,
   IsBoolean,
   IsEmail,
   IsIn,
@@ -64,6 +65,16 @@ export class CreatePortfolioDto {
   @IsString()
   @IsOptional()
   attachment?: string
+
+  @ApiPropertyOptional({
+    example: ['https://example.com/contract.pdf', 'https://example.com/sla.pdf'],
+    description: 'List of attachment URLs or paths',
+    type: [String]
+  })
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  attachments?: string[]
 
   @ApiPropertyOptional({ example: true, description: 'Whether contract has been signed' })
   @IsBoolean()
