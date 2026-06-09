@@ -315,6 +315,12 @@ export class PortfolioService implements IPortfolioService {
             : undefined,
           commission: row?.['Commission'] != null ? Number(row['Commission']) : undefined,
           attachment: row?.['Documents'] ? String(row['Documents']).trim() : undefined,
+          attachments: row?.['Attachments']
+            ? String(row['Attachments'])
+                .split(',')
+                .map((s: string) => s.trim())
+                .filter(Boolean)
+            : [],
           contract_signed
         }
 

@@ -153,6 +153,7 @@ export interface ExternalPortfolioDto {
   is_commissionable: boolean
   commission: number | null
   attachment: string | null
+  attachments: string[]
   contract_signed: boolean | null
   created_at: string
   updated_at: string

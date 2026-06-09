@@ -277,6 +277,7 @@ model Portfolio {
   is_commissionable            Boolean
   commission                   Float?
   attachment                   String?
+  attachments                  String[]      @default([])
   contract_signed              Boolean?
   subportfolios                Subportfolio[]
   properties                   Property[]
