@@ -2130,19 +2130,34 @@ export class PropertyService implements IPropertyService {
     const uniqueToDb = new Set<string>()
     let revisedDateMin: string | null = null
     let revisedDateMax: string | null = null
-    const uniqueExpediaSchedulerReviews = new Set<string>()
-    const uniqueExpediaSchedulerReviewDbs = new Set<string>()
+    const uniqueExpediaSchedulerReviewFroms = new Set<string>()
+    const uniqueExpediaSchedulerReviewTos = new Set<string>()
+    const uniqueExpediaSchedulerReviewDbFroms = new Set<string>()
+    const uniqueExpediaSchedulerReviewDbTos = new Set<string>()
+    const uniqueExpediaSchedulerDbs = new Set<string>()
     const uniqueExpediaCrs = new Set<string>()
     const uniqueExpediaCrsDbs = new Set<string>()
-    const uniqueExpediaRunDates = new Set<string>()
-    const uniqueExpediaRunDateDbs = new Set<string>()
+    const uniqueExpediaRunDateFroms = new Set<string>()
+    const uniqueExpediaRunDateTos = new Set<string>()
+    const uniqueExpediaRunDateDbFroms = new Set<string>()
+    const uniqueExpediaRunDateDbTos = new Set<string>()
     const uniqueExpediaDbDurations = new Set<string>()
     const uniqueExpediaCredentialVerified = new Set<string>()
     const uniqueExpediaOtpNumbers = new Set<string>()
     const uniqueBookingServiceFees = new Set<string>()
+    const uniqueBookingPriorities = new Set<string>()
+    const uniqueBookingCrs = new Set<string>()
+    const uniqueBookingRunDates = new Set<string>()
+    const uniqueBookingRevisedDates = new Set<string>()
     const uniqueBookingCredentialVerified = new Set<string>()
+    const uniqueBookingOtpNumbers = new Set<string>()
     const uniqueAgodaServiceFees = new Set<string>()
+    const uniqueAgodaPriorities = new Set<string>()
+    const uniqueAgodaCrs = new Set<string>()
+    const uniqueAgodaRunDates = new Set<string>()
+    const uniqueAgodaRevisedDates = new Set<string>()
     const uniqueAgodaCredentialVerified = new Set<string>()
+    const uniqueAgodaOtpNumbers = new Set<string>()
     const uniqueSalesReps = new Set<string>()
     const uniqueExpediaIds = new Set<string>()
     const portfolioMap = new Map<string, { id: string; name: string }>()
@@ -2370,32 +2385,62 @@ export class PropertyService implements IPropertyService {
         if (revisedDateMax === null || property.expedia_revised_date > revisedDateMax)
           revisedDateMax = property.expedia_revised_date
       }
-      if (property.expedia_scheduler_review)
-        uniqueExpediaSchedulerReviews.add(property.expedia_scheduler_review)
-      if (property.expedia_scheduler_review_db)
-        uniqueExpediaSchedulerReviewDbs.add(property.expedia_scheduler_review_db)
+      if (property.expedia_scheduler_review_from)
+        uniqueExpediaSchedulerReviewFroms.add(property.expedia_scheduler_review_from)
+      if (property.expedia_scheduler_review_to)
+        uniqueExpediaSchedulerReviewTos.add(property.expedia_scheduler_review_to)
+      if (property.expedia_scheduler_review_db_from)
+        uniqueExpediaSchedulerReviewDbFroms.add(property.expedia_scheduler_review_db_from)
+      if (property.expedia_scheduler_review_db_to)
+        uniqueExpediaSchedulerReviewDbTos.add(property.expedia_scheduler_review_db_to)
+      if (property.expedia_scheduler_db)
+        uniqueExpediaSchedulerDbs.add(property.expedia_scheduler_db)
       if (property.expedia_crs)
         uniqueExpediaCrs.add(property.expedia_crs)
       if (property.expedia_crs_db)
         uniqueExpediaCrsDbs.add(property.expedia_crs_db)
-      if (property.expedia_run_date)
-        uniqueExpediaRunDates.add(property.expedia_run_date)
-      if (property.expedia_run_date_db)
-        uniqueExpediaRunDateDbs.add(property.expedia_run_date_db)
+      if (property.expedia_run_date_from)
+        uniqueExpediaRunDateFroms.add(property.expedia_run_date_from)
+      if (property.expedia_run_date_to)
+        uniqueExpediaRunDateTos.add(property.expedia_run_date_to)
+      if (property.expedia_run_date_db_from)
+        uniqueExpediaRunDateDbFroms.add(property.expedia_run_date_db_from)
+      if (property.expedia_run_date_db_to)
+        uniqueExpediaRunDateDbTos.add(property.expedia_run_date_db_to)
       if (property.expedia_db_duration != null)
         uniqueExpediaDbDurations.add(String(property.expedia_db_duration))
-      if (property.expedia_credential_verified)
-        uniqueExpediaCredentialVerified.add(property.expedia_credential_verified)
+      if (property.expedia_credential_verified != null)
+        uniqueExpediaCredentialVerified.add(String(property.expedia_credential_verified))
       if (property.expedia_otp_number)
         uniqueExpediaOtpNumbers.add(property.expedia_otp_number)
-      if (property.booking_service_fee)
-        uniqueBookingServiceFees.add(property.booking_service_fee)
-      if (property.booking_credential_verified)
-        uniqueBookingCredentialVerified.add(property.booking_credential_verified)
-      if (property.agoda_service_fee)
-        uniqueAgodaServiceFees.add(property.agoda_service_fee)
-      if (property.agoda_credential_verified)
-        uniqueAgodaCredentialVerified.add(property.agoda_credential_verified)
+      if (property.booking_service_fee != null)
+        uniqueBookingServiceFees.add(String(property.booking_service_fee))
+      if (property.booking_priority)
+        uniqueBookingPriorities.add(property.booking_priority)
+      if (property.booking_crs)
+        uniqueBookingCrs.add(property.booking_crs)
+      if (property.booking_run_date)
+        uniqueBookingRunDates.add(property.booking_run_date)
+      if (property.booking_revised_date)
+        uniqueBookingRevisedDates.add(property.booking_revised_date)
+      if (property.booking_credential_verified != null)
+        uniqueBookingCredentialVerified.add(String(property.booking_credential_verified))
+      if (property.booking_otp_number)
+        uniqueBookingOtpNumbers.add(property.booking_otp_number)
+      if (property.agoda_service_fee != null)
+        uniqueAgodaServiceFees.add(String(property.agoda_service_fee))
+      if (property.agoda_priority)
+        uniqueAgodaPriorities.add(property.agoda_priority)
+      if (property.agoda_crs)
+        uniqueAgodaCrs.add(property.agoda_crs)
+      if (property.agoda_run_date)
+        uniqueAgodaRunDates.add(property.agoda_run_date)
+      if (property.agoda_revised_date)
+        uniqueAgodaRevisedDates.add(property.agoda_revised_date)
+      if (property.agoda_credential_verified != null)
+        uniqueAgodaCredentialVerified.add(String(property.agoda_credential_verified))
+      if (property.agoda_otp_number)
+        uniqueAgodaOtpNumbers.add(property.agoda_otp_number)
       if (property.sales_rep)
         uniqueSalesReps.add(property.sales_rep)
     })
@@ -2476,25 +2521,40 @@ export class PropertyService implements IPropertyService {
       agoda_secondary_username: Array.from(
         uniqueAgodaSecondaryUsernames
       ).sort(),
-      expedia_service_fee:  Array.from(uniqueExpediaServiceFees).sort(),
+      expedia_service_fee: Array.from(uniqueExpediaServiceFees).sort(),
       expedia_priority: Array.from(uniqueExpediaPriorities).sort(),
-      from_db:  Array.from(uniqueFromDb).sort(),
-      to_db:  Array.from(uniqueToDb).sort(),
+      from_db: Array.from(uniqueFromDb).sort(),
+      to_db: Array.from(uniqueToDb).sort(),
       expedia_revised_date: { min: revisedDateMin, max: revisedDateMax },
-      expedia_scheduler_review: Array.from(uniqueExpediaSchedulerReviews).sort(),
-      expedia_scheduler_review_db:  Array.from(uniqueExpediaSchedulerReviewDbs).sort(),
-      expedia_crs:  Array.from(uniqueExpediaCrs).sort(),
+      expedia_scheduler_review_from: Array.from(uniqueExpediaSchedulerReviewFroms).sort(),
+      expedia_scheduler_review_to: Array.from(uniqueExpediaSchedulerReviewTos).sort(),
+      expedia_scheduler_review_db_from: Array.from(uniqueExpediaSchedulerReviewDbFroms).sort(),
+      expedia_scheduler_review_db_to: Array.from(uniqueExpediaSchedulerReviewDbTos).sort(),
+      expedia_scheduler_db: Array.from(uniqueExpediaSchedulerDbs).sort(),
+      expedia_crs: Array.from(uniqueExpediaCrs).sort(),
       expedia_crs_db: Array.from(uniqueExpediaCrsDbs).sort(),
-      expedia_run_date: Array.from(uniqueExpediaRunDates).sort(),
-      expedia_run_date_db:  Array.from(uniqueExpediaRunDateDbs).sort(),
-      expedia_db_duration:  Array.from(uniqueExpediaDbDurations).sort(),
-      expedia_credential_verified:  Array.from(uniqueExpediaCredentialVerified).sort(),
+      expedia_run_date_from: Array.from(uniqueExpediaRunDateFroms).sort(),
+      expedia_run_date_to: Array.from(uniqueExpediaRunDateTos).sort(),
+      expedia_run_date_db_from: Array.from(uniqueExpediaRunDateDbFroms).sort(),
+      expedia_run_date_db_to: Array.from(uniqueExpediaRunDateDbTos).sort(),
+      expedia_db_duration: Array.from(uniqueExpediaDbDurations).sort(),
+      expedia_credential_verified: Array.from(uniqueExpediaCredentialVerified).sort(),
       expedia_otp_number: Array.from(uniqueExpediaOtpNumbers).sort(),
-      booking_service_fee:  Array.from(uniqueBookingServiceFees).sort(),
-      booking_credential_verified:  Array.from(uniqueBookingCredentialVerified).sort(),
-      agoda_service_fee:  Array.from(uniqueAgodaServiceFees).sort(),
-      agoda_credential_verified:  Array.from(uniqueAgodaCredentialVerified).sort(),
-      sales_rep:  Array.from(uniqueSalesReps).sort(),
+      booking_service_fee: Array.from(uniqueBookingServiceFees).sort(),
+      booking_priority: Array.from(uniqueBookingPriorities).sort(),
+      booking_crs: Array.from(uniqueBookingCrs).sort(),
+      booking_run_date: Array.from(uniqueBookingRunDates).sort(),
+      booking_revised_date: Array.from(uniqueBookingRevisedDates).sort(),
+      booking_credential_verified: Array.from(uniqueBookingCredentialVerified).sort(),
+      booking_otp_number: Array.from(uniqueBookingOtpNumbers).sort(),
+      agoda_service_fee: Array.from(uniqueAgodaServiceFees).sort(),
+      agoda_priority: Array.from(uniqueAgodaPriorities).sort(),
+      agoda_crs: Array.from(uniqueAgodaCrs).sort(),
+      agoda_run_date: Array.from(uniqueAgodaRunDates).sort(),
+      agoda_revised_date: Array.from(uniqueAgodaRevisedDates).sort(),
+      agoda_credential_verified: Array.from(uniqueAgodaCredentialVerified).sort(),
+      agoda_otp_number: Array.from(uniqueAgodaOtpNumbers).sort(),
+      sales_rep: Array.from(uniqueSalesReps).sort(),
     }
   }
 
