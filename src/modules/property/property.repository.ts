@@ -344,10 +344,45 @@ export class PropertyRepository implements IPropertyRepository {
       // Check if property already exists
       const existingProp = await this.findByName(propertyName)
       if (existingProp) {
-        logger.debug(`Property "${propertyName}" already exists, skipping`)
+        // Property already exists — only create/update credentials if provided
+        const credPayloadExisting: any = {}
+        if (row.expediaUsername) credPayloadExisting.expediaUsername = row.expediaUsername
+        if (row.agodaUsername) credPayloadExisting.agodaUsername = row.agodaUsername
+        if (row.bookingUsername) credPayloadExisting.bookingUsername = row.bookingUsername
+        if (row.expediaPassword) credPayloadExisting.expediaPassword = row.expediaPassword
+        if (row.bookingPassword) credPayloadExisting.bookingPassword = row.bookingPassword
+        if (row.agodaPassword) credPayloadExisting.agodaPassword = row.agodaPassword
+        if (row.expediaSecondaryUsername) credPayloadExisting.expediaSecondaryUsername = row.expediaSecondaryUsername
+        if (row.expediaSecondaryPassword) credPayloadExisting.expediaSecondaryPassword = row.expediaSecondaryPassword
+        if (row.bookingSecondaryUsername) credPayloadExisting.bookingSecondaryUsername = row.bookingSecondaryUsername
+        if (row.bookingSecondaryPassword) credPayloadExisting.bookingSecondaryPassword = row.bookingSecondaryPassword
+        if (row.agodaSecondaryUsername) credPayloadExisting.agodaSecondaryUsername = row.agodaSecondaryUsername
+        if (row.agodaSecondaryPassword) credPayloadExisting.agodaSecondaryPassword = row.agodaSecondaryPassword
+
+        if (Object.keys(credPayloadExisting).length > 0) {
+          const existingCred = await this.prisma.propertyCredentials.findFirst({
+            where: { property_id: existingProp.id }
+          })
+          if (existingCred) {
+            await this.prisma.propertyCredentials.update({
+              where: { id: existingCred.id },
+              data: credPayloadExisting
+            })
+            logger.log(`Credentials updated for existing property "${propertyName}"`)
+          } else {
+            await this.prisma.propertyCredentials.create({
+              data: { property_id: existingProp.id, ...credPayloadExisting }
+            })
+            credentialsCreated++
+            logger.log(`Credentials created for existing property "${propertyName}"`)
+          }
+        } else {
+          logger.debug(`Property "${propertyName}" already exists and no credentials provided — skipping`)
+        }
+
         skippedProperties.push({
           name: propertyName,
-          reason: 'Property already exists'
+          reason: 'Property already exists (credentials updated if provided)'
         })
         propertiesSkipped++
         continue
@@ -438,6 +473,44 @@ export class PropertyRepository implements IPropertyRepository {
         propertyPayload.booking_otp_phone = row.bookingOtpPhone
       if (row.caseContactEmail)
         propertyPayload.primary_case_email = row.caseContactEmail
+      // New Expedia fields
+      if (row.expediaServiceFee) propertyPayload.expedia_service_fee = parseInt(row.expediaServiceFee) || undefined
+      if (row.expediaPriority) propertyPayload.expedia_priority = row.expediaPriority
+      if (row.expediaCrs) propertyPayload.expedia_crs = row.expediaCrs
+      if (row.expediaCrsDb) propertyPayload.expedia_crs_db = row.expediaCrsDb
+      if (row.expediaRunDateFrom) propertyPayload.expedia_run_date_from = row.expediaRunDateFrom
+      if (row.expediaRunDateTo) propertyPayload.expedia_run_date_to = row.expediaRunDateTo
+      if (row.expediaRunDateDbFrom) propertyPayload.expedia_run_date_db_from = row.expediaRunDateDbFrom
+      if (row.expediaRunDateDbTo) propertyPayload.expedia_run_date_db_to = row.expediaRunDateDbTo
+      if (row.expediaRevisedDate) propertyPayload.expedia_revised_date = row.expediaRevisedDate
+      if (row.expediaSchedulerReviewFrom) propertyPayload.expedia_scheduler_review_from = row.expediaSchedulerReviewFrom
+      if (row.expediaSchedulerReviewTo) propertyPayload.expedia_scheduler_review_to = row.expediaSchedulerReviewTo
+      if (row.expediaSchedulerDb) propertyPayload.expedia_scheduler_db = row.expediaSchedulerDb
+      if (row.expediaSchedulerReviewDbFrom) propertyPayload.expedia_scheduler_review_db_from = row.expediaSchedulerReviewDbFrom
+      if (row.expediaSchedulerReviewDbTo) propertyPayload.expedia_scheduler_review_db_to = row.expediaSchedulerReviewDbTo
+      if (row.expediaDbDuration) propertyPayload.expedia_db_duration = parseInt(row.expediaDbDuration) || undefined
+      if (row.expediaCredentialVerified !== undefined) propertyPayload.expedia_credential_verified = row.expediaCredentialVerified === 'true'
+      if (row.expediaOtpNumber) propertyPayload.expedia_otp_number = row.expediaOtpNumber
+      if (row.fromDb) propertyPayload.from_db = row.fromDb
+      if (row.toDb) propertyPayload.to_db = row.toDb
+      // New Booking fields
+      if (row.bookingServiceFee) propertyPayload.booking_service_fee = parseInt(row.bookingServiceFee) || undefined
+      if (row.bookingPriority) propertyPayload.booking_priority = row.bookingPriority
+      if (row.bookingCrs) propertyPayload.booking_crs = row.bookingCrs
+      if (row.bookingRunDate) propertyPayload.booking_run_date = row.bookingRunDate
+      if (row.bookingRevisedDate) propertyPayload.booking_revised_date = row.bookingRevisedDate
+      if (row.bookingCredentialVerified !== undefined) propertyPayload.booking_credential_verified = row.bookingCredentialVerified === 'true'
+      if (row.bookingOtpNumber) propertyPayload.booking_otp_number = row.bookingOtpNumber
+      // New Agoda fields
+      if (row.agodaServiceFee) propertyPayload.agoda_service_fee = parseInt(row.agodaServiceFee) || undefined
+      if (row.agodaPriority) propertyPayload.agoda_priority = row.agodaPriority
+      if (row.agodaCrs) propertyPayload.agoda_crs = row.agodaCrs
+      if (row.agodaRunDate) propertyPayload.agoda_run_date = row.agodaRunDate
+      if (row.agodaRevisedDate) propertyPayload.agoda_revised_date = row.agodaRevisedDate
+      if (row.agodaCredentialVerified !== undefined) propertyPayload.agoda_credential_verified = row.agodaCredentialVerified === 'true'
+      if (row.agodaOtpNumber) propertyPayload.agoda_otp_number = row.agodaOtpNumber
+      // Misc
+      if (row.salesRep) propertyPayload.sales_rep = row.salesRep
 
       if (row.serviceTypeName) {
         propertyPayload.service_type = row.serviceTypeName.trim()

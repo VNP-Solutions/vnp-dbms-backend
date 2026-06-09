@@ -30,6 +30,11 @@ import { UserRoleModule } from './modules/user-role/user-role.module'
 import { RedisModule } from './modules/redis/redis.module'
 import { UserModule } from './modules/user/user.module'
 import { ActivityLogModule } from './modules/activity-log/activity-log.module'
+import { BillingTypeModule } from './modules/billing-type/billing-type.module'
+import { FrequencyModule } from './modules/frequency/frequency.module'
+import { NotificationEmailModule } from './modules/notification-email/notification-email.module'
+import { PriorityModule } from './modules/priority/priority.module'
+import { ProcessorModule } from './modules/processor/processor.module'
 
 @Module({
   imports: [
@@ -56,7 +61,12 @@ import { ActivityLogModule } from './modules/activity-log/activity-log.module'
     ServiceTypeModule,
     CurrencyModule,
     ExternalApiModule,
-    ActivityLogModule
+    ActivityLogModule,
+    BillingTypeModule,
+    PriorityModule,
+    FrequencyModule,
+    ProcessorModule,
+    NotificationEmailModule
   ],
   controllers: [AppController],
   providers: [

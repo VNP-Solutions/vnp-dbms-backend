@@ -547,6 +547,61 @@ model PropertyCredentials {
   @@index([property_id])
 }
 
+model BillingType {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  name       String   @unique
+  is_active  Boolean  @default(true)
+  order      Int      @default(1)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([is_active])
+  @@index([order])
+}
+
+model Priority {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  name       String   @unique
+  is_active  Boolean  @default(true)
+  order      Int      @default(1)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([is_active])
+  @@index([order])
+}
+
+model Frequency {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  name       String   @unique
+  is_active  Boolean  @default(true)
+  order      Int      @default(1)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([is_active])
+  @@index([order])
+}
+
+model Processor {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  name       String   @unique
+  is_active  Boolean  @default(true)
+  order      Int      @default(1)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([is_active])
+  @@index([order])
+}
+
+model NotificationEmail {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  is_active  Boolean  @default(false)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+}
+
 model ActivityLog {
   id           String   @id @default(auto()) @map("_id") @db.ObjectId
   username     String

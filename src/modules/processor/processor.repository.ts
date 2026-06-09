@@ -1,0 +1,45 @@
+import { Inject, Injectable } from '@nestjs/common'
+import { PrismaService } from '../prisma/prisma.service'
+import { CreateProcessorDto, UpdateProcessorDto } from './processor.dto'
+import type { IProcessorRepository } from './processor.interface'
+
+@Injectable()
+export class ProcessorRepository implements IProcessorRepository {
+  constructor(@Inject(PrismaService) private prisma: PrismaService) {}
+
+  async create(data: CreateProcessorDto) {
+    const last = await this.prisma.processor.findFirst({ orderBy: { order: 'desc' }, select: { order: true } })
+    return this.prisma.processor.create({ data: { ...data, order: (last?.order ?? 0) + 1 } })
+  }
+
+  findAll() {
+    return this.prisma.processor.findMany({ orderBy: { order: 'asc' } })
+  }
+
+  findById(id: string) {
+    return this.prisma.processor.findUnique({ where: { id } })
+  }
+
+  findByName(name: string) {
+    return this.prisma.processor.findUnique({ where: { name } })
+  }
+
+  update(id: string, data: UpdateProcessorDto) {
+    return this.prisma.processor.update({ where: { id }, data })
+  }
+
+  delete(id: string) {
+    return this.prisma.processor.delete({ where: { id } })
+  }
+
+  count() {
+    return this.prisma.processor.count()
+  }
+
+  async updateMany(data: Array<{ id: string; order: number }>): Promise<void> {
+    const updates = data.map(item =>
+      this.prisma.processor.update({ where: { id: item.id }, data: { order: item.order } })
+    )
+    await this.prisma.$transaction([...updates] as any, { timeout: 10000 })
+  }
+}

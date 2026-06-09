@@ -497,7 +497,7 @@ export class CreatePropertyDto {
   @IsNumber()
   @IsOptional()
   @Type(() => Number)
-  expedia_service_fee?: String
+  expedia_service_fee?: number
 
   @ApiPropertyOptional({ description: 'Expedia priority' })
   @IsString()

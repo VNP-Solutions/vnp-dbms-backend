@@ -79,6 +79,44 @@ export interface ImportPropertyRow {
   bookingOtpPhone?: string
   serviceTypeName?: string
   currency?: string
+  // New Expedia fields
+  expediaServiceFee?: string
+  expediaPriority?: string
+  expediaCrs?: string
+  expediaCrsDb?: string
+  expediaRunDateFrom?: string
+  expediaRunDateTo?: string
+  expediaRunDateDbFrom?: string
+  expediaRunDateDbTo?: string
+  expediaRevisedDate?: string
+  expediaSchedulerReviewFrom?: string
+  expediaSchedulerReviewTo?: string
+  expediaSchedulerDb?: string
+  expediaSchedulerReviewDbFrom?: string
+  expediaSchedulerReviewDbTo?: string
+  expediaDbDuration?: string
+  expediaCredentialVerified?: string
+  expediaOtpNumber?: string
+  fromDb?: string
+  toDb?: string
+  // New Booking fields
+  bookingServiceFee?: string
+  bookingPriority?: string
+  bookingCrs?: string
+  bookingRunDate?: string
+  bookingRevisedDate?: string
+  bookingCredentialVerified?: string
+  bookingOtpNumber?: string
+  // New Agoda fields
+  agodaServiceFee?: string
+  agodaPriority?: string
+  agodaCrs?: string
+  agodaRunDate?: string
+  agodaRevisedDate?: string
+  agodaCredentialVerified?: string
+  agodaOtpNumber?: string
+  // Misc new fields
+  salesRep?: string
 }
 
 export interface ImportPropertiesResult {
