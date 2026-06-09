@@ -547,24 +547,30 @@ export class PropertyService implements IPropertyService {
             if (nums.length) whereConditions.push({ expedia_db_duration: { in: nums } })
             break
           }
-          case 'expedia_credential_verified':
-            whereConditions.push({ expedia_credential_verified: { in: values } })
+          case 'expedia_credential_verified': {
+            const condition = this.booleanFilterCondition('expedia_credential_verified', values)
+            if (condition) whereConditions.push(condition)
             break
+          }
           case 'expedia_otp_number':
             whereConditions.push({ expedia_otp_number: { in: values } })
             break
           case 'booking_service_fee':
             whereConditions.push({ booking_service_fee: { in: values } })
             break
-          case 'booking_credential_verified':
-            whereConditions.push({ booking_credential_verified: { in: values } })
+          case 'booking_credential_verified': {
+            const condition = this.booleanFilterCondition('booking_credential_verified', values)
+            if (condition) whereConditions.push(condition)
             break
+          }
           case 'agoda_service_fee':
             whereConditions.push({ agoda_service_fee: { in: values } })
             break
-          case 'agoda_credential_verified':
-            whereConditions.push({ agoda_credential_verified: { in: values } })
+          case 'agoda_credential_verified': {
+            const condition = this.booleanFilterCondition('agoda_credential_verified', values)
+            if (condition) whereConditions.push(condition)
             break
+          }
           case 'sales_rep':
             whereConditions.push({ sales_rep: { in: values } })
             break
@@ -1320,7 +1326,45 @@ export class PropertyService implements IPropertyService {
             : undefined,
           currency: r['Currency']
             ? String(r['Currency']).trim()
-            : undefined
+            : undefined,
+          // New Expedia fields
+          expediaServiceFee: r['Expedia Service Fee'] ? String(r['Expedia Service Fee']).trim() : undefined,
+          expediaPriority: r['Expedia Priority'] ? String(r['Expedia Priority']).trim() : undefined,
+          expediaCrs: r['Expedia CRS'] ? String(r['Expedia CRS']).trim() : undefined,
+          expediaCrsDb: r['Expedia CRS DB'] ? String(r['Expedia CRS DB']).trim() : undefined,
+          expediaRunDateFrom: r['Expedia Run Date From'] ? String(r['Expedia Run Date From']).trim() : undefined,
+          expediaRunDateTo: r['Expedia Run Date To'] ? String(r['Expedia Run Date To']).trim() : undefined,
+          expediaRunDateDbFrom: r['Expedia Run Date DB From'] ? String(r['Expedia Run Date DB From']).trim() : undefined,
+          expediaRunDateDbTo: r['Expedia Run Date DB To'] ? String(r['Expedia Run Date DB To']).trim() : undefined,
+          expediaRevisedDate: r['Expedia Revised Date'] ? String(r['Expedia Revised Date']).trim() : undefined,
+          expediaSchedulerReviewFrom: r['Expedia Scheduler Review From'] ? String(r['Expedia Scheduler Review From']).trim() : undefined,
+          expediaSchedulerReviewTo: r['Expedia Scheduler Review To'] ? String(r['Expedia Scheduler Review To']).trim() : undefined,
+          expediaSchedulerDb: r['Expedia Scheduler DB'] ? String(r['Expedia Scheduler DB']).trim() : undefined,
+          expediaSchedulerReviewDbFrom: r['Expedia Scheduler Review DB From'] ? String(r['Expedia Scheduler Review DB From']).trim() : undefined,
+          expediaSchedulerReviewDbTo: r['Expedia Scheduler Review DB To'] ? String(r['Expedia Scheduler Review DB To']).trim() : undefined,
+          expediaDbDuration: r['Expedia DB Duration'] ? String(r['Expedia DB Duration']).trim() : undefined,
+          expediaCredentialVerified: parseBool(r['Expedia Credential Verified']),
+          expediaOtpNumber: r['Expedia OTP Number'] ? String(r['Expedia OTP Number']).trim() : undefined,
+          fromDb: r['From DB'] ? String(r['From DB']).trim() : undefined,
+          toDb: r['To DB'] ? String(r['To DB']).trim() : undefined,
+          // New Booking fields
+          bookingServiceFee: r['Booking Service Fee'] ? String(r['Booking Service Fee']).trim() : undefined,
+          bookingPriority: r['Booking Priority'] ? String(r['Booking Priority']).trim() : undefined,
+          bookingCrs: r['Booking CRS'] ? String(r['Booking CRS']).trim() : undefined,
+          bookingRunDate: r['Booking Run Date'] ? String(r['Booking Run Date']).trim() : undefined,
+          bookingRevisedDate: r['Booking Revised Date'] ? String(r['Booking Revised Date']).trim() : undefined,
+          bookingCredentialVerified: parseBool(r['Booking Credential Verified']),
+          bookingOtpNumber: r['Booking OTP Number'] ? String(r['Booking OTP Number']).trim() : undefined,
+          // New Agoda fields
+          agodaServiceFee: r['Agoda Service Fee'] ? String(r['Agoda Service Fee']).trim() : undefined,
+          agodaPriority: r['Agoda Priority'] ? String(r['Agoda Priority']).trim() : undefined,
+          agodaCrs: r['Agoda CRS'] ? String(r['Agoda CRS']).trim() : undefined,
+          agodaRunDate: r['Agoda Run Date'] ? String(r['Agoda Run Date']).trim() : undefined,
+          agodaRevisedDate: r['Agoda Revised Date'] ? String(r['Agoda Revised Date']).trim() : undefined,
+          agodaCredentialVerified: parseBool(r['Agoda Credential Verified']),
+          agodaOtpNumber: r['Agoda OTP Number'] ? String(r['Agoda OTP Number']).trim() : undefined,
+          // Misc
+          salesRep: r['Sales Rep'] ? String(r['Sales Rep']).trim() : undefined
         } satisfies ImportPropertyRow
       })
       .filter(Boolean) as ImportPropertyRow[]
@@ -1668,7 +1712,174 @@ export class PropertyService implements IPropertyService {
             else if (lower === 'false' || lower === '0' || lower === 'no') updateData.is_active = false
           }
 
-          // ── Credential fields ──────────────────────────────────────────────
+          // Helper: parse boolean cell values
+          const parseBoolCell = (val: string | undefined): boolean | undefined => {
+            if (val === undefined) return undefined
+            const l = val.toLowerCase()
+            if (l === 'true' || l === '1' || l === 'yes') return true
+            if (l === 'false' || l === '0' || l === 'no') return false
+            return undefined
+          }
+
+          // ── Expedia OTA fields ─────────────────────────────────────────────
+          const expediaIdVal = findValue(row, ['Expedia ID', 'Expedia id'])
+          if (expediaIdVal !== undefined) { const n = parseInt(expediaIdVal); if (!isNaN(n)) updateData.expedia_id = n }
+          const expediaStatus = findValue(row, ['Expedia Status', 'Expedia status'])
+          if (expediaStatus !== undefined) updateData.expedia_status = expediaStatus
+          const expediaBillingType = findValue(row, ['Expedia Billing Type', 'Expedia billing type'])
+          if (expediaBillingType !== undefined) updateData.expedia_billing_type = expediaBillingType.toUpperCase()
+          const expediaServiceType = findValue(row, ['Expedia Service Type', 'Expedia service type'])
+          if (expediaServiceType !== undefined) updateData.expedia_service_type = expediaServiceType
+          const expediaFrequency = findValue(row, ['Expedia Frequency', 'Expedia frequency'])
+          if (expediaFrequency !== undefined) updateData.expedia_frequency = expediaFrequency.toUpperCase()
+          const expediaPriority = findValue(row, ['Expedia Priority', 'Expedia priority'])
+          if (expediaPriority !== undefined) updateData.expedia_priority = expediaPriority
+          const expediaAccessLevelBool = parseBoolCell(findValue(row, ['Expedia Access Level', 'Expedia access level']))
+          if (expediaAccessLevelBool !== undefined) updateData.expedia_access_level = expediaAccessLevelBool
+          const expediaFrom = findValue(row, ['Expedia From', 'Expedia from'])
+          if (expediaFrom !== undefined) updateData.expedia_from = expediaFrom
+          const expediaTo = findValue(row, ['Expedia To', 'Expedia to'])
+          if (expediaTo !== undefined) updateData.expedia_to = expediaTo
+          const expediaSchedulerBool = parseBoolCell(findValue(row, ['Expedia Scheduler', 'Expedia scheduler']))
+          if (expediaSchedulerBool !== undefined) updateData.expedia_scheduler = expediaSchedulerBool
+          const expediaDurationVal = findValue(row, ['Expedia Duration', 'Expedia duration'])
+          if (expediaDurationVal !== undefined) { const n = parseInt(expediaDurationVal); if (!isNaN(n)) updateData.expedia_duration = n }
+          const expediaServiceFeeVal = findValue(row, ['Expedia Service Fee', 'Expedia service fee'])
+          if (expediaServiceFeeVal !== undefined) { const n = parseInt(expediaServiceFeeVal); if (!isNaN(n)) updateData.expedia_service_fee = n }
+          const expediaCrs = findValue(row, ['Expedia CRS', 'Expedia crs'])
+          if (expediaCrs !== undefined) updateData.expedia_crs = expediaCrs
+          const expediaCrsDb = findValue(row, ['Expedia CRS DB', 'Expedia crs db'])
+          if (expediaCrsDb !== undefined) updateData.expedia_crs_db = expediaCrsDb
+          const expediaRunDateFrom = findValue(row, ['Expedia Run Date From', 'Expedia run date from'])
+          if (expediaRunDateFrom !== undefined) updateData.expedia_run_date_from = expediaRunDateFrom
+          const expediaRunDateTo = findValue(row, ['Expedia Run Date To', 'Expedia run date to'])
+          if (expediaRunDateTo !== undefined) updateData.expedia_run_date_to = expediaRunDateTo
+          const expediaRunDateDbFrom = findValue(row, ['Expedia Run Date DB From', 'Expedia run date db from'])
+          if (expediaRunDateDbFrom !== undefined) updateData.expedia_run_date_db_from = expediaRunDateDbFrom
+          const expediaRunDateDbTo = findValue(row, ['Expedia Run Date DB To', 'Expedia run date db to'])
+          if (expediaRunDateDbTo !== undefined) updateData.expedia_run_date_db_to = expediaRunDateDbTo
+          const expediaRevisedDate = findValue(row, ['Expedia Revised Date', 'Expedia revised date'])
+          if (expediaRevisedDate !== undefined) updateData.expedia_revised_date = expediaRevisedDate
+          const expediaSchedulerReviewFrom = findValue(row, ['Expedia Scheduler Review From', 'Expedia scheduler review from'])
+          if (expediaSchedulerReviewFrom !== undefined) updateData.expedia_scheduler_review_from = expediaSchedulerReviewFrom
+          const expediaSchedulerReviewTo = findValue(row, ['Expedia Scheduler Review To', 'Expedia scheduler review to'])
+          if (expediaSchedulerReviewTo !== undefined) updateData.expedia_scheduler_review_to = expediaSchedulerReviewTo
+          const expediaSchedulerDb = findValue(row, ['Expedia Scheduler DB', 'Expedia scheduler db'])
+          if (expediaSchedulerDb !== undefined) updateData.expedia_scheduler_db = expediaSchedulerDb
+          const expediaSchedulerReviewDbFrom = findValue(row, ['Expedia Scheduler Review DB From', 'Expedia scheduler review db from'])
+          if (expediaSchedulerReviewDbFrom !== undefined) updateData.expedia_scheduler_review_db_from = expediaSchedulerReviewDbFrom
+          const expediaSchedulerReviewDbTo = findValue(row, ['Expedia Scheduler Review DB To', 'Expedia scheduler review db to'])
+          if (expediaSchedulerReviewDbTo !== undefined) updateData.expedia_scheduler_review_db_to = expediaSchedulerReviewDbTo
+          const expediaDbDurationVal = findValue(row, ['Expedia DB Duration', 'Expedia db duration'])
+          if (expediaDbDurationVal !== undefined) { const n = parseInt(expediaDbDurationVal); if (!isNaN(n)) updateData.expedia_db_duration = n }
+          const expediaCredVerified = parseBoolCell(findValue(row, ['Expedia Credential Verified', 'Expedia credential verified']))
+          if (expediaCredVerified !== undefined) updateData.expedia_credential_verified = expediaCredVerified
+          const expediaOtpNumber = findValue(row, ['Expedia OTP Number', 'Expedia otp number'])
+          if (expediaOtpNumber !== undefined) updateData.expedia_otp_number = expediaOtpNumber
+
+          // From DB / To DB
+          const fromDb = findValue(row, ['From DB', 'From db'])
+          if (fromDb !== undefined) updateData.from_db = fromDb
+          const toDb = findValue(row, ['To DB', 'To db'])
+          if (toDb !== undefined) updateData.to_db = toDb
+
+          // ── Booking OTA fields ────────────────────────────────────────────
+          const bookingIdVal = findValue(row, ['Booking ID', 'Booking id'])
+          if (bookingIdVal !== undefined) { const n = parseInt(bookingIdVal); if (!isNaN(n)) updateData.booking_id = n }
+          const bookingStatus = findValue(row, ['Booking Status', 'Booking status'])
+          if (bookingStatus !== undefined) updateData.booking_status = bookingStatus
+          const bookingBillingType = findValue(row, ['Booking Billing Type', 'Booking billing type'])
+          if (bookingBillingType !== undefined) updateData.booking_billing_type = bookingBillingType.toUpperCase()
+          const bookingServiceType = findValue(row, ['Booking Service Type', 'Booking service type'])
+          if (bookingServiceType !== undefined) updateData.booking_service_type = bookingServiceType
+          const bookingFrequency = findValue(row, ['Booking Frequency', 'Booking frequency'])
+          if (bookingFrequency !== undefined) updateData.booking_frequency = bookingFrequency.toUpperCase()
+          const bookingPriority = findValue(row, ['Booking Priority', 'Booking priority'])
+          if (bookingPriority !== undefined) updateData.booking_priority = bookingPriority
+          const bookingAccessLevelBool = parseBoolCell(findValue(row, ['Booking Access Level', 'Booking access level']))
+          if (bookingAccessLevelBool !== undefined) updateData.booking_access_level = bookingAccessLevelBool
+          const bookingFrom = findValue(row, ['Booking From', 'Booking from'])
+          if (bookingFrom !== undefined) updateData.booking_from = bookingFrom
+          const bookingTo = findValue(row, ['Booking To', 'Booking to'])
+          if (bookingTo !== undefined) updateData.booking_to = bookingTo
+          const bookingSchedulerBool = parseBoolCell(findValue(row, ['Booking Scheduler', 'Booking scheduler']))
+          if (bookingSchedulerBool !== undefined) updateData.booking_scheduler = bookingSchedulerBool
+          const bookingDurationVal = findValue(row, ['Booking Duration', 'Booking duration'])
+          if (bookingDurationVal !== undefined) { const n = parseInt(bookingDurationVal); if (!isNaN(n)) updateData.booking_duration = n }
+          const bookingServiceFeeVal = findValue(row, ['Booking Service Fee', 'Booking service fee'])
+          if (bookingServiceFeeVal !== undefined) { const n = parseInt(bookingServiceFeeVal); if (!isNaN(n)) updateData.booking_service_fee = n }
+          const bookingCrs = findValue(row, ['Booking CRS', 'Booking crs'])
+          if (bookingCrs !== undefined) updateData.booking_crs = bookingCrs
+          const bookingRunDate = findValue(row, ['Booking Run Date', 'Booking run date'])
+          if (bookingRunDate !== undefined) updateData.booking_run_date = bookingRunDate
+          const bookingRevisedDate = findValue(row, ['Booking Revised Date', 'Booking revised date'])
+          if (bookingRevisedDate !== undefined) updateData.booking_revised_date = bookingRevisedDate
+          const bookingCredVerified = parseBoolCell(findValue(row, ['Booking Credential Verified', 'Booking credential verified']))
+          if (bookingCredVerified !== undefined) updateData.booking_credential_verified = bookingCredVerified
+          const bookingOtpNumber = findValue(row, ['Booking OTP Number', 'Booking otp number'])
+          if (bookingOtpNumber !== undefined) updateData.booking_otp_number = bookingOtpNumber
+          const bookingOtpPhone = findValue(row, ['Booking OTP Phone', 'Booking otp phone'])
+          if (bookingOtpPhone !== undefined) updateData.booking_otp_phone = bookingOtpPhone
+
+          // ── Agoda OTA fields ──────────────────────────────────────────────
+          const agodaIdVal = findValue(row, ['Agoda ID', 'Agoda id'])
+          if (agodaIdVal !== undefined) { const n = parseInt(agodaIdVal); if (!isNaN(n)) updateData.agoda_id = n }
+          const agodaStatus = findValue(row, ['Agoda Status', 'Agoda status'])
+          if (agodaStatus !== undefined) updateData.agoda_status = agodaStatus
+          const agodaBillingType = findValue(row, ['Agoda Billing Type', 'Agoda billing type'])
+          if (agodaBillingType !== undefined) updateData.agoda_billing_type = agodaBillingType.toUpperCase()
+          const agodaServiceType = findValue(row, ['Agoda Service Type', 'Agoda service type'])
+          if (agodaServiceType !== undefined) updateData.agoda_service_type = agodaServiceType
+          const agodaFrequency = findValue(row, ['Agoda Frequency', 'Agoda frequency'])
+          if (agodaFrequency !== undefined) updateData.agoda_frequency = agodaFrequency.toUpperCase()
+          const agodaPriority = findValue(row, ['Agoda Priority', 'Agoda priority'])
+          if (agodaPriority !== undefined) updateData.agoda_priority = agodaPriority
+          const agodaAccessLevelBool = parseBoolCell(findValue(row, ['Agoda Access Level', 'Agoda access level']))
+          if (agodaAccessLevelBool !== undefined) updateData.agoda_access_level = agodaAccessLevelBool
+          const agodaFrom = findValue(row, ['Agoda From', 'Agoda from'])
+          if (agodaFrom !== undefined) updateData.agoda_from = agodaFrom
+          const agodaTo = findValue(row, ['Agoda To', 'Agoda to'])
+          if (agodaTo !== undefined) updateData.agoda_to = agodaTo
+          const agodaSchedulerBool = parseBoolCell(findValue(row, ['Agoda Scheduler', 'Agoda scheduler']))
+          if (agodaSchedulerBool !== undefined) updateData.agoda_scheduler = agodaSchedulerBool
+          const agodaDurationVal = findValue(row, ['Agoda Duration', 'Agoda duration'])
+          if (agodaDurationVal !== undefined) { const n = parseInt(agodaDurationVal); if (!isNaN(n)) updateData.agoda_duration = n }
+          const agodaServiceFeeVal = findValue(row, ['Agoda Service Fee', 'Agoda service fee'])
+          if (agodaServiceFeeVal !== undefined) { const n = parseInt(agodaServiceFeeVal); if (!isNaN(n)) updateData.agoda_service_fee = n }
+          const agodaCrs = findValue(row, ['Agoda CRS', 'Agoda crs'])
+          if (agodaCrs !== undefined) updateData.agoda_crs = agodaCrs
+          const agodaRunDate = findValue(row, ['Agoda Run Date', 'Agoda run date'])
+          if (agodaRunDate !== undefined) updateData.agoda_run_date = agodaRunDate
+          const agodaRevisedDate = findValue(row, ['Agoda Revised Date', 'Agoda revised date'])
+          if (agodaRevisedDate !== undefined) updateData.agoda_revised_date = agodaRevisedDate
+          const agodaCredVerified = parseBoolCell(findValue(row, ['Agoda Credential Verified', 'Agoda credential verified']))
+          if (agodaCredVerified !== undefined) updateData.agoda_credential_verified = agodaCredVerified
+          const agodaOtpNumber = findValue(row, ['Agoda OTP Number', 'Agoda otp number'])
+          if (agodaOtpNumber !== undefined) updateData.agoda_otp_number = agodaOtpNumber
+
+          // ── Misc fields ───────────────────────────────────────────────────
+          const needAnotherDomain = parseBoolCell(findValue(row, ['Need Another Domain', 'Need another domain']))
+          if (needAnotherDomain !== undefined) updateData.need_another_domain = needAnotherDomain
+          const salesRep = findValue(row, ['Sales Rep', 'Sales rep'])
+          if (salesRep !== undefined) updateData.sales_rep = salesRep
+          const caseContactEmail = findValue(row, ['Case Contact Email', 'Case contact email', 'Primary Case Email'])
+          if (caseContactEmail !== undefined) updateData.primary_case_email = caseContactEmail
+
+          // ── QP / FP credentials (stored on Property, encrypted) ───────────
+          const qpUsername = findValue(row, ['Qp Username', 'QP Username'])
+          if (qpUsername !== undefined) updateData.qp_username = qpUsername
+          const qpPasswordVal = findValue(row, ['Qp Password', 'QP Password'])
+          if (qpPasswordVal !== undefined) updateData.qp_password = this.encryptionUtil.encrypt(qpPasswordVal)
+          const qpApiKeyVal = findValue(row, ['Qp Api Key', 'QP Api Key', 'QP API Key'])
+          if (qpApiKeyVal !== undefined) updateData.qp_api_key = this.encryptionUtil.encrypt(qpApiKeyVal)
+          const fpUsernameVal = findValue(row, ['FP Username', 'Fp Username'])
+          if (fpUsernameVal !== undefined) updateData.fp_username = fpUsernameVal
+          const fpPasswordVal = findValue(row, ['FP Password', 'Fp Password'])
+          if (fpPasswordVal !== undefined) updateData.fp_password = this.encryptionUtil.encrypt(fpPasswordVal)
+          const webmailPasswordVal = findValue(row, ['Webmail Password', 'Webmail password'])
+          if (webmailPasswordVal !== undefined) updateData.webmail_password = this.encryptionUtil.encrypt(webmailPasswordVal)
+
+          // ── Credential fields (PropertyCredentials collection) ─────────────
           const expediaUsername = findValue(row, ['Expedia Username', 'Expedia username'])
           const expediaPassword = findValue(row, ['Expedia Password', 'Expedia password'])
           const agodaUsername = findValue(row, ['Agoda Username', 'Agoda username'])
@@ -1688,6 +1899,11 @@ export class PropertyService implements IPropertyService {
             result.failureCount++
             continue
           }
+          if (!!agodaUsername !== !!agodaPassword) {
+            result.errors.push({ row: rowNumber, propertyName: existingProperty.name, error: 'Agoda username and password must be provided together' })
+            result.failureCount++
+            continue
+          }
           if (!!bookingUsername !== !!bookingPassword) {
             result.errors.push({ row: rowNumber, propertyName: existingProperty.name, error: 'Booking username and password must be provided together' })
             result.failureCount++
@@ -1700,6 +1916,11 @@ export class PropertyService implements IPropertyService {
           }
           if (!!bookingSecondaryUsername !== !!bookingSecondaryPassword) {
             result.errors.push({ row: rowNumber, propertyName: existingProperty.name, error: 'Booking secondary username and password must be provided together' })
+            result.failureCount++
+            continue
+          }
+          if (!!agodaSecondaryUsername !== !!agodaSecondaryPassword) {
+            result.errors.push({ row: rowNumber, propertyName: existingProperty.name, error: 'Agoda secondary username and password must be provided together' })
             result.failureCount++
             continue
           }
