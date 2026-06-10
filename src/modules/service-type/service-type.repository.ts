@@ -51,13 +51,8 @@ export class ServiceTypeRepository implements IServiceTypeRepository {
   }
 
   async countPortfolios(serviceTypeId: string): Promise<number> {
-    const serviceType = await this.prisma.serviceType.findUnique({
-      where: { id: serviceTypeId },
-      select: { type: true }
-    })
-    if (!serviceType) return 0
     return this.prisma.portfolio.count({
-      where: { service_type: serviceType.type }
+      where: { service_type_id: serviceTypeId }
     })
   }
 

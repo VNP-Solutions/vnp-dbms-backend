@@ -11,7 +11,20 @@ import type {
 const propertyInclude = {
   portfolio: { select: { id: true, name: true } },
   subportfolio: { select: { id: true, name: true, portfolio_id: true } },
-  credentials: true
+  credentials: true,
+  service_type: true,
+  expedia_service_type: true,
+  booking_service_type: true,
+  agoda_service_type: true,
+  expedia_billing_type: true,
+  booking_billing_type: true,
+  agoda_billing_type: true,
+  expedia_frequency: true,
+  booking_frequency: true,
+  agoda_frequency: true,
+  expedia_processor: true,
+  booking_processor: true,
+  agoda_processor: true
 }
 
 @Injectable()
@@ -53,7 +66,7 @@ export class PropertyRepository implements IPropertyRepository {
     const payload: any = {
       name: data.name,
       portfolio_id: data.portfolio_id,
-      service_type: data.service_type,
+      service_type_id: data.service_type_id,
       currency: data.currency,
       card_descriptor: data.card_descriptor,
       is_active: data.is_active ?? true,
@@ -72,9 +85,9 @@ export class PropertyRepository implements IPropertyRepository {
       case_management_contact: data.case_management_contact,
       access_contact: data.access_contact,
       reporting_contact: data.reporting_contact,
-      expedia_processor: data.expedia_processor,
-      booking_processor: data.booking_processor,
-      agoda_processor: data.agoda_processor,
+      expedia_processor_id: data.expedia_processor_id,
+      booking_processor_id: data.booking_processor_id,
+      agoda_processor_id: data.agoda_processor_id,
       from: data.from,
       to: data.to,
       qp_username: data.qp_username,
@@ -90,25 +103,25 @@ export class PropertyRepository implements IPropertyRepository {
       booking_status: data.booking_status,
       agoda_id: data.agoda_id,
       agoda_status: data.agoda_status,
-      expedia_billing_type: data.expedia_billing_type,
-      expedia_service_type: data.expedia_service_type,
-      expedia_frequency: data.expedia_frequency,
+      expedia_billing_type_id: data.expedia_billing_type_id,
+      expedia_service_type_id: data.expedia_service_type_id,
+      expedia_frequency_id: data.expedia_frequency_id,
       expedia_access_level: data.expedia_access_level,
       expedia_from: data.expedia_from,
       expedia_to: data.expedia_to,
       expedia_scheduler: data.expedia_scheduler,
       expedia_duration: data.expedia_duration,
-      booking_billing_type: data.booking_billing_type,
-      booking_service_type: data.booking_service_type,
-      booking_frequency: data.booking_frequency,
+      booking_billing_type_id: data.booking_billing_type_id,
+      booking_service_type_id: data.booking_service_type_id,
+      booking_frequency_id: data.booking_frequency_id,
       booking_access_level: data.booking_access_level,
       booking_from: data.booking_from,
       booking_to: data.booking_to,
       booking_scheduler: data.booking_scheduler,
       booking_duration: data.booking_duration,
-      agoda_billing_type: data.agoda_billing_type,
-      agoda_service_type: data.agoda_service_type,
-      agoda_frequency: data.agoda_frequency,
+      agoda_billing_type_id: data.agoda_billing_type_id,
+      agoda_service_type_id: data.agoda_service_type_id,
+      agoda_frequency_id: data.agoda_frequency_id,
       agoda_access_level: data.agoda_access_level,
       agoda_from: data.agoda_from,
       agoda_to: data.agoda_to,
@@ -323,7 +336,7 @@ export class PropertyRepository implements IPropertyRepository {
           portfolio = await this.prisma.portfolio.create({
             data: {
               name: portfolioName,
-              service_type: defaultServiceType.type,
+              service_type_id: defaultServiceType.id,
               is_active: true,
               is_commissionable: false
             },
@@ -419,17 +432,39 @@ export class PropertyRepository implements IPropertyRepository {
       if (row.caseManagementContact) propertyPayload.case_management_contact = row.caseManagementContact
       if (row.accessContact) propertyPayload.access_contact = row.accessContact
       if (row.reportingContact) propertyPayload.reporting_contact = row.reportingContact
-      if (row.expediaProcessor) propertyPayload.expedia_processor = row.expediaProcessor
-      if (row.bookingProcessor) propertyPayload.booking_processor = row.bookingProcessor
-      if (row.agodaProcessor) propertyPayload.agoda_processor = row.agodaProcessor
+      // Helper: resolve lookup name → ID (returns undefined if not found)
+      const resolveProcessor = async (name?: string): Promise<string | undefined> => {
+        if (!name) return undefined
+        const rec = await this.prisma.processor.findFirst({ where: { name: { equals: name, mode: 'insensitive' } } })
+        return rec?.id
+      }
+      const resolveServiceType = async (name?: string): Promise<string | undefined> => {
+        if (!name) return undefined
+        const rec = await this.prisma.serviceType.findFirst({ where: { type: { equals: name, mode: 'insensitive' } } })
+        return rec?.id
+      }
+      const resolveBillingType = async (name?: string): Promise<string | undefined> => {
+        if (!name) return undefined
+        const rec = await this.prisma.billingType.findFirst({ where: { name: { equals: name, mode: 'insensitive' } } })
+        return rec?.id
+      }
+      const resolveFrequency = async (name?: string): Promise<string | undefined> => {
+        if (!name) return undefined
+        const rec = await this.prisma.frequency.findFirst({ where: { name: { equals: name, mode: 'insensitive' } } })
+        return rec?.id
+      }
+
+      if (row.expediaProcessor) propertyPayload.expedia_processor_id = await resolveProcessor(row.expediaProcessor)
+      if (row.bookingProcessor) propertyPayload.booking_processor_id = await resolveProcessor(row.bookingProcessor)
+      if (row.agodaProcessor) propertyPayload.agoda_processor_id = await resolveProcessor(row.agodaProcessor)
       if (row.fpMid) propertyPayload.fp_mid = row.fpMid
       if (row.stripeAccountEmail) propertyPayload.stripe_account_email = row.stripeAccountEmail
       if (row.expediaBillingType)
-        propertyPayload.expedia_billing_type = row.expediaBillingType
+        propertyPayload.expedia_billing_type_id = await resolveBillingType(row.expediaBillingType)
       if (row.expediaServiceType)
-        propertyPayload.expedia_service_type = row.expediaServiceType
+        propertyPayload.expedia_service_type_id = await resolveServiceType(row.expediaServiceType)
       if (row.expediaFrequency)
-        propertyPayload.expedia_frequency = row.expediaFrequency
+        propertyPayload.expedia_frequency_id = await resolveFrequency(row.expediaFrequency)
       if (row.expediaAccessLevel)
         propertyPayload.expedia_access_level = row.expediaAccessLevel === 'true'
       if (row.expediaFrom) propertyPayload.expedia_from = row.expediaFrom
@@ -439,11 +474,11 @@ export class PropertyRepository implements IPropertyRepository {
       if (row.expediaDuration)
         propertyPayload.expedia_duration = parseInt(row.expediaDuration) || undefined
       if (row.bookingBillingType)
-        propertyPayload.booking_billing_type = row.bookingBillingType
+        propertyPayload.booking_billing_type_id = await resolveBillingType(row.bookingBillingType)
       if (row.bookingServiceType)
-        propertyPayload.booking_service_type = row.bookingServiceType
+        propertyPayload.booking_service_type_id = await resolveServiceType(row.bookingServiceType)
       if (row.bookingFrequency)
-        propertyPayload.booking_frequency = row.bookingFrequency
+        propertyPayload.booking_frequency_id = await resolveFrequency(row.bookingFrequency)
       if (row.bookingAccessLevel)
         propertyPayload.booking_access_level = row.bookingAccessLevel === 'true'
       if (row.bookingFrom) propertyPayload.booking_from = row.bookingFrom
@@ -453,11 +488,11 @@ export class PropertyRepository implements IPropertyRepository {
       if (row.bookingDuration)
         propertyPayload.booking_duration = parseInt(row.bookingDuration) || undefined
       if (row.agodaBillingType)
-        propertyPayload.agoda_billing_type = row.agodaBillingType
+        propertyPayload.agoda_billing_type_id = await resolveBillingType(row.agodaBillingType)
       if (row.agodaServiceType)
-        propertyPayload.agoda_service_type = row.agodaServiceType
+        propertyPayload.agoda_service_type_id = await resolveServiceType(row.agodaServiceType)
       if (row.agodaFrequency)
-        propertyPayload.agoda_frequency = row.agodaFrequency
+        propertyPayload.agoda_frequency_id = await resolveFrequency(row.agodaFrequency)
       if (row.agodaAccessLevel)
         propertyPayload.agoda_access_level = row.agodaAccessLevel === 'true'
       if (row.agodaFrom) propertyPayload.agoda_from = row.agodaFrom
@@ -513,7 +548,7 @@ export class PropertyRepository implements IPropertyRepository {
       if (row.salesRep) propertyPayload.sales_rep = row.salesRep
 
       if (row.serviceTypeName) {
-        propertyPayload.service_type = row.serviceTypeName.trim()
+        propertyPayload.service_type_id = await resolveServiceType(row.serviceTypeName)
       }
       if (row.currency) propertyPayload.currency = row.currency.trim()
 

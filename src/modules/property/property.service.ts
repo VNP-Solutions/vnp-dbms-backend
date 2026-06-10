@@ -414,14 +414,14 @@ export class PropertyService implements IPropertyService {
           case 'reporting_contact':
             whereConditions.push({ reporting_contact: { in: values } })
             break
-          case 'expedia_processor':
-            whereConditions.push({ expedia_processor: { in: values } })
+          case 'expedia_processor_id':
+            whereConditions.push({ expedia_processor_id: { in: values } })
             break
-          case 'booking_processor':
-            whereConditions.push({ booking_processor: { in: values } })
+          case 'booking_processor_id':
+            whereConditions.push({ booking_processor_id: { in: values } })
             break
-          case 'agoda_processor':
-            whereConditions.push({ agoda_processor: { in: values } })
+          case 'agoda_processor_id':
+            whereConditions.push({ agoda_processor_id: { in: values } })
             break
           case 'from':
             whereConditions.push({ from: { in: values } })
@@ -435,8 +435,8 @@ export class PropertyService implements IPropertyService {
           case 'stripe_account_email':
             whereConditions.push({ stripe_account_email: { in: values } })
             break
-          case 'service_type':
-            whereConditions.push({ service_type: { in: values } })
+          case 'service_type_id':
+            whereConditions.push({ service_type_id: { in: values } })
             break
           case 'currency':
             whereConditions.push({ currency: { in: values } })
@@ -450,14 +450,14 @@ export class PropertyService implements IPropertyService {
           case 'fp_username':
             whereConditions.push({ fp_username: { in: values } })
             break
-          case 'expedia_billing_type':
-            whereConditions.push({ expedia_billing_type: { in: values } })
+          case 'expedia_billing_type_id':
+            whereConditions.push({ expedia_billing_type_id: { in: values } })
             break
-          case 'expedia_service_type':
-            whereConditions.push({ expedia_service_type: { in: values } })
+          case 'expedia_service_type_id':
+            whereConditions.push({ expedia_service_type_id: { in: values } })
             break
-          case 'expedia_frequency':
-            whereConditions.push({ expedia_frequency: { in: values } })
+          case 'expedia_frequency_id':
+            whereConditions.push({ expedia_frequency_id: { in: values } })
             break
           case 'expedia_access_level': {
             const condition = this.booleanFilterCondition('expedia_access_level', values)
@@ -475,14 +475,14 @@ export class PropertyService implements IPropertyService {
               whereConditions.push({ expedia_duration: { in: nums } })
             break
           }
-          case 'booking_billing_type':
-            whereConditions.push({ booking_billing_type: { in: values } })
+          case 'booking_billing_type_id':
+            whereConditions.push({ booking_billing_type_id: { in: values } })
             break
-          case 'booking_service_type':
-            whereConditions.push({ booking_service_type: { in: values } })
+          case 'booking_service_type_id':
+            whereConditions.push({ booking_service_type_id: { in: values } })
             break
-          case 'booking_frequency':
-            whereConditions.push({ booking_frequency: { in: values } })
+          case 'booking_frequency_id':
+            whereConditions.push({ booking_frequency_id: { in: values } })
             break
           case 'booking_access_level': {
             const condition = this.booleanFilterCondition('booking_access_level', values)
@@ -500,14 +500,14 @@ export class PropertyService implements IPropertyService {
               whereConditions.push({ booking_duration: { in: nums } })
             break
           }
-          case 'agoda_billing_type':
-            whereConditions.push({ agoda_billing_type: { in: values } })
+          case 'agoda_billing_type_id':
+            whereConditions.push({ agoda_billing_type_id: { in: values } })
             break
-          case 'agoda_service_type':
-            whereConditions.push({ agoda_service_type: { in: values } })
+          case 'agoda_service_type_id':
+            whereConditions.push({ agoda_service_type_id: { in: values } })
             break
-          case 'agoda_frequency':
-            whereConditions.push({ agoda_frequency: { in: values } })
+          case 'agoda_frequency_id':
+            whereConditions.push({ agoda_frequency_id: { in: values } })
             break
           case 'agoda_access_level': {
             const condition = this.booleanFilterCondition('agoda_access_level', values)
@@ -1560,6 +1560,28 @@ export class PropertyService implements IPropertyService {
           const propertyId = existingProperty.id
           const updateData: Record<string, any> = {}
 
+          // Helper functions to resolve names to ObjectIds
+          const resolveProcessor = async (name?: string): Promise<string | undefined> => {
+            if (!name) return undefined
+            const rec = await this.prisma.processor.findFirst({ where: { name: { equals: name, mode: 'insensitive' } } })
+            return rec?.id
+          }
+          const resolveServiceType = async (name?: string): Promise<string | undefined> => {
+            if (!name) return undefined
+            const rec = await this.prisma.serviceType.findFirst({ where: { type: { equals: name, mode: 'insensitive' } } })
+            return rec?.id
+          }
+          const resolveBillingType = async (name?: string): Promise<string | undefined> => {
+            if (!name) return undefined
+            const rec = await this.prisma.billingType.findFirst({ where: { name: { equals: name, mode: 'insensitive' } } })
+            return rec?.id
+          }
+          const resolveFrequency = async (name?: string): Promise<string | undefined> => {
+            if (!name) return undefined
+            const rec = await this.prisma.frequency.findFirst({ where: { name: { equals: name, mode: 'insensitive' } } })
+            return rec?.id
+          }
+
           // Rename: only possible when matched by property_identifier.
           // The "Property Name" column then carries the new name.
           if (matchedByIdentifier && propertyName && propertyName !== existingProperty.name) {
@@ -1632,7 +1654,7 @@ export class PropertyService implements IPropertyService {
 
           // Service type
           const serviceType = findValue(row, ['Service Type', 'Service type'])
-          if (serviceType !== undefined) updateData.service_type = serviceType
+          if (serviceType !== undefined) updateData.service_type_id = await resolveServiceType(serviceType)
 
           // Currency
           const currency = findValue(row, ['Currency', 'currency'])
@@ -1676,13 +1698,13 @@ export class PropertyService implements IPropertyService {
 
           // Processors
           const expediaProcessor = findValue(row, ['Expedia Processor', 'Expedia processor'])
-          if (expediaProcessor !== undefined) updateData.expedia_processor = expediaProcessor
+          if (expediaProcessor !== undefined) updateData.expedia_processor_id = await resolveProcessor(expediaProcessor)
 
           const bookingProcessor = findValue(row, ['Booking Processor', 'Booking processor'])
-          if (bookingProcessor !== undefined) updateData.booking_processor = bookingProcessor
+          if (bookingProcessor !== undefined) updateData.booking_processor_id = await resolveProcessor(bookingProcessor)
 
           const agodaProcessor = findValue(row, ['Agoda Processor', 'Agoda processor'])
-          if (agodaProcessor !== undefined) updateData.agoda_processor = agodaProcessor
+          if (agodaProcessor !== undefined) updateData.agoda_processor_id = await resolveProcessor(agodaProcessor)
 
           // FP MID
           const fpMid = findValue(row, ['FP MID', 'FP Mid', 'fp_mid'])
@@ -1727,11 +1749,11 @@ export class PropertyService implements IPropertyService {
           const expediaStatus = findValue(row, ['Expedia Status', 'Expedia status'])
           if (expediaStatus !== undefined) updateData.expedia_status = expediaStatus
           const expediaBillingType = findValue(row, ['Expedia Billing Type', 'Expedia billing type'])
-          if (expediaBillingType !== undefined) updateData.expedia_billing_type = expediaBillingType.toUpperCase()
+          if (expediaBillingType !== undefined) updateData.expedia_billing_type_id = await resolveBillingType(expediaBillingType)
           const expediaServiceType = findValue(row, ['Expedia Service Type', 'Expedia service type'])
-          if (expediaServiceType !== undefined) updateData.expedia_service_type = expediaServiceType
+          if (expediaServiceType !== undefined) updateData.expedia_service_type_id = await resolveServiceType(expediaServiceType)
           const expediaFrequency = findValue(row, ['Expedia Frequency', 'Expedia frequency'])
-          if (expediaFrequency !== undefined) updateData.expedia_frequency = expediaFrequency.toUpperCase()
+          if (expediaFrequency !== undefined) updateData.expedia_frequency_id = await resolveFrequency(expediaFrequency)
           const expediaPriority = findValue(row, ['Expedia Priority', 'Expedia priority'])
           if (expediaPriority !== undefined) updateData.expedia_priority = expediaPriority
           const expediaAccessLevelBool = parseBoolCell(findValue(row, ['Expedia Access Level', 'Expedia access level']))
@@ -1789,11 +1811,11 @@ export class PropertyService implements IPropertyService {
           const bookingStatus = findValue(row, ['Booking Status', 'Booking status'])
           if (bookingStatus !== undefined) updateData.booking_status = bookingStatus
           const bookingBillingType = findValue(row, ['Booking Billing Type', 'Booking billing type'])
-          if (bookingBillingType !== undefined) updateData.booking_billing_type = bookingBillingType.toUpperCase()
+          if (bookingBillingType !== undefined) updateData.booking_billing_type_id = await resolveBillingType(bookingBillingType)
           const bookingServiceType = findValue(row, ['Booking Service Type', 'Booking service type'])
-          if (bookingServiceType !== undefined) updateData.booking_service_type = bookingServiceType
+          if (bookingServiceType !== undefined) updateData.booking_service_type_id = await resolveServiceType(bookingServiceType)
           const bookingFrequency = findValue(row, ['Booking Frequency', 'Booking frequency'])
-          if (bookingFrequency !== undefined) updateData.booking_frequency = bookingFrequency.toUpperCase()
+          if (bookingFrequency !== undefined) updateData.booking_frequency_id = await resolveFrequency(bookingFrequency)
           const bookingPriority = findValue(row, ['Booking Priority', 'Booking priority'])
           if (bookingPriority !== undefined) updateData.booking_priority = bookingPriority
           const bookingAccessLevelBool = parseBoolCell(findValue(row, ['Booking Access Level', 'Booking access level']))
@@ -1827,11 +1849,11 @@ export class PropertyService implements IPropertyService {
           const agodaStatus = findValue(row, ['Agoda Status', 'Agoda status'])
           if (agodaStatus !== undefined) updateData.agoda_status = agodaStatus
           const agodaBillingType = findValue(row, ['Agoda Billing Type', 'Agoda billing type'])
-          if (agodaBillingType !== undefined) updateData.agoda_billing_type = agodaBillingType.toUpperCase()
+          if (agodaBillingType !== undefined) updateData.agoda_billing_type_id = await resolveBillingType(agodaBillingType)
           const agodaServiceType = findValue(row, ['Agoda Service Type', 'Agoda service type'])
-          if (agodaServiceType !== undefined) updateData.agoda_service_type = agodaServiceType
+          if (agodaServiceType !== undefined) updateData.agoda_service_type_id = await resolveServiceType(agodaServiceType)
           const agodaFrequency = findValue(row, ['Agoda Frequency', 'Agoda frequency'])
-          if (agodaFrequency !== undefined) updateData.agoda_frequency = agodaFrequency.toUpperCase()
+          if (agodaFrequency !== undefined) updateData.agoda_frequency_id = await resolveFrequency(agodaFrequency)
           const agodaPriority = findValue(row, ['Agoda Priority', 'Agoda priority'])
           if (agodaPriority !== undefined) updateData.agoda_priority = agodaPriority
           const agodaAccessLevelBool = parseBoolCell(findValue(row, ['Agoda Access Level', 'Agoda access level']))
@@ -2172,9 +2194,9 @@ export class PropertyService implements IPropertyService {
     const uniqueCaseManagementContacts = new Set<string>()
     const uniqueAccessContacts = new Set<string>()
     const uniqueReportingContacts = new Set<string>()
-    const uniqueExpediaProcessors = new Set<string>()
-    const uniqueBookingProcessors = new Set<string>()
-    const uniqueAgodaProcessors = new Set<string>()
+    const uniqueExpediaProcessorIds = new Set<string>()
+    const uniqueBookingProcessorIds = new Set<string>()
+    const uniqueAgodaProcessorIds = new Set<string>()
     const uniqueFpMids = new Set<string>()
     const uniqueStripeAccountEmails = new Set<string>()
     const uniqueFromDates = new Set<string>()
@@ -2182,21 +2204,21 @@ export class PropertyService implements IPropertyService {
     const uniquePropertyIdentifiers = new Set<string>()
     const uniquePortfolioContacts = new Set<string>()
     const uniqueFpUsernames = new Set<string>()
-    const uniqueExpediaBillingTypes = new Set<string>()
-    const uniqueExpediaServiceTypes = new Set<string>()
-    const uniqueExpediaFrequencies = new Set<string>()
+    const uniqueExpediaBillingTypeIds = new Set<string>()
+    const uniqueExpediaServiceTypeIds = new Set<string>()
+    const uniqueExpediaFrequencyIds = new Set<string>()
     const uniqueExpediaFroms = new Set<string>()
     const uniqueExpediaTos = new Set<string>()
     const uniqueExpediaDurations = new Set<string>()
-    const uniqueBookingBillingTypes = new Set<string>()
-    const uniqueBookingServiceTypes = new Set<string>()
-    const uniqueBookingFrequencies = new Set<string>()
+    const uniqueBookingBillingTypeIds = new Set<string>()
+    const uniqueBookingServiceTypeIds = new Set<string>()
+    const uniqueBookingFrequencyIds = new Set<string>()
     const uniqueBookingFroms = new Set<string>()
     const uniqueBookingTos = new Set<string>()
     const uniqueBookingDurations = new Set<string>()
-    const uniqueAgodaBillingTypes = new Set<string>()
-    const uniqueAgodaServiceTypes = new Set<string>()
-    const uniqueAgodaFrequencies = new Set<string>()
+    const uniqueAgodaBillingTypeIds = new Set<string>()
+    const uniqueAgodaServiceTypeIds = new Set<string>()
+    const uniqueAgodaFrequencyIds = new Set<string>()
     const uniqueAgodaFroms = new Set<string>()
     const uniqueAgodaTos = new Set<string>()
     const uniqueAgodaDurations = new Set<string>()
@@ -2205,7 +2227,7 @@ export class PropertyService implements IPropertyService {
       string,
       { id: string; name: string; portfolio_id: string }
     >()
-    const uniqueServiceTypes = new Set<string>()
+    const uniqueServiceTypeIds = new Set<string>()
     const uniqueCurrencies = new Set<string>()
     const uniqueDescriptions = new Set<string>()
     const uniqueExpediaStatuses = new Set<string>()
@@ -2241,8 +2263,8 @@ export class PropertyService implements IPropertyService {
 
     properties.forEach((property: any) => {
       if (property.portfolio_id) portfolioIdSet.add(property.portfolio_id)
-      if (property.service_type)
-        uniqueServiceTypes.add(property.service_type)
+      if (property.service_type_id)
+        uniqueServiceTypeIds.add(property.service_type_id)
       if (property.currency)
         uniqueCurrencies.add(property.currency)
       if (property.expedia_id) uniqueExpediaIds.add(property.expedia_id)
@@ -2289,12 +2311,12 @@ export class PropertyService implements IPropertyService {
             ? property.next_due_date.toISOString()
             : String(property.next_due_date)
         )
-      if (property.expedia_processor)
-        uniqueExpediaProcessors.add(property.expedia_processor)
-      if (property.booking_processor)
-        uniqueBookingProcessors.add(property.booking_processor)
-      if (property.agoda_processor)
-        uniqueAgodaProcessors.add(property.agoda_processor)
+      if (property.expedia_processor_id)
+        uniqueExpediaProcessorIds.add(property.expedia_processor_id)
+      if (property.booking_processor_id)
+        uniqueBookingProcessorIds.add(property.booking_processor_id)
+      if (property.agoda_processor_id)
+        uniqueAgodaProcessorIds.add(property.agoda_processor_id)
       if (property.fp_mid)
         uniqueFpMids.add(property.fp_mid)
       if (property.stripe_account_email)
@@ -2314,12 +2336,12 @@ export class PropertyService implements IPropertyService {
       if (property.portfolio_contact)
         uniquePortfolioContacts.add(property.portfolio_contact)
       if (property.fp_username) uniqueFpUsernames.add(property.fp_username)
-      if (property.expedia_billing_type)
-        uniqueExpediaBillingTypes.add(property.expedia_billing_type)
-      if (property.expedia_service_type)
-        uniqueExpediaServiceTypes.add(property.expedia_service_type)
-      if (property.expedia_frequency)
-        uniqueExpediaFrequencies.add(property.expedia_frequency)
+      if (property.expedia_billing_type_id)
+        uniqueExpediaBillingTypeIds.add(property.expedia_billing_type_id)
+      if (property.expedia_service_type_id)
+        uniqueExpediaServiceTypeIds.add(property.expedia_service_type_id)
+      if (property.expedia_frequency_id)
+        uniqueExpediaFrequencyIds.add(property.expedia_frequency_id)
       if (property.expedia_from) uniqueExpediaFroms.add(property.expedia_from)
       if (property.expedia_to) uniqueExpediaTos.add(property.expedia_to)
       if (property.expedia_duration != null)
@@ -2328,12 +2350,12 @@ export class PropertyService implements IPropertyService {
         uniqueExpediaAccessLevels.add(String(property.expedia_access_level))
       if (property.expedia_scheduler != null)
         uniqueExpediaSchedulers.add(String(property.expedia_scheduler))
-      if (property.booking_billing_type)
-        uniqueBookingBillingTypes.add(property.booking_billing_type)
-      if (property.booking_service_type)
-        uniqueBookingServiceTypes.add(property.booking_service_type)
-      if (property.booking_frequency)
-        uniqueBookingFrequencies.add(property.booking_frequency)
+      if (property.booking_billing_type_id)
+        uniqueBookingBillingTypeIds.add(property.booking_billing_type_id)
+      if (property.booking_service_type_id)
+        uniqueBookingServiceTypeIds.add(property.booking_service_type_id)
+      if (property.booking_frequency_id)
+        uniqueBookingFrequencyIds.add(property.booking_frequency_id)
       if (property.booking_from) uniqueBookingFroms.add(property.booking_from)
       if (property.booking_to) uniqueBookingTos.add(property.booking_to)
       if (property.booking_duration != null)
@@ -2342,12 +2364,12 @@ export class PropertyService implements IPropertyService {
         uniqueBookingAccessLevels.add(String(property.booking_access_level))
       if (property.booking_scheduler != null)
         uniqueBookingSchedulers.add(String(property.booking_scheduler))
-      if (property.agoda_billing_type)
-        uniqueAgodaBillingTypes.add(property.agoda_billing_type)
-      if (property.agoda_service_type)
-        uniqueAgodaServiceTypes.add(property.agoda_service_type)
-      if (property.agoda_frequency)
-        uniqueAgodaFrequencies.add(property.agoda_frequency)
+      if (property.agoda_billing_type_id)
+        uniqueAgodaBillingTypeIds.add(property.agoda_billing_type_id)
+      if (property.agoda_service_type_id)
+        uniqueAgodaServiceTypeIds.add(property.agoda_service_type_id)
+      if (property.agoda_frequency_id)
+        uniqueAgodaFrequencyIds.add(property.agoda_frequency_id)
       if (property.agoda_from) uniqueAgodaFroms.add(property.agoda_from)
       if (property.agoda_to) uniqueAgodaTos.add(property.agoda_to)
       if (property.agoda_duration != null)
@@ -2471,40 +2493,40 @@ export class PropertyService implements IPropertyService {
       expedia_status: Array.from(uniqueExpediaStatuses).sort(),
       booking_status: Array.from(uniqueBookingStatuses).sort(),
       agoda_status: Array.from(uniqueAgodaStatuses).sort(),
-      expedia_processor: Array.from(uniqueExpediaProcessors).sort(),
-      booking_processor: Array.from(uniqueBookingProcessors).sort(),
-      agoda_processor: Array.from(uniqueAgodaProcessors).sort(),
+      expedia_processor_id: Array.from(uniqueExpediaProcessorIds).sort(),
+      booking_processor_id: Array.from(uniqueBookingProcessorIds).sort(),
+      agoda_processor_id: Array.from(uniqueAgodaProcessorIds).sort(),
       fp_mid: Array.from(uniqueFpMids).sort(),
       stripe_account_email: Array.from(uniqueStripeAccountEmails).sort(),
       from: Array.from(uniqueFromDates).sort(),
       to: Array.from(uniqueToDates).sort(),
       property_identifier: Array.from(uniquePropertyIdentifiers).sort(),
       portfolio_contact: Array.from(uniquePortfolioContacts).sort(),
-      service_type: Array.from(uniqueServiceTypes).sort(),
+      service_type_id: Array.from(uniqueServiceTypeIds).sort(),
       currency: Array.from(uniqueCurrencies).sort(),
       fp_username: Array.from(uniqueFpUsernames).sort(),
       qp_username: Array.from(uniqueQpUsernames).sort(),
       previous_portfolio_id: Array.from(uniquePreviousPortfolioIds).sort(),
       next_due_date: Array.from(uniqueNextDueDates).sort(),
-      expedia_billing_type: Array.from(uniqueExpediaBillingTypes).sort(),
-      expedia_service_type: Array.from(uniqueExpediaServiceTypes).sort(),
-      expedia_frequency: Array.from(uniqueExpediaFrequencies).sort(),
+      expedia_billing_type_id: Array.from(uniqueExpediaBillingTypeIds).sort(),
+      expedia_service_type_id: Array.from(uniqueExpediaServiceTypeIds).sort(),
+      expedia_frequency_id: Array.from(uniqueExpediaFrequencyIds).sort(),
       expedia_from: Array.from(uniqueExpediaFroms).sort(),
       expedia_to: Array.from(uniqueExpediaTos).sort(),
       expedia_duration: Array.from(uniqueExpediaDurations).sort(),
       expedia_access_level: Array.from(uniqueExpediaAccessLevels).sort(),
       expedia_scheduler: Array.from(uniqueExpediaSchedulers).sort(),
-      booking_billing_type: Array.from(uniqueBookingBillingTypes).sort(),
-      booking_service_type: Array.from(uniqueBookingServiceTypes).sort(),
-      booking_frequency: Array.from(uniqueBookingFrequencies).sort(),
+      booking_billing_type_id: Array.from(uniqueBookingBillingTypeIds).sort(),
+      booking_service_type_id: Array.from(uniqueBookingServiceTypeIds).sort(),
+      booking_frequency_id: Array.from(uniqueBookingFrequencyIds).sort(),
       booking_from: Array.from(uniqueBookingFroms).sort(),
       booking_to: Array.from(uniqueBookingTos).sort(),
       booking_duration: Array.from(uniqueBookingDurations).sort(),
       booking_access_level: Array.from(uniqueBookingAccessLevels).sort(),
       booking_scheduler: Array.from(uniqueBookingSchedulers).sort(),
-      agoda_billing_type: Array.from(uniqueAgodaBillingTypes).sort(),
-      agoda_service_type: Array.from(uniqueAgodaServiceTypes).sort(),
-      agoda_frequency: Array.from(uniqueAgodaFrequencies).sort(),
+      agoda_billing_type_id: Array.from(uniqueAgodaBillingTypeIds).sort(),
+      agoda_service_type_id: Array.from(uniqueAgodaServiceTypeIds).sort(),
+      agoda_frequency_id: Array.from(uniqueAgodaFrequencyIds).sort(),
       agoda_from: Array.from(uniqueAgodaFroms).sort(),
       agoda_to: Array.from(uniqueAgodaTos).sort(),
       agoda_duration: Array.from(uniqueAgodaDurations).sort(),

@@ -201,7 +201,7 @@ export class UserRepository implements IUserRepository {
       ) || []
 
     // Fetch properties and portfolios for UserAccessedProperty
-    const [properties, portfolios] = await Promise.all([
+    const [properties, portfoliosResult] = await Promise.all([
       propertyIds.length > 0
         ? this.prisma.property.findMany({
             where: { id: { in: propertyIds } },
@@ -231,10 +231,16 @@ export class UserRepository implements IUserRepository {
         : []
     ])
 
+    const portfolios = portfoliosResult.map(p => ({
+      id: p.id,
+      name: p.name,
+      service_type: p.service_type?.type ?? ''
+    }))
+
     // Process UserProjectRoles - fetch properties and portfolios for each
     const userProjectRoles = await Promise.all(
       ((user as any).userProjectRoles || []).map(async (upr: any) => {
-        const [uprProperties, uprPortfolios] = await Promise.all([
+        const [uprProperties, uprPortfoliosResult] = await Promise.all([
           upr.property_ids && upr.property_ids.length > 0
             ? this.prisma.property.findMany({
                 where: { id: { in: upr.property_ids } },
@@ -267,7 +273,11 @@ export class UserRepository implements IUserRepository {
         return {
           id: upr.id,
           properties: uprProperties,
-          portfolios: uprPortfolios
+          portfolios: uprPortfoliosResult.map(p => ({
+            id: p.id,
+            name: p.name,
+            service_type: p.service_type?.type ?? ''
+          }))
         }
       })
     )
