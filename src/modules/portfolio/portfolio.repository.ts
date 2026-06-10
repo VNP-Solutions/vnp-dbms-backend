@@ -51,6 +51,7 @@ export class PortfolioRepository implements IPortfolioRepository {
       take,
       orderBy,
       include: {
+        service_type: true,
         _count: {
           select: { properties: true, subportfolios: true }
         }
@@ -72,6 +73,7 @@ export class PortfolioRepository implements IPortfolioRepository {
     const portfolio = await this.prisma.portfolio.findUnique({
       where: { id },
       include: {
+        service_type: true,
         _count: { select: { properties: true, subportfolios: true } }
       }
     })

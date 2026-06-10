@@ -1,4 +1,4 @@
-import { Property } from '@prisma/client'
+import { BillingType, Frequency, Processor, Property, ServiceType } from '@prisma/client'
 import { PaginatedResult } from '../../common/dto/query.dto'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
 import { BulkUpdateResultDto, CreatePropertyDto, ExportPropertyExcelDto, PropertyFilterDto, UpdatePropertyDto } from './property.dto'
@@ -6,6 +6,19 @@ import { BulkUpdateResultDto, CreatePropertyDto, ExportPropertyExcelDto, Propert
 export type PropertyWithRelations = Property & {
   portfolio: { id: string; name: string }
   subportfolio: { id: string; name: string; portfolio_id: string } | null
+  service_type: ServiceType | null
+  expedia_service_type: ServiceType | null
+  booking_service_type: ServiceType | null
+  agoda_service_type: ServiceType | null
+  expedia_billing_type: BillingType | null
+  booking_billing_type: BillingType | null
+  agoda_billing_type: BillingType | null
+  expedia_frequency: Frequency | null
+  booking_frequency: Frequency | null
+  agoda_frequency: Frequency | null
+  expedia_processor: Processor | null
+  booking_processor: Processor | null
+  agoda_processor: Processor | null
 }
 
 export interface ImportPropertyRow {
@@ -159,40 +172,40 @@ export interface AllDataForGlobalFilterResponse {
   expedia_status: string[]
   booking_status: string[]
   agoda_status: string[]
-  expedia_processor: string[]
-  booking_processor: string[]
-  agoda_processor: string[]
+  expedia_processor_id: string[]
+  booking_processor_id: string[]
+  agoda_processor_id: string[]
   fp_mid: string[]
   stripe_account_email: string[]
   from: string[]
   to: string[]
   property_identifier: string[]
   portfolio_contact: string[]
-  service_type: string[]
+  service_type_id: string[]
   currency: string[]
   fp_username: string[]
   qp_username: string[]
   previous_portfolio_id: string[]
   next_due_date: string[]
-  expedia_billing_type: string[]
-  expedia_service_type: string[]
-  expedia_frequency: string[]
+  expedia_billing_type_id: string[]
+  expedia_service_type_id: string[]
+  expedia_frequency_id: string[]
   expedia_from: string[]
   expedia_to: string[]
   expedia_duration: string[]
   expedia_access_level: string[]
   expedia_scheduler: string[]
-  booking_billing_type: string[]
-  booking_service_type: string[]
-  booking_frequency: string[]
+  booking_billing_type_id: string[]
+  booking_service_type_id: string[]
+  booking_frequency_id: string[]
   booking_from: string[]
   booking_to: string[]
   booking_duration: string[]
   booking_access_level: string[]
   booking_scheduler: string[]
-  agoda_billing_type: string[]
-  agoda_service_type: string[]
-  agoda_frequency: string[]
+  agoda_billing_type_id: string[]
+  agoda_service_type_id: string[]
+  agoda_frequency_id: string[]
   agoda_from: string[]
   agoda_to: string[]
   agoda_duration: string[]

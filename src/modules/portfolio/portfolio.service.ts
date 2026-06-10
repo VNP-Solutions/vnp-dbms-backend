@@ -62,7 +62,7 @@ export class PortfolioService implements IPortfolioService {
     }
 
     const additionalFilters: any = {}
-    if (query.service_type) additionalFilters.service_type = query.service_type
+    if (query.service_type_id) additionalFilters.service_type_id = query.service_type_id
     if (query.is_active !== undefined && query.is_active !== 'All') {
       additionalFilters.is_active = query.is_active
     }
@@ -80,7 +80,7 @@ export class PortfolioService implements IPortfolioService {
 
     const queryConfig = {
       searchFields: ['name'],
-      filterableFields: ['service_type', 'is_active'],
+      filterableFields: ['service_type_id', 'is_active'],
       sortableFields: ['name', 'created_at', 'updated_at', 'is_active', 'is_commissionable'],
       defaultSortField: 'created_at',
       defaultSortOrder: 'desc' as const,
@@ -199,8 +199,7 @@ export class PortfolioService implements IPortfolioService {
       (h) => h.toLowerCase().includes('service') && h.toLowerCase().includes('type')
     ) || 'Service Type'
 
-    // Find or create default "OTA" service type
-    let defaultServiceTypeName = 'OTA'
+    // Find or create default "OTA" service type and resolve to ID
     let defaultServiceType = await this.prisma.serviceType.findFirst({
       where: { type: { equals: 'OTA', mode: 'insensitive' } }
     })
@@ -220,7 +219,7 @@ export class PortfolioService implements IPortfolioService {
       })
       this.logger.log('Default "OTA" service type created successfully')
     }
-    defaultServiceTypeName = defaultServiceType.type
+
 
     let portfoliosCreated = 0
     const portfolios: any[] = []
@@ -256,7 +255,7 @@ export class PortfolioService implements IPortfolioService {
 
         const row = data[rowIndex] as any
 
-        let service_type_name = defaultServiceTypeName
+        let service_type_id: string = defaultServiceType.id
 
         if (row?.[serviceTypeCol]) {
           const stName = String(row[serviceTypeCol]).trim()
@@ -280,7 +279,7 @@ export class PortfolioService implements IPortfolioService {
             })
             this.logger.log(`ServiceType "${stName}" created successfully`)
           }
-          service_type_name = st.type
+          service_type_id = st.id
         }
 
         const valActive = row?.['Active status']
@@ -300,7 +299,7 @@ export class PortfolioService implements IPortfolioService {
 
         const dto: CreatePortfolioDto = {
           name,
-          service_type: service_type_name,
+          service_type_id,
           is_active,
           is_commissionable,
           contact_email: row?.['Contact Email'] ? String(row['Contact Email']).trim() : undefined,

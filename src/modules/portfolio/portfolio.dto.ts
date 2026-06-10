@@ -5,6 +5,7 @@ import {
   IsBoolean,
   IsEmail,
   IsIn,
+  IsMongoId,
   IsNotEmpty,
   IsNumber,
   IsOptional,
@@ -19,10 +20,10 @@ export class CreatePortfolioDto {
   @IsNotEmpty()
   name: string
 
-  @ApiProperty({ example: 'OTA', description: 'Service type name' })
-  @IsString()
+  @ApiProperty({ example: '507f1f77bcf86cd799439099', description: 'Service Type ID (MongoDB ObjectId)' })
+  @IsMongoId()
   @IsNotEmpty()
-  service_type: string
+  service_type_id: string
 
   @ApiProperty({ example: true, description: 'Whether portfolio is active' })
   @IsBoolean()
@@ -85,10 +86,10 @@ export class CreatePortfolioDto {
 export class UpdatePortfolioDto extends PartialType(CreatePortfolioDto) {}
 
 export class PortfolioQueryDto extends QueryDto {
-  @ApiPropertyOptional({ description: 'Filter by service type', example: 'OTA' })
+  @ApiPropertyOptional({ description: 'Filter by service type ID (MongoDB ObjectId)', example: '507f1f77bcf86cd799439099' })
   @IsOptional()
-  @IsString()
-  service_type?: string
+  @IsMongoId()
+  service_type_id?: string
 
   @ApiPropertyOptional({
     description: 'Filter by active status: All (both), true (active only), false (inactive only)',
