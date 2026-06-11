@@ -8,6 +8,21 @@ import type { IPortfolioRepository, PortfolioWithCounts } from './portfolio.inte
 export class PortfolioRepository implements IPortfolioRepository {
   constructor(@Inject(PrismaService) private prisma: PrismaService) {}
 
+  async reassignPropertiesToPortfolio(
+    fromPortfolioId: string,
+    toPortfolioId: string
+  ): Promise<number> {
+    const result = await this.prisma.property.updateMany({
+      where: { portfolio_id: fromPortfolioId },
+      data: {
+        portfolio_id: toPortfolioId,
+        subportfolio_id: null
+      }
+    })
+  
+    return result.count
+  }
+  
   async getAccessiblePortfolioIds(userId: string): Promise<string[] | 'all'> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },

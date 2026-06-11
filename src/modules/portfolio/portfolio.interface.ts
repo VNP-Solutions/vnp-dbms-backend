@@ -10,6 +10,10 @@ export type PortfolioWithCounts = Portfolio & {
 }
 
 export interface IPortfolioRepository {
+  reassignPropertiesToPortfolio(
+    fromPortfolioId: string,
+    toPortfolioId: string
+  ): Promise<number>
   create(data: CreatePortfolioDto): Promise<Portfolio>
   findAll(queryOptions: {
     where: any
