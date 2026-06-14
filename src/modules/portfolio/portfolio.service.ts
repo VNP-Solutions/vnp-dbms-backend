@@ -4,7 +4,8 @@ import {
   Inject,
   Injectable,
   Logger,
-  NotFoundException
+  NotFoundException,
+  OnModuleInit
 } from '@nestjs/common'
 import { createHash } from 'crypto'
 import * as XLSX from 'xlsx'
@@ -24,9 +25,10 @@ import type {
 const CACHE_TTL_ITEM = 5 * 60 * 1000   // 5 minutes for individual records
 const CACHE_KEY = (id: string) => `portfolio:${id}`
 const ALL_PATTERN = 'portfolio:all:*'
+const INTERNAL_PORTFOLIO_NAME = 'Internal Portfolio'
 
 @Injectable()
-export class PortfolioService implements IPortfolioService {
+export class PortfolioService implements IPortfolioService, OnModuleInit {
   private readonly logger = new Logger(PortfolioService.name)
 
   constructor(
@@ -36,7 +38,50 @@ export class PortfolioService implements IPortfolioService {
     private readonly redisService: RedisService
   ) {}
 
+  async onModuleInit() {
+    await this.ensureInternalPortfolio()
+  }
+  
+  private async ensureInternalPortfolio() {
+    const existing = await this.prisma.portfolio.findUnique({
+      where: { name: INTERNAL_PORTFOLIO_NAME }
+    })
+  
+    if (existing) return existing
+  
+    let defaultServiceType = await this.prisma.serviceType.findFirst({
+      where: { type: { equals: 'OTA', mode: 'insensitive' } }
+    })
+  
+    if (!defaultServiceType) {
+      const maxOrder = await this.prisma.serviceType.findFirst({
+        orderBy: { order: 'desc' },
+        select: { order: true }
+      })
+  
+      defaultServiceType = await this.prisma.serviceType.create({
+        data: {
+          type: 'OTA',
+          is_active: true,
+          order: (maxOrder?.order ?? 0) + 1
+        }
+      })
+    }
+  
+    return this.prisma.portfolio.create({
+      data: {
+        name: INTERNAL_PORTFOLIO_NAME,
+        service_type_id: defaultServiceType.id,
+        is_active: true,
+        is_commissionable: false
+      }
+    })
+  }
+
   async create(data: CreatePortfolioDto, _user: IUserWithPermissions) {
+    if (data.name.trim().toLowerCase() === INTERNAL_PORTFOLIO_NAME.toLowerCase()) {
+      throw new ConflictException(`"${INTERNAL_PORTFOLIO_NAME}" is reserved by the system`)
+    }
     const existing = await this.portfolioRepository.findByName(data.name)
     if (existing) throw new ConflictException('Portfolio with this name already exists')
     const portfolio = await this.portfolioRepository.create(data)
@@ -144,6 +189,12 @@ export class PortfolioService implements IPortfolioService {
     if (!existing) {
       throw new NotFoundException('Portfolio not found')
     }
+    if (existing.name === INTERNAL_PORTFOLIO_NAME) {
+      throw new BadRequestException(`"${INTERNAL_PORTFOLIO_NAME}" cannot be updated`)
+    }
+    if (data.name?.trim().toLowerCase() === INTERNAL_PORTFOLIO_NAME.toLowerCase()) {
+      throw new ConflictException(`"${INTERNAL_PORTFOLIO_NAME}" is reserved by the system`)
+    }
     const updated = await this.portfolioRepository.update(id, data)
     await Promise.all([
       this.redisService.del(CACHE_KEY(id)),
@@ -153,19 +204,27 @@ export class PortfolioService implements IPortfolioService {
   }
 
   async remove(id: string, user: IUserWithPermissions) {
-    const _portfolio = await this.findOne(id, user)
-    const count = await this.portfolioRepository.countProperties(id)
-    if (count > 0) {
-      throw new BadRequestException(
-        `Cannot delete portfolio with ${count} associated properties. Delete or reassign properties first.`
-      )
+    const portfolio = await this.findOne(id, user)
+    if (!portfolio) {
+      throw new NotFoundException('Portfolio not found')
     }
+    if (portfolio.name === INTERNAL_PORTFOLIO_NAME) {
+      throw new BadRequestException(`"${INTERNAL_PORTFOLIO_NAME}" cannot be deleted`)
+    }
+    const internalPortfolio = await this.ensureInternalPortfolio()
+    const movedProperties = await this.portfolioRepository.reassignPropertiesToPortfolio(
+      id,
+      internalPortfolio.id
+    )
     await this.portfolioRepository.delete(id)
     await Promise.all([
       this.redisService.del(CACHE_KEY(id)),
-      this.redisService.deleteByPattern(ALL_PATTERN)
+      this.redisService.deleteByPattern(ALL_PATTERN),
+      this.redisService.deleteByPattern('property:all:*')
     ])
-    return { message: 'Portfolio deleted successfully' }
+    return {
+       message: `Portfolio deleted successfully. ${movedProperties} properties were moved to "${INTERNAL_PORTFOLIO_NAME}".`
+      }
   }
 
   async importFromExcel(file: Express.Multer.File, _user: IUserWithPermissions): Promise<ImportPortfoliosResult> {
