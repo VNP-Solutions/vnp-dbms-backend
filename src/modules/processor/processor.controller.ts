@@ -36,6 +36,15 @@ export class ProcessorController {
     return this.processorService.findAll(null as any)
   }
 
+  @Get('except/:id')
+  @Public()
+  @ApiOperation({ summary: 'Get all processors except the specified one (public)' })
+  @ApiResponse({ status: 200, description: 'List of processors excluding the specified ID' })
+  @ApiResponse({ status: 404, description: 'Processor not found' })
+  findAllExcept(@Param('id') id: string) {
+    return this.processorService.findAllExcept(id, null as any)
+  }
+
   @Get(':id')
   @RequirePermission(ModuleType.SYSTEM_SETTINGS, PermissionAction.READ)
   @ApiOperation({ summary: 'Get processor by ID' })
@@ -68,6 +77,6 @@ export class ProcessorController {
   @RequirePermission(ModuleType.SYSTEM_SETTINGS, PermissionAction.DELETE)
   @ApiOperation({ summary: 'Delete a processor (requires password)' })
   remove(@Param('id') id: string, @Body() dto: DeleteProcessorDto, @CurrentUser() user: IUserWithPermissions) {
-    return this.processorService.remove(id, dto.password, user)
+    return this.processorService.remove(id, dto.password, dto.replacementId, user)
   }
 }

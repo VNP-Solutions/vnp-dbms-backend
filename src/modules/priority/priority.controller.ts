@@ -36,6 +36,15 @@ export class PriorityController {
     return this.priorityService.findAll(null as any)
   }
 
+  @Get('except/:id')
+  @Public()
+  @ApiOperation({ summary: 'Get all priorities except the specified one (public)' })
+  @ApiResponse({ status: 200, description: 'List of priorities excluding the specified ID' })
+  @ApiResponse({ status: 404, description: 'Priority not found' })
+  findAllExcept(@Param('id') id: string) {
+    return this.priorityService.findAllExcept(id, null as any)
+  }
+
   @Get(':id')
   @RequirePermission(ModuleType.SYSTEM_SETTINGS, PermissionAction.READ)
   @ApiOperation({ summary: 'Get priority by ID' })
@@ -68,6 +77,6 @@ export class PriorityController {
   @RequirePermission(ModuleType.SYSTEM_SETTINGS, PermissionAction.DELETE)
   @ApiOperation({ summary: 'Delete a priority (requires password)' })
   remove(@Param('id') id: string, @Body() dto: DeletePriorityDto, @CurrentUser() user: IUserWithPermissions) {
-    return this.priorityService.remove(id, dto.password, user)
+    return this.priorityService.remove(id, dto.password, dto.replacementId, user)
   }
 }

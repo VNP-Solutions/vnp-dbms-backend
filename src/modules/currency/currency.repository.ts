@@ -17,8 +17,8 @@ export class CurrencyRepository implements ICurrencyRepository {
     })
   }
 
-  async findAll(search?: string) {
-    const where = search?.trim()
+  private buildSearchWhere(search?: string) {
+    return search?.trim()
       ? {
           OR: [
             { code: { contains: search.trim(), mode: 'insensitive' as const } },
@@ -27,9 +27,19 @@ export class CurrencyRepository implements ICurrencyRepository {
           ]
         }
       : undefined
+  }
 
+  async findAll(search?: string) {
     return this.prisma.currency.findMany({
-      where,
+      where: this.buildSearchWhere(search),
+      orderBy: { order: 'asc' }
+    })
+  }
+
+  async findAllExcept(id: string, search?: string) {
+    const searchWhere = this.buildSearchWhere(search)
+    return this.prisma.currency.findMany({
+      where: { id: { not: id }, ...searchWhere },
       orderBy: { order: 'asc' }
     })
   }

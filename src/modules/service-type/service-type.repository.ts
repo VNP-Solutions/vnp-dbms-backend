@@ -17,12 +17,53 @@ export class ServiceTypeRepository implements IServiceTypeRepository {
     })
   }
 
+  private mapWithCount(items: any[]) {
+    return items.map(({ _count, ...rest }) => ({
+      ...rest,
+      count:
+        (_count.portfolios ?? 0) +
+        (_count.properties ?? 0) +
+        (_count.expedia_properties ?? 0) +
+        (_count.booking_properties ?? 0) +
+        (_count.agoda_properties ?? 0)
+    }))
+  }
+
   async findAll() {
-    return this.prisma.serviceType.findMany({
-      orderBy: {
-        order: 'asc'
+    const items = await this.prisma.serviceType.findMany({
+      orderBy: { order: 'asc' },
+      include: {
+        _count: {
+          select: {
+            portfolios: true,
+            properties: true,
+            expedia_properties: true,
+            booking_properties: true,
+            agoda_properties: true
+          }
+        }
       }
     })
+    return this.mapWithCount(items)
+  }
+
+  async findAllExcept(id: string) {
+    const items = await this.prisma.serviceType.findMany({
+      where: { id: { not: id } },
+      orderBy: { order: 'asc' },
+      include: {
+        _count: {
+          select: {
+            portfolios: true,
+            properties: true,
+            expedia_properties: true,
+            booking_properties: true,
+            agoda_properties: true
+          }
+        }
+      }
+    })
+    return this.mapWithCount(items)
   }
 
   async findById(id: string) {

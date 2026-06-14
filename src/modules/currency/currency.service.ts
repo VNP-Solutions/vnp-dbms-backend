@@ -33,9 +33,29 @@ export class CurrencyService implements ICurrencyService {
     return this.currencyRepository.create(data)
   }
 
+  private async attachCounts<T extends { code: string }>(items: T[]): Promise<(T & { count: number })[]> {
+    const propertyCounts = await this.prisma.property.groupBy({
+      by: ['currency'],
+      _count: { id: true },
+      where: { currency: { not: null } }
+    })
+    const countMap = new Map(propertyCounts.map(p => [p.currency, p._count.id]))
+    return items.map(item => ({ ...item, count: countMap.get(item.code) ?? 0 }))
+  }
+
   async findAll(query: CurrencyQueryDto, _user: IUserWithPermissions) {
     const search = query.search?.trim()
-    return this.currencyRepository.findAll(search || undefined)
+    const items = await this.currencyRepository.findAll(search || undefined)
+    return this.attachCounts(items)
+  }
+
+  async findAllExcept(id: string, _user: IUserWithPermissions) {
+    const currency = await this.currencyRepository.findById(id)
+    if (!currency) {
+      throw new NotFoundException('Currency not found')
+    }
+    const items = await this.currencyRepository.findAllExcept(id)
+    return this.attachCounts(items)
   }
 
   async findOne(id: string, _user: IUserWithPermissions) {
@@ -72,8 +92,7 @@ export class CurrencyService implements ICurrencyService {
     return this.currencyRepository.update(id, data)
   }
 
-  async remove(id: string, password: string, user: IUserWithPermissions) {
-    // Fetch user with password from database for verification
+  async remove(id: string, password: string, replacementId: string, user: IUserWithPermissions) {
     const userFromDb = await this.prisma.user.findUnique({
       where: { id: user.id },
       select: { password: true }
@@ -83,7 +102,6 @@ export class CurrencyService implements ICurrencyService {
       throw new NotFoundException('User not found')
     }
 
-    // Verify user password
     const isPasswordValid = await EncryptionUtil.comparePassword(
       password,
       userFromDb.password
@@ -93,13 +111,24 @@ export class CurrencyService implements ICurrencyService {
       throw new BadRequestException('Invalid password')
     }
 
-    const currency = await this.currencyRepository.findById(id)
+    if (id === replacementId) {
+      throw new BadRequestException('Replacement currency must be different from the one being deleted')
+    }
 
+    const currency = await this.currencyRepository.findById(id)
     if (!currency) {
       throw new NotFoundException('Currency not found')
     }
 
-    await this.currencyRepository.delete(id)
+    const replacement = await this.currencyRepository.findById(replacementId)
+    if (!replacement) {
+      throw new NotFoundException('Replacement currency not found')
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.property.updateMany({ where: { currency: currency.code }, data: { currency: replacement.code } }),
+      this.prisma.currency.delete({ where: { id } })
+    ])
 
     return { message: 'Currency deleted successfully' }
   }

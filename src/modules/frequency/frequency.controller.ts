@@ -36,6 +36,15 @@ export class FrequencyController {
     return this.frequencyService.findAll(null as any)
   }
 
+  @Get('except/:id')
+  @Public()
+  @ApiOperation({ summary: 'Get all frequencies except the specified one (public)' })
+  @ApiResponse({ status: 200, description: 'List of frequencies excluding the specified ID' })
+  @ApiResponse({ status: 404, description: 'Frequency not found' })
+  findAllExcept(@Param('id') id: string) {
+    return this.frequencyService.findAllExcept(id, null as any)
+  }
+
   @Get(':id')
   @RequirePermission(ModuleType.SYSTEM_SETTINGS, PermissionAction.READ)
   @ApiOperation({ summary: 'Get frequency by ID' })
@@ -68,6 +77,6 @@ export class FrequencyController {
   @RequirePermission(ModuleType.SYSTEM_SETTINGS, PermissionAction.DELETE)
   @ApiOperation({ summary: 'Delete a frequency (requires password)' })
   remove(@Param('id') id: string, @Body() dto: DeleteFrequencyDto, @CurrentUser() user: IUserWithPermissions) {
-    return this.frequencyService.remove(id, dto.password, user)
+    return this.frequencyService.remove(id, dto.password, dto.replacementId, user)
   }
 }

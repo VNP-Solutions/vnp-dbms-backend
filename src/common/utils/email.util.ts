@@ -311,7 +311,8 @@ VNP Solutions Team`
     to: string | string[],
     subject: string,
     body: string,
-    attachments?: EmailAttachment[]
+    attachments?: EmailAttachment[],
+    html?: string
   ): Promise<void> {
     // Handle array of emails - remove duplicates and filter empty values
     const recipients = Array.isArray(to)
@@ -327,7 +328,8 @@ VNP Solutions Team`
       from: this.configService.get('smtp.email', { infer: true }),
       to: recipients,
       subject,
-      text: body
+      text: body,
+      ...(html && { html })
     }
 
     // Add attachments if provided

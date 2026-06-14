@@ -24,6 +24,12 @@ export class FrequencyService implements IFrequencyService {
     return this.repo.findAll()
   }
 
+  async findAllExcept(id: string, _user: IUserWithPermissions) {
+    const item = await this.repo.findById(id)
+    if (!item) throw new NotFoundException('Frequency not found')
+    return this.repo.findAllExcept(id)
+  }
+
   async findOne(id: string, _user: IUserWithPermissions) {
     const item = await this.repo.findById(id)
     if (!item) throw new NotFoundException('Frequency not found')
@@ -73,17 +79,28 @@ export class FrequencyService implements IFrequencyService {
     return { message: 'Frequency order updated successfully' }
   }
 
-  async remove(id: string, password: string, user: IUserWithPermissions) {
+  async remove(id: string, password: string, replacementId: string, user: IUserWithPermissions) {
     const userFromDb = await this.prisma.user.findUnique({ where: { id: user.id }, select: { password: true } })
     if (!userFromDb) throw new NotFoundException('User not found')
 
     const valid = await EncryptionUtil.comparePassword(password, userFromDb.password)
     if (!valid) throw new BadRequestException('Invalid password')
 
+    if (id === replacementId) throw new BadRequestException('Replacement frequency must be different from the one being deleted')
+
     const item = await this.repo.findById(id)
     if (!item) throw new NotFoundException('Frequency not found')
 
-    await this.repo.delete(id)
+    const replacement = await this.repo.findById(replacementId)
+    if (!replacement) throw new NotFoundException('Replacement frequency not found')
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.property.updateMany({ where: { expedia_frequency_id: id }, data: { expedia_frequency_id: replacementId } })
+      await tx.property.updateMany({ where: { booking_frequency_id: id }, data: { booking_frequency_id: replacementId } })
+      await tx.property.updateMany({ where: { agoda_frequency_id: id }, data: { agoda_frequency_id: replacementId } })
+      await tx.frequency.delete({ where: { id } })
+    })
+
     return { message: 'Frequency deleted successfully' }
   }
 }

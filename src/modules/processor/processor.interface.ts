@@ -4,10 +4,12 @@ import { IUserWithPermissions } from '../../common/interfaces/permission.interfa
 import { CreateProcessorDto, ReorderProcessorDto, UpdateProcessorDto } from './processor.dto'
 
 export type ProcessorModel = Prisma.ProcessorGetPayload<object>
+export type ProcessorWithCount = ProcessorModel & { count: number }
 
 export interface IProcessorRepository {
   create(data: CreateProcessorDto): Promise<ProcessorModel>
-  findAll(): Promise<ProcessorModel[]>
+  findAll(): Promise<ProcessorWithCount[]>
+  findAllExcept(id: string): Promise<ProcessorWithCount[]>
   findById(id: string): Promise<ProcessorModel | null>
   findByName(name: string): Promise<ProcessorModel | null>
   update(id: string, data: UpdateProcessorDto): Promise<ProcessorModel>
@@ -18,10 +20,11 @@ export interface IProcessorRepository {
 
 export interface IProcessorService {
   create(data: CreateProcessorDto, user: IUserWithPermissions): Promise<ProcessorModel>
-  findAll(user: IUserWithPermissions): Promise<ProcessorModel[]>
+  findAll(user: IUserWithPermissions): Promise<ProcessorWithCount[]>
+  findAllExcept(id: string, user: IUserWithPermissions): Promise<ProcessorWithCount[]>
   findOne(id: string, user: IUserWithPermissions): Promise<ProcessorModel>
   update(id: string, data: UpdateProcessorDto, user: IUserWithPermissions): Promise<ProcessorModel>
   toggle(id: string, user: IUserWithPermissions): Promise<ProcessorModel>
   reorder(id: string, data: ReorderProcessorDto, user: IUserWithPermissions): Promise<{ message: string }>
-  remove(id: string, password: string, user: IUserWithPermissions): Promise<{ message: string }>
+  remove(id: string, password: string, replacementId: string, user: IUserWithPermissions): Promise<{ message: string }>
 }

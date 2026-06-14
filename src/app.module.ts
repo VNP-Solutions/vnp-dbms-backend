@@ -35,9 +35,12 @@ import { FrequencyModule } from './modules/frequency/frequency.module'
 import { NotificationEmailModule } from './modules/notification-email/notification-email.module'
 import { PriorityModule } from './modules/priority/priority.module'
 import { ProcessorModule } from './modules/processor/processor.module'
+import { ScheduleModule } from '@nestjs/schedule'
+import { OtaAccessNotificationModule } from './modules/ota-access-notification/ota-access-notification.module'
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     ConfigModule.forRoot({
       load: [configuration],
       validate,
@@ -66,7 +69,8 @@ import { ProcessorModule } from './modules/processor/processor.module'
     PriorityModule,
     FrequencyModule,
     ProcessorModule,
-    NotificationEmailModule
+    NotificationEmailModule,
+    OtaAccessNotificationModule
   ],
   controllers: [AppController],
   providers: [
