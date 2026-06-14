@@ -6,12 +6,14 @@ import {
     UpdateServiceTypeDto
 } from './service-type.dto'
 
-type ServiceTypeWithPortfolios = Prisma.ServiceTypeGetPayload<object>
+type ServiceTypeBase = Prisma.ServiceTypeGetPayload<object>
+export type ServiceTypeWithCount = ServiceTypeBase & { count: number }
 
 export interface IServiceTypeRepository {
   create(data: CreateServiceTypeDto): Promise<ServiceType>
-  findAll(): Promise<ServiceTypeWithPortfolios[]>
-  findById(id: string): Promise<ServiceTypeWithPortfolios | null>
+  findAll(): Promise<ServiceTypeWithCount[]>
+  findAllExcept(id: string): Promise<ServiceTypeWithCount[]>
+  findById(id: string): Promise<ServiceTypeBase | null>
   findByType(type: string): Promise<ServiceType | null>
   update(id: string, data: UpdateServiceTypeDto): Promise<ServiceType>
   delete(id: string): Promise<ServiceType>
@@ -25,17 +27,18 @@ export interface IServiceTypeService {
     data: CreateServiceTypeDto,
     user: IUserWithPermissions
   ): Promise<ServiceType>
-  findAll(user: IUserWithPermissions): Promise<ServiceTypeWithPortfolios[]>
+  findAll(user: IUserWithPermissions): Promise<ServiceTypeWithCount[]>
+  findAllExcept(id: string, user: IUserWithPermissions): Promise<ServiceTypeWithCount[]>
   findOne(
     id: string,
     user: IUserWithPermissions
-  ): Promise<ServiceTypeWithPortfolios>
+  ): Promise<ServiceTypeBase>
   update(
     id: string,
     data: UpdateServiceTypeDto,
     user: IUserWithPermissions
   ): Promise<ServiceType>
-  remove(id: string, password: string, user: IUserWithPermissions): Promise<{ message: string }>
+  remove(id: string, password: string, replacementId: string, user: IUserWithPermissions): Promise<{ message: string }>
   reorder(
     id: string,
     data: ReorderServiceTypeDto,

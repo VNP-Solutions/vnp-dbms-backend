@@ -62,4 +62,12 @@ export class DeleteCurrencyDto {
   @IsString()
   @IsNotEmpty()
   password: string
+
+  @ApiProperty({
+    example: '507f1f77bcf86cd799439011',
+    description: 'ID of the currency to transfer all associated properties to before deletion'
+  })
+  @IsString()
+  @IsNotEmpty()
+  replacementId: string
 }

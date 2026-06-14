@@ -16,6 +16,10 @@ export class PriorityRepository implements IPriorityRepository {
     return this.prisma.priority.findMany({ orderBy: { order: 'asc' } })
   }
 
+  findAllExcept(id: string) {
+    return this.prisma.priority.findMany({ where: { id: { not: id } }, orderBy: { order: 'asc' } })
+  }
+
   findById(id: string) {
     return this.prisma.priority.findUnique({ where: { id } })
   }

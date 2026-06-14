@@ -39,6 +39,14 @@ export class ServiceTypeService implements IServiceTypeService {
     return this.serviceTypeRepository.findAll()
   }
 
+  async findAllExcept(id: string, _user: IUserWithPermissions) {
+    const serviceType = await this.serviceTypeRepository.findById(id)
+    if (!serviceType) {
+      throw new NotFoundException('Service type not found')
+    }
+    return this.serviceTypeRepository.findAllExcept(id)
+  }
+
   async findOne(id: string, _user: IUserWithPermissions) {
     const serviceType = await this.serviceTypeRepository.findById(id)
 
@@ -75,8 +83,7 @@ export class ServiceTypeService implements IServiceTypeService {
     return this.serviceTypeRepository.update(id, data)
   }
 
-  async remove(id: string, password: string, user: IUserWithPermissions) {
-    // Fetch user with password from database for verification
+  async remove(id: string, password: string, replacementId: string, user: IUserWithPermissions) {
     const userFromDb = await this.prisma.user.findUnique({
       where: { id: user.id },
       select: { password: true }
@@ -86,7 +93,6 @@ export class ServiceTypeService implements IServiceTypeService {
       throw new NotFoundException('User not found')
     }
 
-    // Verify user password
     const isPasswordValid = await EncryptionUtil.comparePassword(
       password,
       userFromDb.password
@@ -96,21 +102,28 @@ export class ServiceTypeService implements IServiceTypeService {
       throw new BadRequestException('Invalid password')
     }
 
-    const serviceType = await this.serviceTypeRepository.findById(id)
+    if (id === replacementId) {
+      throw new BadRequestException('Replacement service type must be different from the one being deleted')
+    }
 
+    const serviceType = await this.serviceTypeRepository.findById(id)
     if (!serviceType) {
       throw new NotFoundException('Service type not found')
     }
 
-    const portfolioCount = await this.serviceTypeRepository.countPortfolios(id)
-
-    if (portfolioCount > 0) {
-      throw new BadRequestException(
-        `Cannot delete service type with ${portfolioCount} associated portfolios. Please delete or reassign the portfolios first.`
-      )
+    const replacement = await this.serviceTypeRepository.findById(replacementId)
+    if (!replacement) {
+      throw new NotFoundException('Replacement service type not found')
     }
 
-    await this.serviceTypeRepository.delete(id)
+    await this.prisma.$transaction(async (tx) => {
+      await tx.property.updateMany({ where: { service_type_id: id }, data: { service_type_id: replacementId } })
+      await tx.property.updateMany({ where: { expedia_service_type_id: id }, data: { expedia_service_type_id: replacementId } })
+      await tx.property.updateMany({ where: { booking_service_type_id: id }, data: { booking_service_type_id: replacementId } })
+      await tx.property.updateMany({ where: { agoda_service_type_id: id }, data: { agoda_service_type_id: replacementId } })
+      await tx.portfolio.updateMany({ where: { service_type_id: id }, data: { service_type_id: replacementId } })
+      await tx.serviceType.delete({ where: { id } })
+    })
 
     return { message: 'Service type deleted successfully' }
   }

@@ -39,4 +39,12 @@ export class DeleteServiceTypeDto {
   @IsString()
   @IsNotEmpty()
   password: string
+
+  @ApiProperty({
+    example: '507f1f77bcf86cd799439011',
+    description: 'ID of the service type to transfer all associated portfolios and properties to before deletion'
+  })
+  @IsString()
+  @IsNotEmpty()
+  replacementId: string
 }

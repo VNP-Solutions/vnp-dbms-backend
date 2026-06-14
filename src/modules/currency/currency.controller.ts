@@ -72,6 +72,18 @@ export class CurrencyController {
     return this.currencyService.findAll(query, null as any)
   }
 
+  @Get('except/:id')
+  @Public()
+  @ApiOperation({ summary: 'Get all currencies except the specified one (public)' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of currencies excluding the specified ID'
+  })
+  @ApiResponse({ status: 404, description: 'Currency not found' })
+  findAllExcept(@Param('id') id: string) {
+    return this.currencyService.findAllExcept(id, null as any)
+  }
+
   @Get(':id')
   @RequirePermission(ModuleType.SYSTEM_SETTINGS, PermissionAction.READ)
   @ApiOperation({ summary: 'Get a currency by ID' })
@@ -123,7 +135,7 @@ export class CurrencyController {
     @Body() deleteCurrencyDto: DeleteCurrencyDto,
     @CurrentUser() user: IUserWithPermissions
   ) {
-    return this.currencyService.remove(id, deleteCurrencyDto.password, user)
+    return this.currencyService.remove(id, deleteCurrencyDto.password, deleteCurrencyDto.replacementId, user)
   }
 
   @Patch(':id/reorder')

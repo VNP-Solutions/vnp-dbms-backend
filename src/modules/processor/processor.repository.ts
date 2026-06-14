@@ -12,8 +12,45 @@ export class ProcessorRepository implements IProcessorRepository {
     return this.prisma.processor.create({ data: { ...data, order: (last?.order ?? 0) + 1 } })
   }
 
+  private mapWithCount(items: any[]) {
+    return items.map(({ _count, ...rest }) => ({
+      ...rest,
+      count:
+        (_count.expedia_properties ?? 0) +
+        (_count.booking_properties ?? 0) +
+        (_count.agoda_properties ?? 0)
+    }))
+  }
+
   findAll() {
-    return this.prisma.processor.findMany({ orderBy: { order: 'asc' } })
+    return this.prisma.processor.findMany({
+      orderBy: { order: 'asc' },
+      include: {
+        _count: {
+          select: {
+            expedia_properties: true,
+            booking_properties: true,
+            agoda_properties: true
+          }
+        }
+      }
+    }).then(items => this.mapWithCount(items))
+  }
+
+  findAllExcept(id: string) {
+    return this.prisma.processor.findMany({
+      where: { id: { not: id } },
+      orderBy: { order: 'asc' },
+      include: {
+        _count: {
+          select: {
+            expedia_properties: true,
+            booking_properties: true,
+            agoda_properties: true
+          }
+        }
+      }
+    }).then(items => this.mapWithCount(items))
   }
 
   findById(id: string) {

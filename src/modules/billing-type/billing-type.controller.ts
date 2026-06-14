@@ -37,6 +37,15 @@ export class BillingTypeController {
     return this.billingTypeService.findAll(null as any)
   }
 
+  @Get('except/:id')
+  @Public()
+  @ApiOperation({ summary: 'Get all billing types except the specified one (public)' })
+  @ApiResponse({ status: 200, description: 'List of billing types excluding the specified ID' })
+  @ApiResponse({ status: 404, description: 'Billing type not found' })
+  findAllExcept(@Param('id') id: string) {
+    return this.billingTypeService.findAllExcept(id, null as any)
+  }
+
   @Get(':id')
   @RequirePermission(ModuleType.SYSTEM_SETTINGS, PermissionAction.READ)
   @ApiOperation({ summary: 'Get billing type by ID' })
@@ -78,6 +87,6 @@ export class BillingTypeController {
   @ApiResponse({ status: 200, description: 'Billing type deleted' })
   @ApiResponse({ status: 400, description: 'Invalid password' })
   remove(@Param('id') id: string, @Body() dto: DeleteBillingTypeDto, @CurrentUser() user: IUserWithPermissions) {
-    return this.billingTypeService.remove(id, dto.password, user)
+    return this.billingTypeService.remove(id, dto.password, dto.replacementId, user)
   }
 }
