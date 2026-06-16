@@ -1135,7 +1135,13 @@ export class PropertyService implements IPropertyService {
 
     // Map rows to ImportPropertyRow with encryption
     const rows: ImportPropertyRow[] = rawRows
-      .map(r => {
+      .map(rawRow => {
+        // Strip trailing asterisks (and surrounding spaces) from header keys
+        const r: Record<string, any> = {}
+        for (const key of Object.keys(rawRow)) {
+          r[key.replace(/\s*\*+\s*$/, '').trim()] = rawRow[key]
+        }
+
         const propertyName = r['Property Name']
           ? String(r['Property Name']).trim()
           : ''
@@ -1503,11 +1509,20 @@ export class PropertyService implements IPropertyService {
       }
 
       const worksheet = workbook.Sheets[sheetName]
-      const data: Record<string, any>[] = XLSX.utils.sheet_to_json(worksheet)
+      const rawData: Record<string, any>[] = XLSX.utils.sheet_to_json(worksheet)
 
-      if (!data || data.length === 0) {
+      if (!rawData || rawData.length === 0) {
         throw new BadRequestException('File is empty or contains no data rows')
       }
+
+      // Strip trailing asterisks from header keys (e.g. "Currency *" → "Currency")
+      const data: Record<string, any>[] = rawData.map(rawRow => {
+        const cleaned: Record<string, any> = {}
+        for (const key of Object.keys(rawRow)) {
+          cleaned[key.replace(/\s*\*+\s*$/, '').trim()] = rawRow[key]
+        }
+        return cleaned
+      })
 
       result.totalRows = data.length
 
