@@ -1,4 +1,4 @@
-import { BillingType, Currency, Frequency, Processor, Property, ServiceType } from '@prisma/client'
+import { BillingType, Currency, Frequency, Priority, Processor, Property, ServiceType } from '@prisma/client'
 import { PaginatedResult } from '../../common/dto/query.dto'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
 import { BulkUpdateResultDto, CreatePropertyDto, ExportPropertyExcelDto, PropertyFilterDto, UpdatePropertyDto } from './property.dto'
@@ -20,6 +20,9 @@ export type PropertyWithRelations = Property & {
   expedia_processor: Processor | null
   booking_processor: Processor | null
   agoda_processor: Processor | null
+  expedia_priority: Priority | null
+  booking_priority: Priority | null
+  agoda_priority: Priority | null
 }
 
 export interface ImportPropertyRow {
@@ -218,7 +221,7 @@ export interface AllDataForGlobalFilterResponse {
   booking_secondary_username: string[]
   agoda_secondary_username: string[]
   expedia_service_fee: string[]
-  expedia_priority: string[]
+  expedia_priority: Priority[]
   from_db: string[]
   to_db: string[]
   expedia_revised_date: { min: string | null; max: string | null }
@@ -237,14 +240,14 @@ export interface AllDataForGlobalFilterResponse {
   expedia_credential_verified: string[]
   expedia_otp_number: string[]
   booking_service_fee: string[]
-  booking_priority: string[]
+  booking_priority: Priority[]
   booking_crs: string[]
   booking_run_date: string[]
   booking_revised_date: string[]
   booking_credential_verified: string[]
   booking_otp_number: string[]
   agoda_service_fee: string[]
-  agoda_priority: string[]
+  agoda_priority: Priority[]
   agoda_crs: string[]
   agoda_run_date: string[]
   agoda_revised_date: string[]
