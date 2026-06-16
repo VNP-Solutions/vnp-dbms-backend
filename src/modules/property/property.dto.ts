@@ -225,12 +225,12 @@ export class CreatePropertyDto {
   service_type_id?: string
 
   @ApiPropertyOptional({
-    example: 'USD',
-    description: 'Currency code'
+    example: '507f1f77bcf86cd799439099',
+    description: 'Currency ID (MongoDB ObjectId reference to Currency collection)'
   })
-  @IsString()
+  @IsMongoId()
   @IsOptional()
-  currency?: string
+  currency_id?: string
 
   @ApiPropertyOptional({
     example: 'PROP-12345',
@@ -987,6 +987,11 @@ export class PropertyQueryDto extends QueryDto {
   @IsMongoId()
   service_type_id?: string
 
+  @ApiPropertyOptional({ description: 'Filter by currency ID (MongoDB ObjectId)' })
+  @IsOptional()
+  @IsMongoId()
+  currency_id?: string
+
   @ApiPropertyOptional({ description: 'Filter by property identifier (partial match)' })
   @IsOptional()
   @IsString()
@@ -1100,7 +1105,7 @@ export const PROPERTY_FILTER_FIELD_NAMES = [
   'property_id',
   'subportfolio_id',
   'service_type_id',
-  'currency',
+  'currency_id',
   'property_identifier',
   'portfolio_contact',
   'expedia_id',
@@ -1196,8 +1201,8 @@ function swaggerExampleForFilterName(name: PropertyFilterFieldName): {
     return { in: [OID] }
   if (name === 'service_type_id')
     return { in: ['507f1f77bcf86cd799439099'] }
-  if (name === 'currency')
-    return { in: ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'CHF', 'INR'] }
+  if (name === 'currency_id')
+    return { in: ['507f1f77bcf86cd799439099'] }
   if (
     name === 'expedia_id' ||
     name === 'booking_id' ||
@@ -1256,7 +1261,7 @@ const PROPERTY_FILTER_DTO_FILTERS_DESCRIPTION = `Each item: name (required, one 
 
 /** Full narrative for POST /property/filter Swagger operation text. */
 export const PROPERTY_FILTER_OPERATION_DESCRIPTION =
-  `Returns properties with optional pagination. filters[].name must be one of: ${PROPERTY_FILTER_FIELD_NAMES_LIST}. Each filter row: in = array of values (OR match); use in: [] only with sort_by for created_at or updated_at. Boolean fields (expedia_access_level, expedia_scheduler, booking_access_level, booking_scheduler, agoda_access_level, agoda_scheduler) accept true/false or "true"/"false". Numeric in values: expedia_id, booking_id, agoda_id, expedia_duration, booking_duration, agoda_duration. OTA date range filtering: *_from and *_to filters MUST be provided together as pairs (e.g., expedia_from + expedia_to). When both are present, they automatically create a range filter that finds properties where their OTA date ranges overlap with the provided range. Individual *_from or *_to filters without their pair are ignored. Enum strings: billing types VCC, DB, EBS; frequencies REGULAR, ONE_TIME, STOP; processors QuantumPay, Stripe, FreedomPay. Root body (outside filters): page, limit, search, start_date, end_date, is_active, masked, user_name, user_password (when masked=false).`
+  `Returns properties with optional pagination. filters[].name must be one of: ${PROPERTY_FILTER_FIELD_NAMES_LIST}. Each filter row: in = array of values (OR match); use in: [] only with sort_by for created_at or updated_at. Boolean fields (expedia_access_level, expedia_scheduler, booking_access_level, booking_scheduler, agoda_access_level, agoda_scheduler) accept true/false or "true"/"false". Numeric in values: expedia_id, booking_id, agoda_id, expedia_duration, booking_duration, agoda_duration. OTA date range filtering: *_from and *_to filters MUST be provided together as pairs (e.g., expedia_from + expedia_to). When both are present, they automatically create a range filter that finds properties where their OTA date ranges overlap with the provided range. Individual *_from or *_to filters without their pair are ignored. Enum strings: billing types VCC, DB, EBS; frequencies REGULAR, ONE_TIME, STOP; processors QuantumPay, Stripe, FreedomPay. currency_id accepts MongoDB ObjectId strings. Root body (outside filters): page, limit, search, start_date, end_date, is_active, masked, user_name, user_password (when masked=false).`
 
 export class PropertyFilterItem {
   @ApiProperty({
@@ -1499,7 +1504,7 @@ export class AllDataForGlobalFilterResponseDto {
   service_type_id: string[]
 
   @ApiProperty({ type: [String] })
-  currency: string[]
+  currency_id: string[]
 
   @ApiProperty({ type: [String] })
   fp_username: string[]

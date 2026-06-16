@@ -1,4 +1,4 @@
-import { BillingType, Frequency, Processor, Property, ServiceType } from '@prisma/client'
+import { BillingType, Currency, Frequency, Processor, Property, ServiceType } from '@prisma/client'
 import { PaginatedResult } from '../../common/dto/query.dto'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
 import { BulkUpdateResultDto, CreatePropertyDto, ExportPropertyExcelDto, PropertyFilterDto, UpdatePropertyDto } from './property.dto'
@@ -6,6 +6,7 @@ import { BulkUpdateResultDto, CreatePropertyDto, ExportPropertyExcelDto, Propert
 export type PropertyWithRelations = Property & {
   portfolio: { id: string; name: string }
   subportfolio: { id: string; name: string; portfolio_id: string } | null
+  currency: Currency | null
   service_type: ServiceType | null
   expedia_service_type: ServiceType | null
   booking_service_type: ServiceType | null
@@ -182,7 +183,7 @@ export interface AllDataForGlobalFilterResponse {
   property_identifier: string[]
   portfolio_contact: string[]
   service_type_id: string[]
-  currency: string[]
+  currency_id: string[]
   fp_username: string[]
   qp_username: string[]
   previous_portfolio_id: string[]
