@@ -12,6 +12,7 @@ const propertyInclude = {
   portfolio: { select: { id: true, name: true } },
   subportfolio: { select: { id: true, name: true, portfolio_id: true } },
   credentials: true,
+  currency: true,
   service_type: true,
   expedia_service_type: true,
   booking_service_type: true,
@@ -67,7 +68,7 @@ export class PropertyRepository implements IPropertyRepository {
       name: data.name,
       portfolio_id: data.portfolio_id,
       service_type_id: data.service_type_id,
-      currency: data.currency,
+      currency_id: data.currency_id,
       card_descriptor: data.card_descriptor,
       is_active: data.is_active ?? true,
       next_due_date: data.next_due_date ? new Date(data.next_due_date) : undefined,
@@ -432,31 +433,95 @@ export class PropertyRepository implements IPropertyRepository {
       if (row.caseManagementContact) propertyPayload.case_management_contact = row.caseManagementContact
       if (row.accessContact) propertyPayload.access_contact = row.accessContact
       if (row.reportingContact) propertyPayload.reporting_contact = row.reportingContact
-      // Helper: resolve lookup name → ID (returns undefined if not found)
+      // Normalize a string to UPPER_SNAKE_CASE (for ServiceType and Frequency)
+      const toUpperSnakeCase = (val: string): string =>
+        val.trim().toUpperCase().replace(/[\s\-.]+/g, '_').replace(/_+/g, '_').replace(/^_|_$/, '')
+
+      // Helper: resolve processor name → ID (find or create)
       const resolveProcessor = async (name?: string): Promise<string | undefined> => {
         if (!name) return undefined
-        const rec = await this.prisma.processor.findFirst({ where: { name: { equals: name, mode: 'insensitive' } } })
-        return rec?.id
+        const normalized = name.trim()
+        let rec = await this.prisma.processor.findFirst({ where: { name: { equals: normalized, mode: 'insensitive' } } })
+        if (!rec) {
+          const last = await this.prisma.processor.findFirst({ orderBy: { order: 'desc' }, select: { order: true } })
+          rec = await this.prisma.processor.create({ data: { name: normalized, is_active: true, order: (last?.order ?? 0) + 1 } })
+          logger.log(`Processor "${normalized}" created during import`)
+        }
+        return rec.id
       }
+
+      // Helper: resolve service type name → ID (normalize to UPPER_SNAKE_CASE, find or create)
       const resolveServiceType = async (name?: string): Promise<string | undefined> => {
         if (!name) return undefined
-        const rec = await this.prisma.serviceType.findFirst({ where: { type: { equals: name, mode: 'insensitive' } } })
-        return rec?.id
+        const normalized = toUpperSnakeCase(name)
+        let rec = await this.prisma.serviceType.findFirst({ where: { type: { equals: normalized, mode: 'insensitive' } } })
+        if (!rec) {
+          const maxOrder = await this.prisma.serviceType.findFirst({ orderBy: { order: 'desc' }, select: { order: true } })
+          rec = await this.prisma.serviceType.create({ data: { type: normalized, is_active: true, order: (maxOrder?.order ?? 0) + 1 } })
+          logger.log(`ServiceType "${normalized}" created during import`)
+        }
+        return rec.id
       }
+
+      // Helper: resolve billing type name → ID (find or create)
       const resolveBillingType = async (name?: string): Promise<string | undefined> => {
         if (!name) return undefined
-        const rec = await this.prisma.billingType.findFirst({ where: { name: { equals: name, mode: 'insensitive' } } })
-        return rec?.id
+        const normalized = name.trim()
+        let rec = await this.prisma.billingType.findFirst({ where: { name: { equals: normalized, mode: 'insensitive' } } })
+        if (!rec) {
+          const last = await this.prisma.billingType.findFirst({ orderBy: { order: 'desc' }, select: { order: true } })
+          rec = await this.prisma.billingType.create({ data: { name: normalized, is_active: true, order: (last?.order ?? 0) + 1 } })
+          logger.log(`BillingType "${normalized}" created during import`)
+        }
+        return rec.id
       }
+
+      // Helper: resolve frequency name → ID (normalize to UPPER_SNAKE_CASE, find or create)
       const resolveFrequency = async (name?: string): Promise<string | undefined> => {
         if (!name) return undefined
-        const rec = await this.prisma.frequency.findFirst({ where: { name: { equals: name, mode: 'insensitive' } } })
-        return rec?.id
+        const normalized = toUpperSnakeCase(name)
+        let rec = await this.prisma.frequency.findFirst({ where: { name: { equals: normalized, mode: 'insensitive' } } })
+        if (!rec) {
+          const last = await this.prisma.frequency.findFirst({ orderBy: { order: 'desc' }, select: { order: true } })
+          rec = await this.prisma.frequency.create({ data: { name: normalized, is_active: true, order: (last?.order ?? 0) + 1 } })
+          logger.log(`Frequency "${normalized}" created during import`)
+        }
+        return rec.id
+      }
+
+      // Helper: resolve priority name → name string (find or create Priority record, return name)
+      const resolvePriority = async (name?: string): Promise<string | undefined> => {
+        if (!name) return undefined
+        const normalized = name.trim()
+        let rec = await this.prisma.priority.findFirst({ where: { name: { equals: normalized, mode: 'insensitive' } } })
+        if (!rec) {
+          const last = await this.prisma.priority.findFirst({ orderBy: { order: 'desc' }, select: { order: true } })
+          rec = await this.prisma.priority.create({ data: { name: normalized, is_active: true, order: (last?.order ?? 0) + 1 } })
+          logger.log(`Priority "${normalized}" created during import`)
+        }
+        return rec.name
+      }
+
+      // Helper: resolve currency code → currency_id (find or create Currency, return id)
+      const resolveCurrency = async (code?: string): Promise<string | undefined> => {
+        if (!code) return undefined
+        const normalized = code.trim().toUpperCase()
+        let rec = await this.prisma.currency.findFirst({ where: { code: { equals: normalized, mode: 'insensitive' } } })
+        if (!rec) {
+          const last = await this.prisma.currency.findFirst({ orderBy: { order: 'desc' }, select: { order: true } })
+          rec = await this.prisma.currency.create({ data: { code: normalized, name: normalized, is_active: true, order: (last?.order ?? 0) + 1 } })
+          logger.log(`Currency "${normalized}" created during import`)
+        }
+        return rec.id
       }
 
       if (row.expediaProcessor) propertyPayload.expedia_processor_id = await resolveProcessor(row.expediaProcessor)
       if (row.bookingProcessor) propertyPayload.booking_processor_id = await resolveProcessor(row.bookingProcessor)
       if (row.agodaProcessor) propertyPayload.agoda_processor_id = await resolveProcessor(row.agodaProcessor)
+      // Resolve priority (find-or-create Priority record, store name as string in property)
+      if (row.expediaPriority) propertyPayload.expedia_priority = await resolvePriority(row.expediaPriority)
+      if (row.bookingPriority) propertyPayload.booking_priority = await resolvePriority(row.bookingPriority)
+      if (row.agodaPriority) propertyPayload.agoda_priority = await resolvePriority(row.agodaPriority)
       if (row.fpMid) propertyPayload.fp_mid = row.fpMid
       if (row.stripeAccountEmail) propertyPayload.stripe_account_email = row.stripeAccountEmail
       if (row.expediaBillingType)
@@ -510,7 +575,6 @@ export class PropertyRepository implements IPropertyRepository {
         propertyPayload.primary_case_email = row.caseContactEmail
       // New Expedia fields
       if (row.expediaServiceFee) propertyPayload.expedia_service_fee = parseInt(row.expediaServiceFee) || undefined
-      if (row.expediaPriority) propertyPayload.expedia_priority = row.expediaPriority
       if (row.expediaCrs) propertyPayload.expedia_crs = row.expediaCrs
       if (row.expediaCrsDb) propertyPayload.expedia_crs_db = row.expediaCrsDb
       if (row.expediaRunDateFrom) propertyPayload.expedia_run_date_from = row.expediaRunDateFrom
@@ -530,7 +594,6 @@ export class PropertyRepository implements IPropertyRepository {
       if (row.toDb) propertyPayload.to_db = row.toDb
       // New Booking fields
       if (row.bookingServiceFee) propertyPayload.booking_service_fee = parseInt(row.bookingServiceFee) || undefined
-      if (row.bookingPriority) propertyPayload.booking_priority = row.bookingPriority
       if (row.bookingCrs) propertyPayload.booking_crs = row.bookingCrs
       if (row.bookingRunDate) propertyPayload.booking_run_date = row.bookingRunDate
       if (row.bookingRevisedDate) propertyPayload.booking_revised_date = row.bookingRevisedDate
@@ -538,7 +601,6 @@ export class PropertyRepository implements IPropertyRepository {
       if (row.bookingOtpNumber) propertyPayload.booking_otp_number = row.bookingOtpNumber
       // New Agoda fields
       if (row.agodaServiceFee) propertyPayload.agoda_service_fee = parseInt(row.agodaServiceFee) || undefined
-      if (row.agodaPriority) propertyPayload.agoda_priority = row.agodaPriority
       if (row.agodaCrs) propertyPayload.agoda_crs = row.agodaCrs
       if (row.agodaRunDate) propertyPayload.agoda_run_date = row.agodaRunDate
       if (row.agodaRevisedDate) propertyPayload.agoda_revised_date = row.agodaRevisedDate
@@ -550,7 +612,7 @@ export class PropertyRepository implements IPropertyRepository {
       if (row.serviceTypeName) {
         propertyPayload.service_type_id = await resolveServiceType(row.serviceTypeName)
       }
-      if (row.currency) propertyPayload.currency = row.currency.trim()
+      if (row.currency) propertyPayload.currency_id = await resolveCurrency(row.currency)
 
       if (!propertyPayload.expedia_status) propertyPayload.expedia_status = 'Access Required'
       if (!propertyPayload.booking_status) propertyPayload.booking_status = 'Access Required'

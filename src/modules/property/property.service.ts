@@ -438,8 +438,8 @@ export class PropertyService implements IPropertyService {
           case 'service_type_id':
             whereConditions.push({ service_type_id: { in: values } })
             break
-          case 'currency':
-            whereConditions.push({ currency: { in: values } })
+          case 'currency_id':
+            whereConditions.push({ currency_id: { in: values } })
             break
           case 'property_identifier':
             whereConditions.push({ property_identifier: { in: values } })
@@ -1271,9 +1271,11 @@ export class PropertyService implements IPropertyService {
             : undefined,
           expediaBillingType: parseEnum(r['Expedia Billing Type']),
           expediaServiceType: r['Expedia Service Type']
-            ? String(r['Expedia Service Type']).trim()
+            ? String(r['Expedia Service Type']).trim().toUpperCase().replace(/[\s\-.]+/g, '_').replace(/_+/g, '_').replace(/^_|_$/, '')
             : undefined,
-          expediaFrequency: parseEnum(r['Expedia Frequency']),
+          expediaFrequency: r['Expedia Frequency']
+            ? String(r['Expedia Frequency']).trim().toUpperCase().replace(/[\s\-.]+/g, '_').replace(/_+/g, '_').replace(/^_|_$/, '')
+            : undefined,
           expediaAccessLevel: parseBool(r['Expedia Access Level']),
           expediaFrom: r['Expedia From']
             ? String(r['Expedia From']).trim()
@@ -1287,9 +1289,11 @@ export class PropertyService implements IPropertyService {
             : undefined,
           bookingBillingType: parseEnum(r['Booking Billing Type']),
           bookingServiceType: r['Booking Service Type']
-            ? String(r['Booking Service Type']).trim()
+            ? String(r['Booking Service Type']).trim().toUpperCase().replace(/[\s\-.]+/g, '_').replace(/_+/g, '_').replace(/^_|_$/, '')
             : undefined,
-          bookingFrequency: parseEnum(r['Booking Frequency']),
+          bookingFrequency: r['Booking Frequency']
+            ? String(r['Booking Frequency']).trim().toUpperCase().replace(/[\s\-.]+/g, '_').replace(/_+/g, '_').replace(/^_|_$/, '')
+            : undefined,
           bookingAccessLevel: parseBool(r['Booking Access Level']),
           bookingFrom: r['Booking From']
             ? String(r['Booking From']).trim()
@@ -1303,9 +1307,11 @@ export class PropertyService implements IPropertyService {
             : undefined,
           agodaBillingType: parseEnum(r['Agoda Billing Type']),
           agodaServiceType: r['Agoda Service Type']
-            ? String(r['Agoda Service Type']).trim()
+            ? String(r['Agoda Service Type']).trim().toUpperCase().replace(/[\s\-.]+/g, '_').replace(/_+/g, '_').replace(/^_|_$/, '')
             : undefined,
-          agodaFrequency: parseEnum(r['Agoda Frequency']),
+          agodaFrequency: r['Agoda Frequency']
+            ? String(r['Agoda Frequency']).trim().toUpperCase().replace(/[\s\-.]+/g, '_').replace(/_+/g, '_').replace(/^_|_$/, '')
+            : undefined,
           agodaAccessLevel: parseBool(r['Agoda Access Level']),
           agodaFrom: r['Agoda From']
             ? String(r['Agoda From']).trim()
@@ -1322,7 +1328,7 @@ export class PropertyService implements IPropertyService {
             ? String(r['Booking OTP Phone']).trim()
             : undefined,
           serviceTypeName: r['Service Type']
-            ? String(r['Service Type']).trim()
+            ? String(r['Service Type']).trim().toUpperCase().replace(/[\s\-.]+/g, '_').replace(/_+/g, '_').replace(/^_|_$/, '')
             : undefined,
           currency: r['Currency']
             ? String(r['Currency']).trim()
@@ -1560,26 +1566,50 @@ export class PropertyService implements IPropertyService {
           const propertyId = existingProperty.id
           const updateData: Record<string, any> = {}
 
-          // Helper functions to resolve names to ObjectIds
+          // Normalize to UPPER_SNAKE_CASE (ServiceType and Frequency)
+          const toUpperSnakeCase = (val: string): string =>
+            val.trim().toUpperCase().replace(/[\s\-.]+/g, '_').replace(/_+/g, '_').replace(/^_|_$/, '')
+
+          // Helper functions to resolve names to ObjectIds (find-or-create)
           const resolveProcessor = async (name?: string): Promise<string | undefined> => {
             if (!name) return undefined
-            const rec = await this.prisma.processor.findFirst({ where: { name: { equals: name, mode: 'insensitive' } } })
-            return rec?.id
+            const normalized = name.trim()
+            let rec = await this.prisma.processor.findFirst({ where: { name: { equals: normalized, mode: 'insensitive' } } })
+            if (!rec) {
+              const last = await this.prisma.processor.findFirst({ orderBy: { order: 'desc' }, select: { order: true } })
+              rec = await this.prisma.processor.create({ data: { name: normalized, is_active: true, order: (last?.order ?? 0) + 1 } })
+            }
+            return rec.id
           }
           const resolveServiceType = async (name?: string): Promise<string | undefined> => {
             if (!name) return undefined
-            const rec = await this.prisma.serviceType.findFirst({ where: { type: { equals: name, mode: 'insensitive' } } })
-            return rec?.id
+            const normalized = toUpperSnakeCase(name)
+            let rec = await this.prisma.serviceType.findFirst({ where: { type: { equals: normalized, mode: 'insensitive' } } })
+            if (!rec) {
+              const maxOrder = await this.prisma.serviceType.findFirst({ orderBy: { order: 'desc' }, select: { order: true } })
+              rec = await this.prisma.serviceType.create({ data: { type: normalized, is_active: true, order: (maxOrder?.order ?? 0) + 1 } })
+            }
+            return rec.id
           }
           const resolveBillingType = async (name?: string): Promise<string | undefined> => {
             if (!name) return undefined
-            const rec = await this.prisma.billingType.findFirst({ where: { name: { equals: name, mode: 'insensitive' } } })
-            return rec?.id
+            const normalized = name.trim()
+            let rec = await this.prisma.billingType.findFirst({ where: { name: { equals: normalized, mode: 'insensitive' } } })
+            if (!rec) {
+              const last = await this.prisma.billingType.findFirst({ orderBy: { order: 'desc' }, select: { order: true } })
+              rec = await this.prisma.billingType.create({ data: { name: normalized, is_active: true, order: (last?.order ?? 0) + 1 } })
+            }
+            return rec.id
           }
           const resolveFrequency = async (name?: string): Promise<string | undefined> => {
             if (!name) return undefined
-            const rec = await this.prisma.frequency.findFirst({ where: { name: { equals: name, mode: 'insensitive' } } })
-            return rec?.id
+            const normalized = toUpperSnakeCase(name)
+            let rec = await this.prisma.frequency.findFirst({ where: { name: { equals: normalized, mode: 'insensitive' } } })
+            if (!rec) {
+              const last = await this.prisma.frequency.findFirst({ orderBy: { order: 'desc' }, select: { order: true } })
+              rec = await this.prisma.frequency.create({ data: { name: normalized, is_active: true, order: (last?.order ?? 0) + 1 } })
+            }
+            return rec.id
           }
 
           // Rename: only possible when matched by property_identifier.
@@ -1656,9 +1686,17 @@ export class PropertyService implements IPropertyService {
           const serviceType = findValue(row, ['Service Type', 'Service type'])
           if (serviceType !== undefined) updateData.service_type_id = await resolveServiceType(serviceType)
 
-          // Currency
-          const currency = findValue(row, ['Currency', 'currency'])
-          if (currency !== undefined) updateData.currency = currency
+          // Currency — resolve code → currency_id (find or create)
+          const currencyCode = findValue(row, ['Currency', 'currency'])
+          if (currencyCode !== undefined) {
+            const normalized = currencyCode.trim().toUpperCase()
+            let currencyRec = await this.prisma.currency.findFirst({ where: { code: { equals: normalized, mode: 'insensitive' } } })
+            if (!currencyRec) {
+              const last = await this.prisma.currency.findFirst({ orderBy: { order: 'desc' }, select: { order: true } })
+              currencyRec = await this.prisma.currency.create({ data: { code: normalized, name: normalized, is_active: true, order: (last?.order ?? 0) + 1 } })
+            }
+            updateData.currency_id = currencyRec.id
+          }
 
           // Next due date
           const nextDueDateRaw = getRawValue(row, ['Next Due Date', 'Next due date', 'Due Date'])
@@ -2265,8 +2303,8 @@ export class PropertyService implements IPropertyService {
       if (property.portfolio_id) portfolioIdSet.add(property.portfolio_id)
       if (property.service_type_id)
         uniqueServiceTypeIds.add(property.service_type_id)
-      if (property.currency)
-        uniqueCurrencies.add(property.currency)
+      if (property.currency_id)
+        uniqueCurrencies.add(property.currency_id)
       if (property.expedia_id) uniqueExpediaIds.add(property.expedia_id)
       if (property.booking_id) uniqueBookingIds.add(property.booking_id)
       if (property.agoda_id) uniqueAgodaIds.add(property.agoda_id)
@@ -2503,7 +2541,7 @@ export class PropertyService implements IPropertyService {
       property_identifier: Array.from(uniquePropertyIdentifiers).sort(),
       portfolio_contact: Array.from(uniquePortfolioContacts).sort(),
       service_type_id: Array.from(uniqueServiceTypeIds).sort(),
-      currency: Array.from(uniqueCurrencies).sort(),
+      currency_id: Array.from(uniqueCurrencies).sort(),
       fp_username: Array.from(uniqueFpUsernames).sort(),
       qp_username: Array.from(uniqueQpUsernames).sort(),
       previous_portfolio_id: Array.from(uniquePreviousPortfolioIds).sort(),

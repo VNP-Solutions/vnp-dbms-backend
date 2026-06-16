@@ -33,14 +33,14 @@ export class CurrencyService implements ICurrencyService {
     return this.currencyRepository.create(data)
   }
 
-  private async attachCounts<T extends { code: string }>(items: T[]): Promise<(T & { count: number })[]> {
+  private async attachCounts<T extends { id: string }>(items: T[]): Promise<(T & { count: number })[]> {
     const propertyCounts = await this.prisma.property.groupBy({
-      by: ['currency'],
+      by: ['currency_id'],
       _count: { id: true },
-      where: { currency: { not: null } }
+      where: { currency_id: { not: null } }
     })
-    const countMap = new Map(propertyCounts.map(p => [p.currency, p._count.id]))
-    return items.map(item => ({ ...item, count: countMap.get(item.code) ?? 0 }))
+    const countMap = new Map(propertyCounts.map(p => [p.currency_id, p._count.id]))
+    return items.map(item => ({ ...item, count: countMap.get(item.id) ?? 0 }))
   }
 
   async findAll(query: CurrencyQueryDto, _user: IUserWithPermissions) {
@@ -126,7 +126,7 @@ export class CurrencyService implements ICurrencyService {
     }
 
     await this.prisma.$transaction([
-      this.prisma.property.updateMany({ where: { currency: currency.code }, data: { currency: replacement.code } }),
+      this.prisma.property.updateMany({ where: { currency_id: id }, data: { currency_id: replacementId } }),
       this.prisma.currency.delete({ where: { id } })
     ])
 
