@@ -2247,9 +2247,9 @@ export class PropertyService implements IPropertyService {
     const uniqueCaseManagementContacts = new Set<string>()
     const uniqueAccessContacts = new Set<string>()
     const uniqueReportingContacts = new Set<string>()
-    const uniqueExpediaProcessorIds = new Set<string>()
-    const uniqueBookingProcessorIds = new Set<string>()
-    const uniqueAgodaProcessorIds = new Set<string>()
+    const expediaProcessorMap = new Map<string, any>()
+    const bookingProcessorMap = new Map<string, any>()
+    const agodaProcessorMap = new Map<string, any>()
     const uniqueFpMids = new Set<string>()
     const uniqueStripeAccountEmails = new Set<string>()
     const uniqueFromDates = new Set<string>()
@@ -2257,21 +2257,21 @@ export class PropertyService implements IPropertyService {
     const uniquePropertyIdentifiers = new Set<string>()
     const uniquePortfolioContacts = new Set<string>()
     const uniqueFpUsernames = new Set<string>()
-    const uniqueExpediaBillingTypeIds = new Set<string>()
-    const uniqueExpediaServiceTypeIds = new Set<string>()
-    const uniqueExpediaFrequencyIds = new Set<string>()
+    const expediaBillingTypeMap = new Map<string, any>()
+    const expediaServiceTypeMap = new Map<string, any>()
+    const expediaFrequencyMap = new Map<string, any>()
     const uniqueExpediaFroms = new Set<string>()
     const uniqueExpediaTos = new Set<string>()
     const uniqueExpediaDurations = new Set<string>()
-    const uniqueBookingBillingTypeIds = new Set<string>()
-    const uniqueBookingServiceTypeIds = new Set<string>()
-    const uniqueBookingFrequencyIds = new Set<string>()
+    const bookingBillingTypeMap = new Map<string, any>()
+    const bookingServiceTypeMap = new Map<string, any>()
+    const bookingFrequencyMap = new Map<string, any>()
     const uniqueBookingFroms = new Set<string>()
     const uniqueBookingTos = new Set<string>()
     const uniqueBookingDurations = new Set<string>()
-    const uniqueAgodaBillingTypeIds = new Set<string>()
-    const uniqueAgodaServiceTypeIds = new Set<string>()
-    const uniqueAgodaFrequencyIds = new Set<string>()
+    const agodaBillingTypeMap = new Map<string, any>()
+    const agodaServiceTypeMap = new Map<string, any>()
+    const agodaFrequencyMap = new Map<string, any>()
     const uniqueAgodaFroms = new Set<string>()
     const uniqueAgodaTos = new Set<string>()
     const uniqueAgodaDurations = new Set<string>()
@@ -2280,8 +2280,8 @@ export class PropertyService implements IPropertyService {
       string,
       { id: string; name: string; portfolio_id: string }
     >()
-    const uniqueServiceTypeIds = new Set<string>()
-    const uniqueCurrencies = new Set<string>()
+    const serviceTypeMap = new Map<string, any>()
+    const currencyMap = new Map<string, any>()
     const uniqueDescriptions = new Set<string>()
     const uniqueExpediaStatuses = new Set<string>()
     const uniqueBookingStatuses = new Set<string>()
@@ -2316,10 +2316,10 @@ export class PropertyService implements IPropertyService {
 
     properties.forEach((property: any) => {
       if (property.portfolio_id) portfolioIdSet.add(property.portfolio_id)
-      if (property.service_type_id)
-        uniqueServiceTypeIds.add(property.service_type_id)
-      if (property.currency_id)
-        uniqueCurrencies.add(property.currency_id)
+      if (property.service_type)
+        serviceTypeMap.set(property.service_type.id, property.service_type)
+      if (property.currency)
+        currencyMap.set(property.currency.id, property.currency)
       if (property.expedia_id) uniqueExpediaIds.add(property.expedia_id)
       if (property.booking_id) uniqueBookingIds.add(property.booking_id)
       if (property.agoda_id) uniqueAgodaIds.add(property.agoda_id)
@@ -2364,12 +2364,12 @@ export class PropertyService implements IPropertyService {
             ? property.next_due_date.toISOString()
             : String(property.next_due_date)
         )
-      if (property.expedia_processor_id)
-        uniqueExpediaProcessorIds.add(property.expedia_processor_id)
-      if (property.booking_processor_id)
-        uniqueBookingProcessorIds.add(property.booking_processor_id)
-      if (property.agoda_processor_id)
-        uniqueAgodaProcessorIds.add(property.agoda_processor_id)
+      if (property.expedia_processor)
+        expediaProcessorMap.set(property.expedia_processor.id, property.expedia_processor)
+      if (property.booking_processor)
+        bookingProcessorMap.set(property.booking_processor.id, property.booking_processor)
+      if (property.agoda_processor)
+        agodaProcessorMap.set(property.agoda_processor.id, property.agoda_processor)
       if (property.fp_mid)
         uniqueFpMids.add(property.fp_mid)
       if (property.stripe_account_email)
@@ -2389,12 +2389,12 @@ export class PropertyService implements IPropertyService {
       if (property.portfolio_contact)
         uniquePortfolioContacts.add(property.portfolio_contact)
       if (property.fp_username) uniqueFpUsernames.add(property.fp_username)
-      if (property.expedia_billing_type_id)
-        uniqueExpediaBillingTypeIds.add(property.expedia_billing_type_id)
-      if (property.expedia_service_type_id)
-        uniqueExpediaServiceTypeIds.add(property.expedia_service_type_id)
-      if (property.expedia_frequency_id)
-        uniqueExpediaFrequencyIds.add(property.expedia_frequency_id)
+      if (property.expedia_billing_type)
+        expediaBillingTypeMap.set(property.expedia_billing_type.id, property.expedia_billing_type)
+      if (property.expedia_service_type)
+        expediaServiceTypeMap.set(property.expedia_service_type.id, property.expedia_service_type)
+      if (property.expedia_frequency)
+        expediaFrequencyMap.set(property.expedia_frequency.id, property.expedia_frequency)
       if (property.expedia_from) uniqueExpediaFroms.add(property.expedia_from)
       if (property.expedia_to) uniqueExpediaTos.add(property.expedia_to)
       if (property.expedia_duration != null)
@@ -2403,12 +2403,12 @@ export class PropertyService implements IPropertyService {
         uniqueExpediaAccessLevels.add(String(property.expedia_access_level))
       if (property.expedia_scheduler != null)
         uniqueExpediaSchedulers.add(String(property.expedia_scheduler))
-      if (property.booking_billing_type_id)
-        uniqueBookingBillingTypeIds.add(property.booking_billing_type_id)
-      if (property.booking_service_type_id)
-        uniqueBookingServiceTypeIds.add(property.booking_service_type_id)
-      if (property.booking_frequency_id)
-        uniqueBookingFrequencyIds.add(property.booking_frequency_id)
+      if (property.booking_billing_type)
+        bookingBillingTypeMap.set(property.booking_billing_type.id, property.booking_billing_type)
+      if (property.booking_service_type)
+        bookingServiceTypeMap.set(property.booking_service_type.id, property.booking_service_type)
+      if (property.booking_frequency)
+        bookingFrequencyMap.set(property.booking_frequency.id, property.booking_frequency)
       if (property.booking_from) uniqueBookingFroms.add(property.booking_from)
       if (property.booking_to) uniqueBookingTos.add(property.booking_to)
       if (property.booking_duration != null)
@@ -2417,12 +2417,12 @@ export class PropertyService implements IPropertyService {
         uniqueBookingAccessLevels.add(String(property.booking_access_level))
       if (property.booking_scheduler != null)
         uniqueBookingSchedulers.add(String(property.booking_scheduler))
-      if (property.agoda_billing_type_id)
-        uniqueAgodaBillingTypeIds.add(property.agoda_billing_type_id)
-      if (property.agoda_service_type_id)
-        uniqueAgodaServiceTypeIds.add(property.agoda_service_type_id)
-      if (property.agoda_frequency_id)
-        uniqueAgodaFrequencyIds.add(property.agoda_frequency_id)
+      if (property.agoda_billing_type)
+        agodaBillingTypeMap.set(property.agoda_billing_type.id, property.agoda_billing_type)
+      if (property.agoda_service_type)
+        agodaServiceTypeMap.set(property.agoda_service_type.id, property.agoda_service_type)
+      if (property.agoda_frequency)
+        agodaFrequencyMap.set(property.agoda_frequency.id, property.agoda_frequency)
       if (property.agoda_from) uniqueAgodaFroms.add(property.agoda_from)
       if (property.agoda_to) uniqueAgodaTos.add(property.agoda_to)
       if (property.agoda_duration != null)
@@ -2546,40 +2546,40 @@ export class PropertyService implements IPropertyService {
       expedia_status: Array.from(uniqueExpediaStatuses).sort(),
       booking_status: Array.from(uniqueBookingStatuses).sort(),
       agoda_status: Array.from(uniqueAgodaStatuses).sort(),
-      expedia_processor_id: Array.from(uniqueExpediaProcessorIds).sort(),
-      booking_processor_id: Array.from(uniqueBookingProcessorIds).sort(),
-      agoda_processor_id: Array.from(uniqueAgodaProcessorIds).sort(),
+      expedia_processor: Array.from(expediaProcessorMap.values()).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+      booking_processor: Array.from(bookingProcessorMap.values()).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+      agoda_processor: Array.from(agodaProcessorMap.values()).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
       fp_mid: Array.from(uniqueFpMids).sort(),
       stripe_account_email: Array.from(uniqueStripeAccountEmails).sort(),
       from: Array.from(uniqueFromDates).sort(),
       to: Array.from(uniqueToDates).sort(),
       property_identifier: Array.from(uniquePropertyIdentifiers).sort(),
       portfolio_contact: Array.from(uniquePortfolioContacts).sort(),
-      service_type_id: Array.from(uniqueServiceTypeIds).sort(),
-      currency_id: Array.from(uniqueCurrencies).sort(),
+      service_type: Array.from(serviceTypeMap.values()).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+      currency: Array.from(currencyMap.values()).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
       fp_username: Array.from(uniqueFpUsernames).sort(),
       qp_username: Array.from(uniqueQpUsernames).sort(),
       previous_portfolio_id: Array.from(uniquePreviousPortfolioIds).sort(),
       next_due_date: Array.from(uniqueNextDueDates).sort(),
-      expedia_billing_type_id: Array.from(uniqueExpediaBillingTypeIds).sort(),
-      expedia_service_type_id: Array.from(uniqueExpediaServiceTypeIds).sort(),
-      expedia_frequency_id: Array.from(uniqueExpediaFrequencyIds).sort(),
+      expedia_billing_type: Array.from(expediaBillingTypeMap.values()).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+      expedia_service_type: Array.from(expediaServiceTypeMap.values()).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+      expedia_frequency: Array.from(expediaFrequencyMap.values()).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
       expedia_from: Array.from(uniqueExpediaFroms).sort(),
       expedia_to: Array.from(uniqueExpediaTos).sort(),
       expedia_duration: Array.from(uniqueExpediaDurations).sort(),
       expedia_access_level: Array.from(uniqueExpediaAccessLevels).sort(),
       expedia_scheduler: Array.from(uniqueExpediaSchedulers).sort(),
-      booking_billing_type_id: Array.from(uniqueBookingBillingTypeIds).sort(),
-      booking_service_type_id: Array.from(uniqueBookingServiceTypeIds).sort(),
-      booking_frequency_id: Array.from(uniqueBookingFrequencyIds).sort(),
+      booking_billing_type: Array.from(bookingBillingTypeMap.values()).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+      booking_service_type: Array.from(bookingServiceTypeMap.values()).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+      booking_frequency: Array.from(bookingFrequencyMap.values()).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
       booking_from: Array.from(uniqueBookingFroms).sort(),
       booking_to: Array.from(uniqueBookingTos).sort(),
       booking_duration: Array.from(uniqueBookingDurations).sort(),
       booking_access_level: Array.from(uniqueBookingAccessLevels).sort(),
       booking_scheduler: Array.from(uniqueBookingSchedulers).sort(),
-      agoda_billing_type_id: Array.from(uniqueAgodaBillingTypeIds).sort(),
-      agoda_service_type_id: Array.from(uniqueAgodaServiceTypeIds).sort(),
-      agoda_frequency_id: Array.from(uniqueAgodaFrequencyIds).sort(),
+      agoda_billing_type: Array.from(agodaBillingTypeMap.values()).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+      agoda_service_type: Array.from(agodaServiceTypeMap.values()).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+      agoda_frequency: Array.from(agodaFrequencyMap.values()).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
       agoda_from: Array.from(uniqueAgodaFroms).sort(),
       agoda_to: Array.from(uniqueAgodaTos).sort(),
       agoda_duration: Array.from(uniqueAgodaDurations).sort(),
