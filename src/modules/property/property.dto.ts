@@ -488,10 +488,10 @@ export class CreatePropertyDto {
   @Type(() => Number)
   expedia_service_fee?: number
 
-  @ApiPropertyOptional({ description: 'Expedia priority' })
-  @IsString()
+  @ApiPropertyOptional({ example: '507f1f77bcf86cd799439099', description: 'Expedia Priority ID (MongoDB ObjectId)' })
+  @IsMongoId()
   @IsOptional()
-  expedia_priority?: string
+  expedia_priority_id?: string
 
   @ApiPropertyOptional({ description: 'Expedia CRS' })
   @IsString()
@@ -644,10 +644,10 @@ export class CreatePropertyDto {
   @Type(() => Number)
   booking_service_fee?: number
 
-  @ApiPropertyOptional({ description: 'Booking priority' })
-  @IsString()
+  @ApiPropertyOptional({ example: '507f1f77bcf86cd799439099', description: 'Booking Priority ID (MongoDB ObjectId)' })
+  @IsMongoId()
   @IsOptional()
-  booking_priority?: string
+  booking_priority_id?: string
 
   @ApiPropertyOptional({ description: 'Booking CRS' })
   @IsString()
@@ -745,10 +745,10 @@ export class CreatePropertyDto {
   @Type(() => Number)
   agoda_service_fee?: number
 
-  @ApiPropertyOptional({ description: 'Agoda priority' })
-  @IsString()
+  @ApiPropertyOptional({ example: '507f1f77bcf86cd799439099', description: 'Agoda Priority ID (MongoDB ObjectId)' })
+  @IsMongoId()
   @IsOptional()
-  agoda_priority?: string
+  agoda_priority_id?: string
 
   @ApiPropertyOptional({ description: 'Agoda CRS' })
   @IsString()
@@ -1158,7 +1158,7 @@ export const PROPERTY_FILTER_FIELD_NAMES = [
   'created_at',
   'updated_at',
   'expedia_service_fee',
-  'expedia_priority',
+  'expedia_priority_id',
   'from_db',
   'to_db',
   'expedia_revised_date_from',
@@ -1177,8 +1177,10 @@ export const PROPERTY_FILTER_FIELD_NAMES = [
   'expedia_credential_verified',
   'expedia_otp_number',
   'booking_service_fee',
+  'booking_priority_id',
   'booking_credential_verified',
   'agoda_service_fee',
+  'agoda_priority_id',
   'agoda_credential_verified',
   'sales_rep'
 ] as const
@@ -1202,6 +1204,8 @@ function swaggerExampleForFilterName(name: PropertyFilterFieldName): {
   if (name === 'service_type_id')
     return { in: ['507f1f77bcf86cd799439099'] }
   if (name === 'currency_id')
+    return { in: ['507f1f77bcf86cd799439099'] }
+  if (name === 'expedia_priority_id' || name === 'booking_priority_id' || name === 'agoda_priority_id')
     return { in: ['507f1f77bcf86cd799439099'] }
   if (
     name === 'expedia_id' ||
@@ -1635,6 +1639,15 @@ export class AllDataForGlobalFilterResponseDto {
 
   @ApiProperty({ type: [String] })
   agoda_secondary_username: string[]
+
+  @ApiProperty({ type: [Object], description: 'Unique Expedia Priority objects used across accessible properties' })
+  expedia_priority: object[]
+
+  @ApiProperty({ type: [Object], description: 'Unique Booking Priority objects used across accessible properties' })
+  booking_priority: object[]
+
+  @ApiProperty({ type: [Object], description: 'Unique Agoda Priority objects used across accessible properties' })
+  agoda_priority: object[]
 }
 
 export class ExportPropertyExcelDto extends PropertyFilterDto {

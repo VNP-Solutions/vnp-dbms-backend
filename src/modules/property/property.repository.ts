@@ -25,7 +25,10 @@ const propertyInclude = {
   agoda_frequency: true,
   expedia_processor: true,
   booking_processor: true,
-  agoda_processor: true
+  agoda_processor: true,
+  expedia_priority: true,
+  booking_priority: true,
+  agoda_priority: true
 }
 
 @Injectable()
@@ -129,7 +132,7 @@ export class PropertyRepository implements IPropertyRepository {
       agoda_scheduler: data.agoda_scheduler,
       agoda_duration: data.agoda_duration,
       expedia_service_fee: data.expedia_service_fee,
-      expedia_priority: data.expedia_priority,
+      expedia_priority_id: data.expedia_priority_id,
       expedia_crs: data.expedia_crs,
       expedia_crs_db: data.expedia_crs_db,
       expedia_run_date_from: data.expedia_run_date_from,
@@ -148,14 +151,14 @@ export class PropertyRepository implements IPropertyRepository {
       from_db: data.from_db,
       to_db: data.to_db,
       booking_service_fee: data.booking_service_fee,
-      booking_priority: data.booking_priority,
+      booking_priority_id: data.booking_priority_id,
       booking_crs: data.booking_crs,
       booking_run_date: data.booking_run_date,
       booking_revised_date: data.booking_revised_date,
       booking_credential_verified: data.booking_credential_verified,
       booking_otp_number: data.booking_otp_number,
       agoda_service_fee: data.agoda_service_fee,
-      agoda_priority: data.agoda_priority,
+      agoda_priority_id: data.agoda_priority_id,
       agoda_crs: data.agoda_crs,
       agoda_run_date: data.agoda_run_date,
       agoda_revised_date: data.agoda_revised_date,
@@ -489,7 +492,7 @@ export class PropertyRepository implements IPropertyRepository {
         return rec.id
       }
 
-      // Helper: resolve priority name → name string (find or create Priority record, return name)
+      // Helper: resolve priority name → priority_id (find or create Priority record, return id)
       const resolvePriority = async (name?: string): Promise<string | undefined> => {
         if (!name) return undefined
         const normalized = name.trim()
@@ -499,7 +502,7 @@ export class PropertyRepository implements IPropertyRepository {
           rec = await this.prisma.priority.create({ data: { name: normalized, is_active: true, order: (last?.order ?? 0) + 1 } })
           logger.log(`Priority "${normalized}" created during import`)
         }
-        return rec.name
+        return rec.id
       }
 
       // Helper: resolve currency code → currency_id (find or create Currency, return id)
@@ -518,10 +521,9 @@ export class PropertyRepository implements IPropertyRepository {
       if (row.expediaProcessor) propertyPayload.expedia_processor_id = await resolveProcessor(row.expediaProcessor)
       if (row.bookingProcessor) propertyPayload.booking_processor_id = await resolveProcessor(row.bookingProcessor)
       if (row.agodaProcessor) propertyPayload.agoda_processor_id = await resolveProcessor(row.agodaProcessor)
-      // Resolve priority (find-or-create Priority record, store name as string in property)
-      if (row.expediaPriority) propertyPayload.expedia_priority = await resolvePriority(row.expediaPriority)
-      if (row.bookingPriority) propertyPayload.booking_priority = await resolvePriority(row.bookingPriority)
-      if (row.agodaPriority) propertyPayload.agoda_priority = await resolvePriority(row.agodaPriority)
+      if (row.expediaPriority) propertyPayload.expedia_priority_id = await resolvePriority(row.expediaPriority)
+      if (row.bookingPriority) propertyPayload.booking_priority_id = await resolvePriority(row.bookingPriority)
+      if (row.agodaPriority) propertyPayload.agoda_priority_id = await resolvePriority(row.agodaPriority)
       if (row.fpMid) propertyPayload.fp_mid = row.fpMid
       if (row.stripeAccountEmail) propertyPayload.stripe_account_email = row.stripeAccountEmail
       if (row.expediaBillingType)
