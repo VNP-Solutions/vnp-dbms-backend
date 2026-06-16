@@ -1473,14 +1473,14 @@ export class AllDataForGlobalFilterResponseDto {
   @ApiProperty({ type: [String] })
   agoda_status: string[]
 
-  @ApiProperty({ type: [String] })
-  expedia_processor: string[]
+  @ApiProperty({ type: [Object], description: 'Unique Expedia Processor objects used across accessible properties' })
+  expedia_processor: object[]
 
-  @ApiProperty({ type: [String] })
-  booking_processor: string[]
+  @ApiProperty({ type: [Object], description: 'Unique Booking Processor objects used across accessible properties' })
+  booking_processor: object[]
 
-  @ApiProperty({ type: [String] })
-  agoda_processor: string[]
+  @ApiProperty({ type: [Object], description: 'Unique Agoda Processor objects used across accessible properties' })
+  agoda_processor: object[]
 
   @ApiProperty({ type: [String] })
   fp_mid: string[]
@@ -1500,11 +1500,11 @@ export class AllDataForGlobalFilterResponseDto {
   @ApiProperty({ type: [String] })
   portfolio_contact: string[]
 
-  @ApiProperty({ type: [String] })
-  service_type_id: string[]
+  @ApiProperty({ type: [Object], description: 'Unique ServiceType objects used across accessible properties' })
+  service_type: object[]
 
-  @ApiProperty({ type: [String] })
-  currency_id: string[]
+  @ApiProperty({ type: [Object], description: 'Unique Currency objects used across accessible properties' })
+  currency: object[]
 
   @ApiProperty({ type: [String] })
   fp_username: string[]
@@ -1518,14 +1518,14 @@ export class AllDataForGlobalFilterResponseDto {
   @ApiProperty({ type: [String], description: 'ISO date-time strings' })
   next_due_date: string[]
 
-  @ApiProperty({ type: [String] })
-  expedia_billing_type_id: string[]
+  @ApiProperty({ type: [Object], description: 'Unique Expedia BillingType objects used across accessible properties' })
+  expedia_billing_type: object[]
 
-  @ApiProperty({ type: [String] })
-  expedia_service_type_id: string[]
+  @ApiProperty({ type: [Object], description: 'Unique Expedia ServiceType objects used across accessible properties' })
+  expedia_service_type: object[]
 
-  @ApiProperty({ type: [String] })
-  expedia_frequency_id: string[]
+  @ApiProperty({ type: [Object], description: 'Unique Expedia Frequency objects used across accessible properties' })
+  expedia_frequency: object[]
 
   @ApiProperty({ type: [String] })
   expedia_from: string[]
@@ -1558,14 +1558,14 @@ export class AllDataForGlobalFilterResponseDto {
   })
   expedia_scheduler: string[]
 
-  @ApiProperty({ type: [String] })
-  booking_billing_type_id: string[]
+  @ApiProperty({ type: [Object], description: 'Unique Booking BillingType objects used across accessible properties' })
+  booking_billing_type: object[]
 
-  @ApiProperty({ type: [String] })
-  booking_service_type_id: string[]
+  @ApiProperty({ type: [Object], description: 'Unique Booking ServiceType objects used across accessible properties' })
+  booking_service_type: object[]
 
-  @ApiProperty({ type: [String] })
-  booking_frequency_id: string[]
+  @ApiProperty({ type: [Object], description: 'Unique Booking Frequency objects used across accessible properties' })
+  booking_frequency: object[]
 
   @ApiProperty({ type: [String] })
   booking_from: string[]
@@ -1588,14 +1588,14 @@ export class AllDataForGlobalFilterResponseDto {
   })
   booking_scheduler: string[]
 
-  @ApiProperty({ type: [String] })
-  agoda_billing_type_id: string[]
+  @ApiProperty({ type: [Object], description: 'Unique Agoda BillingType objects used across accessible properties' })
+  agoda_billing_type: object[]
 
-  @ApiProperty({ type: [String] })
-  agoda_service_type_id: string[]
+  @ApiProperty({ type: [Object], description: 'Unique Agoda ServiceType objects used across accessible properties' })
+  agoda_service_type: object[]
 
-  @ApiProperty({ type: [String] })
-  agoda_frequency_id: string[]
+  @ApiProperty({ type: [Object], description: 'Unique Agoda Frequency objects used across accessible properties' })
+  agoda_frequency: object[]
 
   @ApiProperty({ type: [String] })
   agoda_from: string[]
