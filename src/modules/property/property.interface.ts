@@ -306,4 +306,5 @@ export interface IPropertyService {
   ): Promise<BulkUpdateResultDto>
   getAllDataForGlobalFilter(user: IUserWithPermissions): Promise<AllDataForGlobalFilterResponse>
   exportToExcelAndEmail(dto: ExportPropertyExcelDto, user: IUserWithPermissions): Promise<{ message: string }>
+  transferPortfolio(id: string, portfolioId: string, password: string, user: IUserWithPermissions): Promise<PropertyWithRelations>
 }

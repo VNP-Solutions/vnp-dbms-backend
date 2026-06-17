@@ -45,6 +45,7 @@ import {
   PROPERTY_FILTER_OPERATION_DESCRIPTION,
   PROPERTY_FILTER_SWAGGER_EXAMPLE_FILTERS,
   PropertyFilterDto,
+  TransferPropertyDto,
   UpdatePropertyDto
 } from './property.dto'
 import type { IPropertyService } from './property.interface'
@@ -613,6 +614,23 @@ export class PropertyController {
   @ApiResponse({ status: 404, description: 'Property not found' })
   findOne(@Param('id') id: string, @CurrentUser() user: IUserWithPermissions) {
     return this.propertyService.findOne(id, user)
+  }
+
+  @Patch(':id/transfer')
+  @RequirePermission(ModuleType.PROPERTY, PermissionAction.UPDATE, true)
+  @ApiOperation({
+    summary: 'Transfer property to a different portfolio',
+    description: 'Moves a property to a new portfolio. Requires the caller\'s account password for confirmation.'
+  })
+  @ApiResponse({ status: 200, description: 'Property transferred successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid password or property already in the target portfolio' })
+  @ApiResponse({ status: 404, description: 'Property not found' })
+  transferPortfolio(
+    @Param('id') id: string,
+    @Body() dto: TransferPropertyDto,
+    @CurrentUser() user: IUserWithPermissions
+  ) {
+    return this.propertyService.transferPortfolio(id, dto.portfolio_id, dto.password, user)
   }
 
   @Patch(':id')
