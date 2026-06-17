@@ -911,6 +911,29 @@ export class PropertyService implements IPropertyService {
     return { message: 'Property deleted successfully' }
   }
 
+  async transferPortfolio(
+    id: string,
+    portfolioId: string,
+    password: string,
+    user: IUserWithPermissions
+  ): Promise<PropertyWithRelations> {
+    const userFromDb = await this.authRepository.findUserByEmail(user.email)
+    if (!userFromDb) throw new BadRequestException('Invalid credentials')
+
+    const isPasswordValid = await EncryptionUtil.comparePassword(password, userFromDb.password)
+    if (!isPasswordValid) throw new BadRequestException('Invalid password')
+
+    const property = await this.findOne(id, user)
+    if (property.portfolio_id === portfolioId) throw new BadRequestException('Property is already in the specified portfolio')
+
+    await this.repo.update(id, { portfolio_id: portfolioId })
+    await Promise.all([
+      this.redisService.del(CACHE_KEY(id)),
+      this.redisService.deleteByPattern(ALL_PATTERN)
+    ])
+    return this.repo.findById(id) as Promise<PropertyWithRelations>
+  }
+
   async findByPortfolioId(
     portfolioId: string,
     user: IUserWithPermissions

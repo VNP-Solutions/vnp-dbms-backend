@@ -1087,6 +1087,18 @@ export class PropertyQueryDto extends QueryDto {
   user_password?: string
 }
 
+export class TransferPropertyDto {
+  @ApiProperty({ example: '507f1f77bcf86cd799439011', description: 'New portfolio ID (MongoDB ObjectId)' })
+  @IsMongoId()
+  @IsNotEmpty()
+  portfolio_id: string
+
+  @ApiProperty({ example: 'mySecretPassword', description: 'User account password for confirmation' })
+  @IsString()
+  @IsNotEmpty()
+  password: string
+}
+
 export class BulkDeletePropertyDto {
   @ApiProperty({
     description: 'Array of property IDs to delete',
