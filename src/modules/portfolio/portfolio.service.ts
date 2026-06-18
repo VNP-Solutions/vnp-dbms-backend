@@ -46,7 +46,6 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
     const existing = await this.prisma.portfolio.findUnique({
       where: { name: INTERNAL_PORTFOLIO_NAME }
     })
-  
     if (existing) return existing
   
     let defaultServiceType = await this.prisma.serviceType.findFirst({

@@ -25,6 +25,7 @@ import {
   GetPropertyCredentialDto,
   PropertyFilterDto,
   RequiredFieldType,
+  SyncByOtaDto,
   UpdatePropertyDto
 } from './property.dto'
 import { mapPropertyToExcelRow, writePropertyExportBuffer } from '../../common/utils/property-excel.util'
@@ -36,6 +37,9 @@ import type {
   IPropertyService,
   PropertyWithRelations
 } from './property.interface'
+import axios, { AxiosInstance } from 'axios'
+import { ConfigService } from '@nestjs/config'
+import type { Configuration } from '../../config/configuration'
 
 const CACHE_TTL_ITEM = 5 * 60 * 1000 // 5 minutes for individual records
 const CACHE_TTL_ALL = 60 * 60 * 1000 // 1 hour for all properties cache
@@ -45,6 +49,8 @@ const ALL_PATTERN = 'property:all:*'
 @Injectable()
 export class PropertyService implements IPropertyService {
   private readonly logger = new Logger(PropertyService.name)
+  private readonly dashboardClient: AxiosInstance | null
+  private readonly scraperClient: AxiosInstance | null
 
   constructor(
     @Inject('IPropertyRepository')
@@ -58,8 +64,24 @@ export class PropertyService implements IPropertyService {
     private readonly encryptionUtil: EncryptionUtil,
     private readonly prisma: PrismaService,
     private readonly redisService: RedisService,
-    private readonly emailUtil: EmailUtil
-  ) {}
+    private readonly emailUtil: EmailUtil,
+    private readonly config: ConfigService<Configuration>
+  ) {
+    const timeout = this.config.get('syncTimeoutMs', { infer: true }) ?? 15000
+    const dashUrl = this.config.get('dashboardBackendUrl', { infer: true }) ?? ''
+    const dashTok = this.config.get('dashboardServiceToken', { infer: true }) ?? ''
+    const scrUrl  = this.config.get('scraperBackendUrl', { infer: true }) ?? ''
+    const scrTok  = this.config.get('scraperServiceToken', { infer: true }) ?? ''
+    this.dashboardClient = dashUrl && dashTok
+      ? axios.create({ baseURL: dashUrl, timeout, headers: { 'X-Service-Token': dashTok } })
+      : null
+    this.scraperClient = scrUrl && scrTok
+      ? axios.create({ baseURL: scrUrl, timeout, headers: { 'X-Service-Token': scrTok } })
+      : null
+    if (!this.dashboardClient) this.logger.warn('[sync] dashboard disabled — URL/token missing')
+    if (!this.scraperClient)  this.logger.warn('[sync] scraper disabled — URL/token missing')
+  
+  }
 
   async create(
     data: CreatePropertyDto,
@@ -901,6 +923,25 @@ export class PropertyService implements IPropertyService {
     return this.repo.findById(id) as Promise<PropertyWithRelations>
   }
 
+  async updateAndSync(id: string, data: UpdatePropertyDto, user: IUserWithPermissions) {
+    const before = await this.repo.findById(id)
+    if (!before) throw new NotFoundException('Property not found')
+    const updated = await this.update(id, data, user)
+    try {
+      await this.fanOutPropertyUpdate(
+        {
+          expedia_id: before.expedia_id ?? null,
+          booking_id: before.booking_id ?? null,
+          agoda_id: before.agoda_id ?? null
+        },
+        data
+      )
+    } catch (e: any) {
+      this.logger.error(`[sync] unexpected: ${e?.message ?? e}`)
+    }
+    return updated
+  }
+  
   async remove(id: string, user: IUserWithPermissions) {
     await this.findOne(id, user)
     await this.repo.delete(id)
@@ -2754,5 +2795,48 @@ export class PropertyService implements IPropertyService {
       if (!Number.isNaN(n) && Number.isFinite(n)) nums.push(n)
     }
     return nums
+  }
+
+  private pickFields(src: any, fields: string[]) {
+    const out: Record<string, any> = {}
+    for (const f of fields) if (src?.[f] !== undefined) out[f] = src[f]
+    return out
+  }
+  private async fanOutPropertyUpdate(
+    otaIds: { expedia_id: number | null; booking_id: number | null; agoda_id: number | null },
+    data: Record<string, any>
+  ) {
+    const jobs: Promise<any>[] = []
+    if (this.dashboardClient) {
+      jobs.push(this.dashboardClient.patch('/api/property/sync-by-ota', { ...otaIds, data })
+        .then(r => ['dashboard', r.data]).catch(e => ['dashboard', { error: e?.message }]))
+    }
+    if (this.scraperClient) {
+      jobs.push(this.scraperClient.patch('/properties/sync-by-ota', { ...otaIds, data })
+        .then(r => ['scraper', r.data]).catch(e => ['scraper', { error: e?.message }]))
+    }
+    const results = await Promise.allSettled(jobs)
+    for (const r of results) {
+      if (r.status === 'fulfilled') this.logger.log(`[sync] ${r.value[0]}: ${JSON.stringify(r.value[1])}`)
+      else this.logger.error(`[sync] failed: ${r.reason}`)
+    }
+  }
+
+  private readonly inboundSyncFields = ['name', 'card_descriptor', 'is_active', 'next_due_date',
+    'expedia_id', 'expedia_status', 'booking_id', 'booking_status', 'agoda_id', 'agoda_status']
+    
+  async syncByOta(dto: SyncByOtaDto) {
+    if (dto.expedia_id == null && dto.booking_id == null && dto.agoda_id == null) return { status: 'no_ota_ids' }
+    const ids = await this.repo.findIdsByOtaIds(dto)
+    if (!ids.length) return { status: 'not_found' }
+    if (ids.length > 1) { this.logger.warn(`[sync] ambiguous: ${ids.join(',')}`); return { status: 'ambiguous', candidates: ids } }
+  
+    const patch: Record<string, any> = {}
+    for (const k of this.inboundSyncFields) if (dto.data?.[k] !== undefined) patch[k] = dto.data[k]
+    if (!Object.keys(patch).length) return { status: 'no_op', id: ids[0] }
+  
+    const updated = await this.repo.update(ids[0], patch as UpdatePropertyDto)
+    await Promise.all([this.redisService.del(CACHE_KEY(updated.id)), this.redisService.deleteByPattern(ALL_PATTERN)])
+    return { status: 'updated', id: updated.id }
   }
 }

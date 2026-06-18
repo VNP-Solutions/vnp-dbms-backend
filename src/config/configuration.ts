@@ -49,6 +49,11 @@ export interface Configuration {
     /** Default TTL in seconds (converted to ms when passed to cache stores) */
     ttl: number
   }
+  dashboardBackendUrl: string
+  dashboardServiceToken: string
+  scraperServiceToken: string
+  syncTimeoutMs: number
+  serviceToken: string
 }
 
 export default (): Configuration => ({
@@ -101,5 +106,10 @@ export default (): Configuration => ({
     port: parseInt(process.env.REDIS_PORT || '6379', 10),
     password: process.env.REDIS_PASSWORD || undefined,
     ttl: parseInt(process.env.REDIS_TTL || '300', 10)
-  }
+  },
+  dashboardBackendUrl: process.env.DASHBOARD_BACKEND_URL || '',
+  dashboardServiceToken: process.env.DASHBOARD_SERVICE_TOKEN || '',
+  scraperServiceToken: process.env.SCRAPER_SERVICE_TOKEN || '',
+  syncTimeoutMs: parseInt(process.env.SYNC_TIMEOUT_MS || '15000', 10),
+  serviceToken: process.env.SERVICE_TOKEN || '',
 })
