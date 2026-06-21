@@ -9,6 +9,7 @@ import {
   Param,
   Patch,
   Post,
+  Res,
   UploadedFile,
   UseGuards,
   UseInterceptors
@@ -51,7 +52,7 @@ import {
   PropertyFilterDto,
   TransferPropertyDto,
   SyncByOtaDto,
-  UpdatePropertyDto
+  UpdatePropertyDto,
 } from './property.dto'
 import type { IPropertyService } from './property.interface'
 import { ServiceTokenGuard } from './guards/service-token.guard'
@@ -97,7 +98,7 @@ export class PropertyController {
     @Body() dto: CreatePropertyDto,
     @CurrentUser() user: IUserWithPermissions
   ) {
-    return this.propertyService.create(dto, user)
+    return this.propertyService.createAndSync(dto, user)
   }
 
   @Post('import')
@@ -684,7 +685,7 @@ export class PropertyController {
   @ApiResponse({ status: 200, description: 'Property deleted' })
   @ApiResponse({ status: 404, description: 'Property not found' })
   remove(@Param('id') id: string, @CurrentUser() user: IUserWithPermissions) {
-    return this.propertyService.remove(id, user)
+    return this.propertyService.removeAndSync(id, user)
   }
 
   @Post('bulk-delete')

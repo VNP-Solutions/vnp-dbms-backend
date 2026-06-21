@@ -280,6 +280,7 @@ export interface IPropertyRepository {
 
 export interface IPropertyService {
   create(data: CreatePropertyDto, user: IUserWithPermissions): Promise<PropertyWithRelations>
+  createAndSync(data: CreatePropertyDto, user: IUserWithPermissions): Promise<PropertyWithRelations>
   findAllWithFilters(filterDto: PropertyFilterDto, user: IUserWithPermissions): Promise<PaginatedResult<PropertyWithRelations>>
   findAllCached(user: IUserWithPermissions): Promise<PropertyWithRelations[]>
   refreshCache(user: IUserWithPermissions): Promise<{ message: string }>
@@ -314,6 +315,7 @@ export interface IPropertyService {
   syncByOta(dto: SyncByOtaDto): Promise<{ status: string; id?: string; candidates?: string[] }>
   bulkTransferPortfolio(ids: string[], portfolioId: string, password: string, user: IUserWithPermissions): Promise<BulkTransferResult>
   importFromExcelAndSync(file: Express.Multer.File, user: IUserWithPermissions): Promise<ImportPropertiesResult>
+  removeAndSync(id: string, user: IUserWithPermissions): Promise<{ message: string }>
 }
 
 export interface BulkTransferResult {
