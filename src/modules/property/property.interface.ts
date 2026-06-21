@@ -310,4 +310,12 @@ export interface IPropertyService {
   exportToExcelAndEmail(dto: ExportPropertyExcelDto, user: IUserWithPermissions): Promise<{ message: string }>
   transferPortfolio(id: string, portfolioId: string, password: string, user: IUserWithPermissions): Promise<PropertyWithRelations>
   syncByOta(dto: SyncByOtaDto): Promise<{ status: string; id?: string; candidates?: string[] }>
+  bulkTransferPortfolio(ids: string[], portfolioId: string, password: string, user: IUserWithPermissions): Promise<BulkTransferResult>
+}
+
+export interface BulkTransferResult {
+  success: Array<{ id: string; name: string }>
+  skipped: Array<{ id: string; name?: string; reason: string }>
+  successCount: number
+  skippedCount: number
 }

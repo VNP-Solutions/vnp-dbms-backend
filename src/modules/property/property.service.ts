@@ -975,6 +975,60 @@ export class PropertyService implements IPropertyService {
     return this.repo.findById(id) as Promise<PropertyWithRelations>
   }
 
+  async bulkTransferPortfolio(
+    ids: string[],
+    portfolioId: string,
+    password: string,
+    user: IUserWithPermissions
+  ): Promise<import('./property.interface').BulkTransferResult> {
+    const userFromDb = await this.authRepository.findUserByEmail(user.email)
+    if (!userFromDb) throw new BadRequestException('Invalid credentials')
+
+    const isPasswordValid = await EncryptionUtil.comparePassword(password, userFromDb.password)
+    if (!isPasswordValid) throw new BadRequestException('Invalid password')
+
+    this.logger.log(`User ${user.email} attempting bulk transfer of ${ids.length} properties to portfolio ${portfolioId}`)
+
+    const accessibleIds = await this.repo.getAccessiblePropertyIds(user.id)
+
+    const success: Array<{ id: string; name: string }> = []
+    const skipped: Array<{ id: string; name?: string; reason: string }> = []
+
+    for (const id of ids) {
+      if (accessibleIds !== 'all' && !accessibleIds.includes(id)) {
+        skipped.push({ id, reason: 'No access to this property' })
+        continue
+      }
+
+      try {
+        const property = await this.repo.findById(id)
+        if (!property) {
+          skipped.push({ id, reason: 'Property not found' })
+          continue
+        }
+        if (property.portfolio_id === portfolioId) {
+          skipped.push({ id, name: property.name, reason: 'Property is already in the specified portfolio' })
+          continue
+        }
+
+        await this.repo.update(id, { portfolio_id: portfolioId })
+        await this.redisService.del(CACHE_KEY(id))
+        success.push({ id: property.id, name: property.name })
+      } catch (err: any) {
+        this.logger.error(`Error transferring property ${id}: ${err.message}`)
+        skipped.push({ id, reason: `Error: ${err.message}` })
+      }
+    }
+
+    if (success.length > 0) {
+      await this.redisService.deleteByPattern(ALL_PATTERN)
+    }
+
+    this.logger.log(`Bulk transfer completed: ${success.length} success, ${skipped.length} skipped`)
+
+    return { success, skipped, successCount: success.length, skippedCount: skipped.length }
+  }
+
   async findByPortfolioId(
     portfolioId: string,
     user: IUserWithPermissions

@@ -37,6 +37,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
 import {
   AllDataForGlobalFilterResponseDto,
   BulkDeletePropertyDto,
+  BulkTransferPropertyDto,
   BulkUpdateResultDto,
   CreatePropertyDto,
   ExportPropertyExcelDto,
@@ -728,6 +729,53 @@ export class PropertyController {
     @CurrentUser() user: IUserWithPermissions
   ) {
     return this.propertyService.bulkDelete(dto.ids, user)
+  }
+
+  @Post('bulk-transfer')
+  @RequirePermission(ModuleType.PROPERTY, PermissionAction.UPDATE)
+  @ApiOperation({
+    summary: 'Bulk transfer properties to a different portfolio',
+    description: 'Moves multiple properties to a new portfolio. Requires the caller\'s account password for confirmation. Properties already in the target portfolio or inaccessible ones are reported as skipped.'
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Bulk transfer completed',
+    schema: {
+      type: 'object',
+      properties: {
+        success: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              name: { type: 'string' }
+            }
+          }
+        },
+        skipped: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              name: { type: 'string', nullable: true },
+              reason: { type: 'string' }
+            }
+          }
+        },
+        successCount: { type: 'number' },
+        skippedCount: { type: 'number' }
+      }
+    }
+  })
+  @ApiResponse({ status: 400, description: 'Invalid password' })
+  @ApiResponse({ status: 403, description: 'Forbidden' })
+  bulkTransferPortfolio(
+    @Body() dto: BulkTransferPropertyDto,
+    @CurrentUser() user: IUserWithPermissions
+  ) {
+    return this.propertyService.bulkTransferPortfolio(dto.ids, dto.portfolio_id, dto.password, user)
   }
 }
 
