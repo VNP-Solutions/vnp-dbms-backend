@@ -1101,6 +1101,28 @@ export class TransferPropertyDto {
   password: string
 }
 
+export class BulkTransferPropertyDto {
+  @ApiProperty({
+    description: 'Array of property IDs to transfer',
+    example: ['507f1f77bcf86cd799439011', '507f1f77bcf86cd799439012'],
+    type: [String]
+  })
+  @IsArray()
+  @IsMongoId({ each: true })
+  @IsNotEmpty({ each: true })
+  ids: string[]
+
+  @ApiProperty({ example: '507f1f77bcf86cd799439011', description: 'Target portfolio ID (MongoDB ObjectId)' })
+  @IsMongoId()
+  @IsNotEmpty()
+  portfolio_id: string
+
+  @ApiProperty({ example: 'mySecretPassword', description: 'User account password for confirmation' })
+  @IsString()
+  @IsNotEmpty()
+  password: string
+}
+
 export class BulkDeletePropertyDto {
   @ApiProperty({
     description: 'Array of property IDs to delete',
