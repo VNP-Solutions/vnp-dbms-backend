@@ -1,7 +1,7 @@
 import { BillingType, Currency, Frequency, Priority, Processor, Property, ServiceType } from '@prisma/client'
 import { PaginatedResult } from '../../common/dto/query.dto'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
-import { BulkUpdateResultDto, CreatePropertyDto, ExportPropertyExcelDto, PropertyFilterDto, UpdatePropertyDto } from './property.dto'
+import { BulkUpdateResultDto, CreatePropertyDto, ExportPropertyExcelDto, PropertyFilterDto, SyncByOtaDto, UpdatePropertyDto } from './property.dto'
 
 export type PropertyWithRelations = Property & {
   portfolio: { id: string; name: string }
@@ -273,6 +273,7 @@ export interface IPropertyRepository {
     subportfolios: { id: string; name: string; portfolio_id: string }[]
   }>
   importProperties(rows: ImportPropertyRow[]): Promise<ImportPropertiesResult>
+  findIdsByOtaIds(ota: { expedia_id?: number | null; booking_id?: number | null; agoda_id?: number | null }): Promise<string[]>;
 }
 
 export interface IPropertyService {
@@ -282,6 +283,7 @@ export interface IPropertyService {
   refreshCache(user: IUserWithPermissions): Promise<{ message: string }>
   findOne(id: string, user: IUserWithPermissions): Promise<PropertyWithRelations>
   update(id: string, data: UpdatePropertyDto, user: IUserWithPermissions): Promise<PropertyWithRelations>
+  updateAndSync(id: string, data: UpdatePropertyDto, user: IUserWithPermissions): Promise<PropertyWithRelations>
   remove(id: string, user: IUserWithPermissions): Promise<{ message: string }>
   bulkDelete(ids: string[], user: IUserWithPermissions): Promise<BulkDeleteResult>
   findByPortfolioId(portfolioId: string, user: IUserWithPermissions): Promise<PropertyWithRelations[]>
@@ -307,4 +309,5 @@ export interface IPropertyService {
   getAllDataForGlobalFilter(user: IUserWithPermissions): Promise<AllDataForGlobalFilterResponse>
   exportToExcelAndEmail(dto: ExportPropertyExcelDto, user: IUserWithPermissions): Promise<{ message: string }>
   transferPortfolio(id: string, portfolioId: string, password: string, user: IUserWithPermissions): Promise<PropertyWithRelations>
+  syncByOta(dto: SyncByOtaDto): Promise<{ status: string; id?: string; candidates?: string[] }>
 }

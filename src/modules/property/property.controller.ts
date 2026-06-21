@@ -17,6 +17,7 @@ import {
   ApiBody,
   ApiConsumes,
   ApiExtraModels,
+  ApiHeader,
   ApiOperation,
   ApiResponse,
   ApiTags
@@ -46,9 +47,11 @@ import {
   PROPERTY_FILTER_SWAGGER_EXAMPLE_FILTERS,
   PropertyFilterDto,
   TransferPropertyDto,
+  SyncByOtaDto,
   UpdatePropertyDto
 } from './property.dto'
 import type { IPropertyService } from './property.interface'
+import { ServiceTokenGuard } from './guards/service-token.guard'
 
 @ApiTags('Property')
 @ApiBearerAuth('JWT-auth')
@@ -646,6 +649,30 @@ export class PropertyController {
     return this.propertyService.update(id, dto, user)
   }
 
+  @Patch(':id/sync')
+  @RequirePermission(ModuleType.PROPERTY, PermissionAction.UPDATE, true)
+  @ApiOperation({ summary: 'Update property and sync to dashboard + scraper' })
+  @ApiBody({
+    type: UpdatePropertyDto,
+    examples: {
+      syncDelta: {
+        summary: 'Rename + flip Booking status (syncs to dashboard + scraper)',
+        value: {
+          name: 'Grand Hotel & Spa',
+          card_descriptor: 'GRAND HOTEL SPA NY',
+          booking_status: 'Suspended'
+        }
+      }
+    }
+  })
+  updateAndSync(
+    @Param('id') id: string,
+    @Body() dto: UpdatePropertyDto,
+    @CurrentUser() user: IUserWithPermissions
+  ) {
+    return this.propertyService.updateAndSync(id, dto, user)
+  }
+
   @Delete(':id')
   @RequirePermission(ModuleType.PROPERTY, PermissionAction.DELETE, true)
   @ApiOperation({ summary: 'Delete property by ID' })
@@ -701,5 +728,19 @@ export class PropertyController {
     @CurrentUser() user: IUserWithPermissions
   ) {
     return this.propertyService.bulkDelete(dto.ids, user)
+  }
+}
+
+@ApiTags('PropertySync')
+@Public()
+@Controller('property')
+export class PropertySyncController {
+  constructor(@Inject('IPropertyService') private readonly propertyService: IPropertyService) {}
+  @Patch('sync-by-ota')
+  @UseGuards(ServiceTokenGuard)
+  @ApiHeader({ name: 'x-service-token', description: 'Service token' })
+  @ApiOperation({ summary: 'Internal: sync property from scraper by OTA id' })
+  syncByOta(@Body() dto: SyncByOtaDto) {
+    return this.propertyService.syncByOta(dto)
   }
 }

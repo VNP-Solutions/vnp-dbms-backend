@@ -6,9 +6,11 @@ import {
   IsDate,
   IsDateString,
   IsIn,
+  IsInt,
   IsMongoId,
   IsNotEmpty,
   IsNumber,
+  IsObject,
   IsOptional,
   IsString,
   ValidateNested
@@ -1666,4 +1668,11 @@ export class ExportPropertyExcelDto extends PropertyFilterDto {
   // page and limit are not applicable for export — all matching records are always returned
   declare page?: never
   declare limit?: never
+}
+
+export class SyncByOtaDto {
+  @IsOptional() @IsInt() expedia_id?: number | null
+  @IsOptional() @IsInt() booking_id?: number | null
+  @IsOptional() @IsInt() agoda_id?: number | null
+  @IsObject() data!: Record<string, any>
 }
