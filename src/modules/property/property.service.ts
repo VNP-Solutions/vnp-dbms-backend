@@ -651,6 +651,16 @@ export class PropertyService implements IPropertyService {
               contains: filterDto.search,
               mode: 'insensitive'
             }
+          },
+          {
+            portfolio: {
+              name: { contains: filterDto.search, mode: 'insensitive' }
+            }
+          },
+          {
+            subportfolio: {
+              name: { contains: filterDto.search, mode: 'insensitive' }
+            }
           }
         ]
       })
