@@ -121,8 +121,9 @@ export class SubportfolioRepository implements ISubportfolioRepository {
   }
 
   async update(id: string, data: UpdateSubportfolioDto): Promise<SubportfolioWithPortfolio> {
-    const updateData: any = { ...data }
-    if (data.portfolio_id) updateData.portfolio = { connect: { id: data.portfolio_id } }
+    const { portfolio_id, ...rest } = data
+    const updateData: any = { ...rest }
+    if (portfolio_id) updateData.portfolio = { connect: { id: portfolio_id } }
     return this.prisma.subportfolio.update({
       where: { id },
       data: updateData,
