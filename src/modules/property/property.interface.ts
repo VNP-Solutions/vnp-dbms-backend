@@ -156,6 +156,8 @@ export interface BulkDeleteResult {
   skippedCount: number
 }
 
+
+
 export interface AllDataForGlobalFilterResponse {
   expedia_id: string[]
   portfolio: Array<{ id: string; name: string }>
@@ -311,6 +313,7 @@ export interface IPropertyService {
   transferPortfolio(id: string, portfolioId: string, password: string, user: IUserWithPermissions): Promise<PropertyWithRelations>
   syncByOta(dto: SyncByOtaDto): Promise<{ status: string; id?: string; candidates?: string[] }>
   bulkTransferPortfolio(ids: string[], portfolioId: string, password: string, user: IUserWithPermissions): Promise<BulkTransferResult>
+  importFromExcelAndSync(file: Express.Multer.File, user: IUserWithPermissions): Promise<ImportPropertiesResult>
 }
 
 export interface BulkTransferResult {
