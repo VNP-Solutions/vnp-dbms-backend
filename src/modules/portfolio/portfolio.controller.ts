@@ -40,7 +40,7 @@ export class PortfolioController {
   @ApiResponse({ status: 201, description: 'Portfolio created successfully' })
   @ApiResponse({ status: 403, description: 'Forbidden' })
   create(@Body() dto: CreatePortfolioDto, @CurrentUser() user: IUserWithPermissions) {
-    return this.portfolioService.create(dto, user)
+    return this.portfolioService.createAndSync(dto, user)
   }
 
   @Post('import')
@@ -116,7 +116,7 @@ export class PortfolioController {
     @Body() dto: UpdatePortfolioDto,
     @CurrentUser() user: IUserWithPermissions
   ) {
-    return this.portfolioService.update(id, dto, user)
+    return this.portfolioService.updateAndSync(id, dto, user)
   }
 
   @Delete(':id')
@@ -125,6 +125,6 @@ export class PortfolioController {
   @ApiResponse({ status: 200, description: 'Portfolio deleted' })
   @ApiResponse({ status: 404, description: 'Portfolio not found' })
   remove(@Param('id') id: string, @CurrentUser() user: IUserWithPermissions) {
-    return this.portfolioService.remove(id, user)
+    return this.portfolioService.removeAndSync(id, user)
   }
 }

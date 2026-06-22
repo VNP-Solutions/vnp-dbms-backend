@@ -53,4 +53,7 @@ export interface IPortfolioService {
     file: Express.Multer.File,
     user: IUserWithPermissions
   ): Promise<ImportPortfoliosResult>
+  createAndSync(data: CreatePortfolioDto, user: IUserWithPermissions): Promise<Portfolio>
+  updateAndSync(id: string, data: UpdatePortfolioDto, user: IUserWithPermissions): Promise<Portfolio>
+  removeAndSync(id: string, user: IUserWithPermissions): Promise<{ message: string }>
 }

@@ -21,6 +21,9 @@ import type {
   IPortfolioService,
   PortfolioWithCounts
 } from './portfolio.interface'
+import axios, { AxiosInstance } from 'axios'
+import { ConfigService } from '@nestjs/config'
+import type { Configuration } from '../../config/configuration'
 
 const CACHE_TTL_ITEM = 5 * 60 * 1000   // 5 minutes for individual records
 const CACHE_KEY = (id: string) => `portfolio:${id}`
@@ -30,13 +33,22 @@ const INTERNAL_PORTFOLIO_NAME = 'Internal Portfolio'
 @Injectable()
 export class PortfolioService implements IPortfolioService, OnModuleInit {
   private readonly logger = new Logger(PortfolioService.name)
-
+  private readonly scraperClient: AxiosInstance | null
   constructor(
     @Inject('IPortfolioRepository')
     private readonly portfolioRepository: IPortfolioRepository,
     private readonly prisma: PrismaService,
-    private readonly redisService: RedisService
-  ) {}
+    private readonly redisService: RedisService,
+    private readonly config: ConfigService<Configuration, true>
+  ) {
+    const timeout = this.config.get('syncTimeoutMs', { infer: true }) ?? 15000
+    const scrUrl = this.config.get('scraperBackendUrl', { infer: true }) ?? ''
+    const scrTok = this.config.get('scraperServiceToken', { infer: true }) ?? ''
+    this.scraperClient = scrUrl && scrTok
+      ? axios.create({ baseURL: scrUrl, timeout, headers: { 'X-Service-Token': scrTok } })
+      : null
+    if (!this.scraperClient) this.logger.warn('[sync] scraper disabled — URL/token missing')
+  }
 
   async onModuleInit() {
     await this.ensureInternalPortfolio()
@@ -202,6 +214,32 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
     return updated
   }
 
+  async updateAndSync(id: string, data: UpdatePortfolioDto, user: IUserWithPermissions) {
+    const before = await this.findOne(id, user)   // capture OLD name first
+    const updated = await this.update(id, data, user)
+    try {
+      const newName = updated.name?.trim()
+      if (newName && newName !== before.name) {
+        await this.fanOutPortfolioUpdate(before.name, newName)
+      }
+    } catch (e: any) {
+      this.logger.error(`[sync] unexpected on portfolio update: ${e?.message ?? e}`)
+    }
+    return updated
+  }
+  private async fanOutPortfolioUpdate(oldName: string, newName: string) {
+    if (!this.scraperClient) {
+      this.logger.warn('[sync] scraper disabled, skipping portfolio update sync')
+      return
+    }
+    try {
+      const r = await this.scraperClient.post('/portfolios/sync-update', { oldName, newName })
+      this.logger.log(`[sync] scraper portfolio update: ${JSON.stringify(r.data)}`)
+    } catch (e: any) {
+      this.logger.error(`[sync] scraper portfolio update failed: ${e?.message ?? e}`)
+    }
+  }
+
   async remove(id: string, user: IUserWithPermissions) {
     const portfolio = await this.findOne(id, user)
     if (!portfolio) {
@@ -224,6 +262,29 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
     return {
        message: `Portfolio deleted successfully. ${movedProperties} properties were moved to "${INTERNAL_PORTFOLIO_NAME}".`
       }
+  }
+
+  async removeAndSync(id: string, user: IUserWithPermissions) {
+    const before = await this.findOne(id, user)   // capture name BEFORE deletion
+    const result = await this.remove(id, user)
+    try {
+      await this.fanOutPortfolioDelete(before.name)
+    } catch (e: any) {
+      this.logger.error(`[sync] unexpected on portfolio delete: ${e?.message ?? e}`)
+    }
+    return result
+  }
+  private async fanOutPortfolioDelete(name: string) {
+    if (!this.scraperClient) {
+      this.logger.warn('[sync] scraper disabled, skipping portfolio delete sync')
+      return
+    }
+    try {
+      const r = await this.scraperClient.post('/portfolios/sync-delete', { name })
+      this.logger.log(`[sync] scraper portfolio delete: ${JSON.stringify(r.data)}`)
+    } catch (e: any) {
+      this.logger.error(`[sync] scraper portfolio delete failed: ${e?.message ?? e}`)
+    }
   }
 
   async importFromExcel(file: Express.Multer.File, _user: IUserWithPermissions): Promise<ImportPortfoliosResult> {
@@ -424,5 +485,28 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
 
   private hashQuery(query: object): string {
     return createHash('sha256').update(JSON.stringify(query)).digest('hex').substring(0, 16)
+  }
+
+  private async fanOutPortfolioCreate(name: string) {
+    if (!this.scraperClient) {
+      this.logger.warn('[sync] scraper disabled, skipping portfolio create sync')
+      return
+    }
+    try {
+      const r = await this.scraperClient.post('/portfolios/sync-create', { name })
+      this.logger.log(`[sync] scraper portfolio create: ${JSON.stringify(r.data)}`)
+    } catch (e: any) {
+      this.logger.error(`[sync] scraper portfolio create failed: ${e?.message ?? e}`)
+    }
+  }
+  
+  async createAndSync(data: CreatePortfolioDto, user: IUserWithPermissions) {
+    const portfolio = await this.create(data, user)
+    try {
+      await this.fanOutPortfolioCreate(portfolio.name)
+    } catch (e: any) {
+      this.logger.error(`[sync] unexpected on portfolio create: ${e?.message ?? e}`)
+    }
+    return portfolio
   }
 }
