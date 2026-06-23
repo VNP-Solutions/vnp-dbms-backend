@@ -4,6 +4,7 @@ import { JwtModule } from '@nestjs/jwt'
 import { PassportModule } from '@nestjs/passport'
 import { EmailUtil } from '../../common/utils/email.util'
 import { PrismaService } from '../prisma/prisma.service'
+import { AuthCookieService } from './auth-cookie.service'
 import { AuthController } from './auth.controller'
 import { AuthRepository } from './auth.repository'
 import { AuthService } from './auth.service'
@@ -26,6 +27,7 @@ import { JwtStrategy } from './strategies/jwt.strategy'
       useClass: AuthRepository
     },
     JwtStrategy,
+    AuthCookieService,
     PrismaService,
     EmailUtil
   ],

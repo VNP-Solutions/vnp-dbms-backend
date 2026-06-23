@@ -6,6 +6,8 @@ import {
   HttpStatus,
   Inject,
   Post,
+  Req,
+  Res,
   UnauthorizedException
 } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
@@ -16,7 +18,9 @@ import {
   ApiResponse,
   ApiTags
 } from '@nestjs/swagger'
+import type { Request, Response } from 'express'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
+import { AuthCookieService } from './auth-cookie.service'
 import {
   AuthResponseDto,
   CreateSuperAdminDto,
@@ -40,7 +44,8 @@ export class AuthController {
   constructor(
     @Inject('IAuthService')
     private readonly authService: IAuthService,
-    private readonly configService: ConfigService
+    private readonly configService: ConfigService,
+    private readonly authCookieService: AuthCookieService
   ) {}
 
   @Post('login/request-otp')
@@ -60,19 +65,27 @@ export class AuthController {
 
   @Post('login/verify-otp')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Verify OTP and login' })
+  @ApiOperation({
+    summary: 'Verify OTP and login',
+    description:
+      'Sets accessToken and refreshToken as HTTP-only cookies. Returns user profile only. Pass keep_sign_in=false for a shorter browser session (2h access, 18h refresh).'
+  })
   @ApiResponse({
     status: 200,
     description: 'Login successful',
     type: AuthResponseDto
   })
   async verifyLoginOtp(
-    @Body() body: VerifyLoginOtpDto
+    @Body() body: VerifyLoginOtpDto,
+    @Res({ passthrough: true }) res: Response
   ): Promise<{ message: string; data: AuthResponseDto }> {
-    const result = await this.authService.verifyLoginOtp(body)
+    const session = await this.authService.verifyLoginOtp(body)
+    this.authCookieService.setAuthCookies(res, session.tokens, {
+      keepSignIn: body.keep_sign_in !== false
+    })
     return {
       message: 'Login successful',
-      data: result
+      data: { user: session.user }
     }
   }
 
@@ -142,19 +155,25 @@ export class AuthController {
 
   @Post('verify-invitation')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Verify invitation and set password' })
+  @ApiOperation({
+    summary: 'Verify invitation and set password',
+    description:
+      'Sets accessToken and refreshToken as HTTP-only cookies. Returns user profile only.'
+  })
   @ApiResponse({
     status: 200,
     description: 'Invitation verified successfully',
     type: AuthResponseDto
   })
   async verifyInvitation(
-    @Body() body: VerifyInvitationDto
+    @Body() body: VerifyInvitationDto,
+    @Res({ passthrough: true }) res: Response
   ): Promise<{ message: string; data: AuthResponseDto }> {
-    const result = await this.authService.verifyInvitation(body)
+    const session = await this.authService.verifyInvitation(body)
+    this.authCookieService.setAuthCookies(res, session.tokens)
     return {
       message: 'Invitation verified successfully',
-      data: result
+      data: { user: session.user }
     }
   }
 
@@ -184,16 +203,49 @@ export class AuthController {
 
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Refresh access token' })
+  @ApiOperation({
+    summary: 'Refresh access token',
+    description:
+      'Reads refreshToken from HTTP-only cookie (or legacy body field). Rotates cookies on success.'
+  })
   @ApiResponse({
     status: 200,
-    description: 'Tokens refreshed successfully (access_token + refresh_token)'
+    description: 'Tokens refreshed successfully via HTTP-only cookies'
   })
-  async refreshToken(@Body() body: RefreshTokenDto) {
-    const result = await this.authService.refreshAccessToken(body.refresh_token)
+  async refreshToken(
+    @Body() body: RefreshTokenDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response
+  ) {
+    const refreshToken =
+      req.cookies?.[this.authCookieService.refreshTokenCookieName()] ??
+      body.refresh_token
+
+    if (!refreshToken) {
+      throw new UnauthorizedException('Refresh token not found')
+    }
+
+    const tokens = await this.authService.refreshAccessToken(refreshToken)
+    this.authCookieService.setAuthCookies(res, tokens)
+
     return {
       message: 'Tokens refreshed successfully',
-      data: result
+      data: null
+    }
+  }
+
+  @Post('logout')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Logout current session',
+    description: 'Clears authentication HTTP-only cookies.'
+  })
+  @ApiResponse({ status: 200, description: 'Logged out successfully' })
+  async logout(@Res({ passthrough: true }) res: Response) {
+    this.authCookieService.clearAuthCookies(res)
+    return {
+      message: 'Logged out successfully',
+      data: null
     }
   }
 
@@ -223,17 +275,19 @@ export class AuthController {
   @ApiResponse({ status: 409, description: 'Super Admin already exists' })
   async createSuperAdmin(
     @Body() body: CreateSuperAdminDto,
-    @Headers('x-super-admin-secret') secret: string
+    @Headers('x-super-admin-secret') secret: string,
+    @Res({ passthrough: true }) res: Response
   ): Promise<{ message: string; data: AuthResponseDto }> {
     const expectedSecret = this.configService.get<string>('superAdminSecret')
     if (!secret || !expectedSecret || secret !== expectedSecret) {
       throw new UnauthorizedException('Invalid or missing super admin secret')
     }
 
-    const result = await this.authService.createSuperAdmin(body)
+    const session = await this.authService.createSuperAdmin(body)
+    this.authCookieService.setAuthCookies(res, session.tokens)
     return {
       message: 'Super Admin created successfully',
-      data: result
+      data: { user: session.user }
     }
   }
 }

@@ -24,6 +24,8 @@ import {
 import type {
   IAuthRepository,
   IAuthService,
+  AuthSessionResult,
+  AuthTokens,
   JwtPayload
 } from './auth.interface'
 
@@ -169,7 +171,7 @@ export class AuthService implements IAuthService {
     return { message: 'OTP sent to your email' }
   }
 
-  async verifyLoginOtp(data: VerifyLoginOtpDto): Promise<AuthResponseDto> {
+  async verifyLoginOtp(data: VerifyLoginOtpDto): Promise<AuthSessionResult> {
     const user = await this.authRepository.findUserByEmail(data.email)
 
     if (!user) {
@@ -188,7 +190,10 @@ export class AuthService implements IAuthService {
     if (!userWithRole) {
       throw new BadRequestException('User not found')
     }
-    return this.generateAuthResponse(userWithRole as unknown as UserWithRole)
+    return this.generateAuthSession(
+      userWithRole as unknown as UserWithRole,
+      data.keep_sign_in !== false
+    )
   }
 
   async inviteUser(
@@ -356,7 +361,7 @@ export class AuthService implements IAuthService {
     }
   }
 
-  async verifyInvitation(data: VerifyInvitationDto): Promise<AuthResponseDto> {
+  async verifyInvitation(data: VerifyInvitationDto): Promise<AuthSessionResult> {
     const user = await this.authRepository.findUserByEmail(data.email)
 
     if (!user) {
@@ -381,7 +386,7 @@ export class AuthService implements IAuthService {
     if (!updatedUser) {
       throw new BadRequestException('User not found')
     }
-    return this.generateAuthResponse(updatedUser as unknown as UserWithRole)
+    return this.generateAuthSession(updatedUser as unknown as UserWithRole)
   }
 
   async requestPasswordReset(email: string): Promise<{ message: string }> {
@@ -430,9 +435,7 @@ export class AuthService implements IAuthService {
     return { message: 'Password reset successfully' }
   }
 
-  async refreshAccessToken(
-    refreshToken: string
-  ): Promise<{ access_token: string; refresh_token: string }> {
+  async refreshAccessToken(refreshToken: string): Promise<AuthTokens> {
     try {
       const payload = this.jwtService.verify<JwtPayload>(refreshToken, {
         secret: this.configService.get('jwt.refreshSecret', { infer: true })
@@ -444,74 +447,84 @@ export class AuthService implements IAuthService {
         throw new UnauthorizedException('Invalid token')
       }
 
-      const newPayload: JwtPayload = {
+      return this.signAuthTokens({
         sub: user.id,
         email: user.email,
         role_id: user.user_role_id
-      }
-
-      const newAccessToken = this.jwtService.sign(newPayload, {
-        secret: this.configService.get('jwt.accessSecret', { infer: true }),
-        expiresIn: this.configService.get('jwt.accessExpiresIn', {
-          infer: true
-        })
       })
-
-      const newRefreshToken = this.jwtService.sign(newPayload, {
-        secret: this.configService.get('jwt.refreshSecret', { infer: true }),
-        expiresIn: this.configService.get('jwt.refreshExpiresIn', {
-          infer: true
-        })
-      })
-
-      return { access_token: newAccessToken, refresh_token: newRefreshToken }
     } catch {
       throw new UnauthorizedException('Invalid or expired refresh token')
     }
   }
 
-  private generateAuthResponse(user: UserWithRole): AuthResponseDto {
-    const payload: JwtPayload = {
-      sub: user.id,
-      email: user.email,
-      role_id: user.user_role_id
-    }
+  private signAuthTokens(
+    payload: JwtPayload,
+    keepSignIn = true
+  ): AuthTokens {
+    const accessExpiresIn = keepSignIn
+      ? this.configService.get('jwt.accessExpiresIn', { infer: true })!
+      : this.configService.get('cookies.sessionAccessExpiresIn', {
+          infer: true
+        })!
+
+    const refreshExpiresIn = keepSignIn
+      ? this.configService.get('jwt.refreshExpiresIn', { infer: true })!
+      : this.configService.get('cookies.sessionRefreshExpiresIn', {
+          infer: true
+        })!
 
     const accessToken = this.jwtService.sign(payload, {
       secret: this.configService.get('jwt.accessSecret', { infer: true }),
-      expiresIn: this.configService.get('jwt.accessExpiresIn', { infer: true })
+      expiresIn: accessExpiresIn
     })
 
     const refreshToken = this.jwtService.sign(payload, {
       secret: this.configService.get('jwt.refreshSecret', { infer: true }),
-      expiresIn: this.configService.get('jwt.refreshExpiresIn', {
-        infer: true
-      })
+      expiresIn: refreshExpiresIn
     })
 
-    return {
-      access_token: accessToken,
-      refresh_token: refreshToken,
-      user: {
-        id: user.id,
+    return { accessToken, refreshToken }
+  }
+
+  private generateAuthSession(
+    user: UserWithRole,
+    keepSignIn = true
+  ): AuthSessionResult {
+    const tokens = this.signAuthTokens(
+      {
+        sub: user.id,
         email: user.email,
-        first_name: user.first_name,
-        last_name: user.last_name,
-        role: user.role,
-        projectRoles: user.userProjectRoles?.map(pr => ({
-          project_type: pr.project_type,
-          user_role_id: pr.user_role_id,
-          user_role: pr.user_role,
-          portfolio_ids: pr.portfolio_ids,
-          subportfolio_ids: pr.subportfolio_ids,
-          property_ids: pr.property_ids,
-          is_active: pr.is_active
-        }))
-      }
+        role_id: user.user_role_id
+      },
+      keepSignIn
+    )
+
+    return {
+      tokens,
+      user: this.buildUserResponse(user)
     }
   }
 
-  async createSuperAdmin(data: CreateSuperAdminDto): Promise<AuthResponseDto> {
+  private buildUserResponse(user: UserWithRole): AuthResponseDto['user'] {
+    return {
+      id: user.id,
+      email: user.email,
+      first_name: user.first_name,
+      last_name: user.last_name,
+      role: user.role,
+      projectRoles: user.userProjectRoles?.map(pr => ({
+        project_type: pr.project_type,
+        user_role_id: pr.user_role_id,
+        user_role: pr.user_role,
+        portfolio_ids: pr.portfolio_ids,
+        subportfolio_ids: pr.subportfolio_ids,
+        property_ids: pr.property_ids,
+        is_active: pr.is_active
+      }))
+    }
+  }
+
+  async createSuperAdmin(data: CreateSuperAdminDto): Promise<AuthSessionResult> {
     // 1. Prevent duplicate super admin account by email
     const existingUser = await this.authRepository.findUserByEmail(data.email)
     if (existingUser) {
@@ -581,6 +594,6 @@ export class AuthService implements IAuthService {
 
     console.log(`[SUPER ADMIN] Created super admin account for: ${data.email}`)
 
-    return this.generateAuthResponse(createdUser as unknown as UserWithRole)
+    return this.generateAuthSession(createdUser as unknown as UserWithRole)
   }
 }

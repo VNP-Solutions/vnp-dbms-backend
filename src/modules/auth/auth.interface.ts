@@ -1,6 +1,6 @@
 import { Otp, Prisma, User } from '@prisma/client'
 import {
-    AuthResponseDto,
+    AuthResponseUserDto,
     CreateSuperAdminDto,
     InviteUserDto,
     ResetPasswordDto,
@@ -19,6 +19,16 @@ export type UserWithRole = Prisma.UserGetPayload<{
     }
   }
 }>
+
+export interface AuthTokens {
+  accessToken: string
+  refreshToken: string
+}
+
+export interface AuthSessionResult {
+  user: AuthResponseUserDto
+  tokens: AuthTokens
+}
 
 export interface IAuthRepository {
   findUserByEmail(email: string): Promise<UserWithRole | null>
@@ -51,7 +61,7 @@ export interface IAuthRepository {
 
 export interface IAuthService {
   requestLoginOtp(email: string, password: string): Promise<{ message: string }>
-  verifyLoginOtp(data: VerifyLoginOtpDto): Promise<AuthResponseDto>
+  verifyLoginOtp(data: VerifyLoginOtpDto): Promise<AuthSessionResult>
   inviteUser(
     data: InviteUserDto,
     inviterId: string,
@@ -61,11 +71,11 @@ export interface IAuthService {
     email: string,
     inviterRolePermissionLevel: string | undefined
   ): Promise<{ message: string }>
-  verifyInvitation(data: VerifyInvitationDto): Promise<AuthResponseDto>
+  verifyInvitation(data: VerifyInvitationDto): Promise<AuthSessionResult>
   requestPasswordReset(email: string): Promise<{ message: string }>
   resetPassword(data: ResetPasswordDto): Promise<{ message: string }>
-  refreshAccessToken(refreshToken: string): Promise<{ access_token: string; refresh_token: string }>
-  createSuperAdmin(data: CreateSuperAdminDto): Promise<AuthResponseDto>
+  refreshAccessToken(refreshToken: string): Promise<AuthTokens>
+  createSuperAdmin(data: CreateSuperAdminDto): Promise<AuthSessionResult>
 }
 
 export interface JwtPayload {

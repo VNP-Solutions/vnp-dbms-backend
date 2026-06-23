@@ -54,6 +54,22 @@ export interface Configuration {
   scraperServiceToken: string
   syncTimeoutMs: number
   serviceToken: string
+  cookies: {
+    accessTokenName: string
+    refreshTokenName: string
+    domain?: string
+    path: string
+    httpOnly: boolean
+    secure: boolean
+    sameSite: 'lax' | 'none' | 'strict'
+    sessionAccessMaxAgeMs: number
+    sessionRefreshMaxAgeMs: number
+    sessionAccessExpiresIn: string
+    sessionRefreshExpiresIn: string
+  }
+  cors: {
+    origins: string[]
+  }
 }
 
 export default (): Configuration => ({
@@ -112,4 +128,36 @@ export default (): Configuration => ({
   scraperServiceToken: process.env.SCRAPER_SERVICE_TOKEN || '',
   syncTimeoutMs: parseInt(process.env.SYNC_TIMEOUT_MS || '15000', 10),
   serviceToken: process.env.SERVICE_TOKEN || '',
+  cookies: {
+    accessTokenName: process.env.COOKIE_ACCESS_TOKEN_NAME || 'accessToken',
+    refreshTokenName: process.env.COOKIE_REFRESH_TOKEN_NAME || 'refreshToken',
+    domain: process.env.COOKIE_DOMAIN || undefined,
+    path: process.env.COOKIE_PATH || '/',
+    httpOnly: true,
+    secure:
+      (process.env.COOKIE_SECURE ?? (process.env.NODE_ENV === 'production' ? 'true' : 'false')) ===
+      'true',
+    sameSite:
+      (process.env.COOKIE_SAME_SITE as 'lax' | 'none' | 'strict' | undefined) ||
+      (process.env.NODE_ENV === 'production' ? 'none' : 'lax'),
+    sessionAccessMaxAgeMs: parseInt(
+      process.env.COOKIE_SESSION_ACCESS_MAX_AGE_MS || String(2 * 60 * 60 * 1000),
+      10
+    ),
+    sessionRefreshMaxAgeMs: parseInt(
+      process.env.COOKIE_SESSION_REFRESH_MAX_AGE_MS ||
+        String(18 * 60 * 60 * 1000),
+      10
+    ),
+    sessionAccessExpiresIn:
+      process.env.COOKIE_SESSION_ACCESS_EXPIRES_IN || '2h',
+    sessionRefreshExpiresIn:
+      process.env.COOKIE_SESSION_REFRESH_EXPIRES_IN || '18h'
+  },
+  cors: {
+    origins: (process.env.CORS_ORIGIN || process.env.FRONTEND_URL || 'http://localhost:3000,http://localhost:5173')
+      .split(',')
+      .map(origin => origin.trim())
+      .filter(Boolean)
+  }
 })
