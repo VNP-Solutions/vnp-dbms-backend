@@ -1698,3 +1698,48 @@ export class SyncByOtaDto {
   @IsOptional() @IsInt() agoda_id?: number | null
   @IsObject() data!: Record<string, any>
 }
+
+// ─── Expedia Property Checker ─────────────────────────────────────────────────
+
+export class ExpediaCheckPropertyItemDto {
+  @ApiProperty({ example: '507f1f77bcf86cd799439011', description: 'Internal MongoDB _id of the property' })
+  @IsString()
+  @IsNotEmpty()
+  _id: string
+
+  @ApiProperty({ example: 12345678, description: 'Expedia property ID' })
+  @IsInt()
+  expedia_id: number
+
+  @ApiProperty({ example: 'partner@example.com', description: 'Expedia account username (email)' })
+  @IsString()
+  @IsNotEmpty()
+  expedia_username: string
+
+  @ApiProperty({ example: 'secret123', description: 'Expedia account password (never logged)' })
+  @IsString()
+  @IsNotEmpty()
+  expedia_password: string
+}
+
+export class ExpediaCheckPropertiesDto {
+  @ApiProperty({
+    type: [ExpediaCheckPropertyItemDto],
+    description: 'List of properties to check. Items are grouped by expedia_username internally.'
+  })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ExpediaCheckPropertyItemDto)
+  items: ExpediaCheckPropertyItemDto[]
+}
+
+export interface ExpediaCheckerUpstreamItem {
+  _id: string
+  expedia_id: number
+}
+
+export interface ExpediaCheckerUpstreamPayload {
+  username: string
+  password: string
+  expedia_ids: ExpediaCheckerUpstreamItem[]
+}

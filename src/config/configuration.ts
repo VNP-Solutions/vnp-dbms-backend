@@ -44,6 +44,8 @@ export interface Configuration {
   }
   superAdminSecret: string
   scraperBackendUrl: string
+  expediaCheckerBaseUrl: string
+  expediaCheckerTimeoutMs: number
   redis: {
     host: string
     port: number
@@ -139,6 +141,8 @@ export default (): Configuration => {
   },
   superAdminSecret: process.env.SUPER_ADMIN_SECRET || '',
   scraperBackendUrl: process.env.SCRAPER_BACKEND_URL || '',
+  expediaCheckerBaseUrl: process.env.EXPEDIA_CHECKER_BASE_URL || '',
+  expediaCheckerTimeoutMs: parseInt(process.env.EXPEDIA_CHECKER_TIMEOUT_MS || '30000', 10),
   redis: {
     host: process.env.REDIS_HOST || 'localhost',
     port: parseInt(process.env.REDIS_PORT || '6379', 10),

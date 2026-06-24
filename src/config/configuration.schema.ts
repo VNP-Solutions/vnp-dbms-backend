@@ -90,6 +90,16 @@ export class ConfigurationSchema {
 
   @IsOptional()
   @IsString()
+  EXPEDIA_CHECKER_BASE_URL?: string
+
+  @IsOptional()
+  @Transform(({ value }: { value: string }) => parseInt(value, 10))
+  @IsNumber()
+  @Min(1)
+  EXPEDIA_CHECKER_TIMEOUT_MS?: number
+
+  @IsOptional()
+  @IsString()
   REDIS_HOST?: string
 
   @IsOptional()

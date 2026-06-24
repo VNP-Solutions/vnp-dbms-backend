@@ -7,6 +7,7 @@ import { PortfolioModule } from '../portfolio/portfolio.module'
 import { RedisService } from '../redis/redis.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { PropertyController, PropertySyncController } from './property.controller'
+import { PropertyExpediaCheckerService } from './property-expedia-checker.service'
 import { PropertyRepository } from './property.repository'
 import { PropertyService } from './property.service'
 import { ServiceTokenGuard } from './guards/service-token.guard'
@@ -21,7 +22,8 @@ import { ServiceTokenGuard } from './guards/service-token.guard'
     EncryptionUtil,
     RedisService,
     EmailUtil,
-    ServiceTokenGuard
+    ServiceTokenGuard,
+    PropertyExpediaCheckerService
   ],
   exports: [{ provide: 'IPropertyService', useClass: PropertyService }]
 })

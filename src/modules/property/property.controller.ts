@@ -4,6 +4,7 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
   Inject,
   Param,
   Patch,
@@ -40,6 +41,7 @@ import {
   BulkTransferPropertyDto,
   BulkUpdateResultDto,
   CreatePropertyDto,
+  ExpediaCheckPropertiesDto,
   ExportPropertyExcelDto,
   GetPropertyCredentialDto,
   GlobalFilterIdNameDto,
@@ -53,6 +55,7 @@ import {
 } from './property.dto'
 import type { IPropertyService } from './property.interface'
 import { ServiceTokenGuard } from './guards/service-token.guard'
+import { PropertyExpediaCheckerService } from './property-expedia-checker.service'
 
 @ApiTags('Property')
 @ApiBearerAuth('JWT-auth')
@@ -66,7 +69,8 @@ import { ServiceTokenGuard } from './guards/service-token.guard'
 export class PropertyController {
   constructor(
     @Inject('IPropertyService')
-    private readonly propertyService: IPropertyService
+    private readonly propertyService: IPropertyService,
+    private readonly expediaCheckerService: PropertyExpediaCheckerService
   ) {}
 
   @Post('credential')
@@ -776,6 +780,36 @@ export class PropertyController {
     @CurrentUser() user: IUserWithPermissions
   ) {
     return this.propertyService.bulkTransferPortfolio(dto.ids, dto.portfolio_id, dto.password, user)
+  }
+
+  @Post('expedia-check')
+  @HttpCode(200)
+  @RequirePermission(ModuleType.PROPERTY, PermissionAction.READ)
+  @ApiOperation({
+    summary: 'Dispatch Expedia property check',
+    description:
+      'Groups the given properties by Expedia account (expedia_username) and dispatches one check request per group in parallel. ' +
+      'The upstream checker service acknowledges immediately and processes in the background. ' +
+      '409 means the checker is already busy with another job.'
+  })
+  @ApiBody({ type: ExpediaCheckPropertiesDto })
+  @ApiResponse({
+    status: 200,
+    description: 'All account groups accepted — processing in background',
+    schema: {
+      example: {
+        message: 'Expedia property check dispatched. Processing is running in background on the checker service.',
+        totalProperties: 3,
+        accountGroups: 2
+      }
+    }
+  })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
+  @ApiResponse({ status: 409, description: 'Expedia checker is already busy — try again later' })
+  @ApiResponse({ status: 502, description: 'Upstream Expedia checker returned an error' })
+  @ApiResponse({ status: 504, description: 'Expedia checker timed out or is unreachable' })
+  checkExpediaProperties(@Body() dto: ExpediaCheckPropertiesDto) {
+    return this.expediaCheckerService.checkProperties(dto.items)
   }
 }
 
