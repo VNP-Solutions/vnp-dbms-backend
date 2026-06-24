@@ -101,8 +101,7 @@ export default (): Configuration => ({
     password: process.env.SMTP_PASSWORD!
   },
   invitationRedirectUrl: process.env.INVITATION_REDIRECT_URL,
-  dashboardUrl:
-    process.env.DASHBOARD_URL || 'https://new.dashboardvnps.com/',
+  dashboardUrl: process.env.DASHBOARD_URL || 'https://new.dashboardvnps.com/',
   auth: {
     passwordRegex:
       /^(?=.*[a-zA-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]).{8,32}$/,
@@ -135,27 +134,26 @@ export default (): Configuration => ({
     path: process.env.COOKIE_PATH || '/',
     httpOnly: true,
     secure:
-      (process.env.COOKIE_SECURE ?? (process.env.NODE_ENV === 'production' ? 'true' : 'false')) ===
-      'true',
+      (process.env.COOKIE_SECURE ??
+        (process.env.NODE_ENV === 'production' ? 'true' : 'false')) === 'true',
     sameSite:
       (process.env.COOKIE_SAME_SITE as 'lax' | 'none' | 'strict' | undefined) ||
       (process.env.NODE_ENV === 'production' ? 'none' : 'lax'),
+
     sessionAccessMaxAgeMs: parseInt(
-      process.env.COOKIE_SESSION_ACCESS_MAX_AGE_MS || String(2 * 60 * 60 * 1000),
+      process.env.JWT_ACCESS_EXPIRES_IN || String(2 * 60 * 60 * 1000),
       10
     ),
     sessionRefreshMaxAgeMs: parseInt(
-      process.env.COOKIE_SESSION_REFRESH_MAX_AGE_MS ||
-        String(18 * 60 * 60 * 1000),
+      process.env.JWT_REFRESH_EXPIRES_IN || String(18 * 60 * 60 * 1000),
       10
     ),
-    sessionAccessExpiresIn:
-      process.env.COOKIE_SESSION_ACCESS_EXPIRES_IN || '2h',
-    sessionRefreshExpiresIn:
-      process.env.COOKIE_SESSION_REFRESH_EXPIRES_IN || '18h'
+
+    sessionAccessExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '7d',
+    sessionRefreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '14d'
   },
   cors: {
-    origins: (process.env.CORS_ORIGIN || process.env.FRONTEND_URL || 'http://localhost:3000,http://localhost:5173')
+    origins: (process.env.CORS_ORIGIN || '')
       .split(',')
       .map(origin => origin.trim())
       .filter(Boolean)
