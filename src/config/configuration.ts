@@ -1,4 +1,4 @@
-import { resolveCookieSettings } from './cookie.config'
+import { resolveCookieDomain, resolveCookieSettings } from './cookie.config'
 import { normalizeCorsOrigin } from './cors.config'
 import { NodeEnvironment } from './configuration.schema'
 
@@ -64,6 +64,7 @@ export interface Configuration {
     httpOnly: boolean
     secure: boolean
     sameSite: 'lax' | 'none' | 'strict'
+    partitioned: boolean
     sessionAccessMaxAgeMs: number
     sessionRefreshMaxAgeMs: number
     sessionAccessExpiresIn: string
@@ -89,6 +90,11 @@ export default (): Configuration => {
     cookieSecure: process.env.COOKIE_SECURE,
     cookieSameSite: process.env.COOKIE_SAME_SITE
   })
+
+  const cookieDomain = resolveCookieDomain(
+    process.env.COOKIE_DOMAIN,
+    process.env.PUBLIC_API_URL
+  )
 
   return {
   port: parseInt(process.env.PORT || '3000', 10),
@@ -147,11 +153,12 @@ export default (): Configuration => {
   cookies: {
     accessTokenName: process.env.COOKIE_ACCESS_TOKEN_NAME || 'accessToken',
     refreshTokenName: process.env.COOKIE_REFRESH_TOKEN_NAME || 'refreshToken',
-    domain: process.env.COOKIE_DOMAIN || undefined,
+    domain: cookieDomain,
     path: process.env.COOKIE_PATH || '/',
     httpOnly: true,
     secure: cookieSettings.secure,
     sameSite: cookieSettings.sameSite,
+    partitioned: cookieSettings.partitioned,
 
     sessionAccessMaxAgeMs: parseInt(
       process.env.COOKIE_SESSION_ACCESS_MAX_AGE_MS ||

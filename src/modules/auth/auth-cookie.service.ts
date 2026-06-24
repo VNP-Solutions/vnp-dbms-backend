@@ -81,6 +81,7 @@ export class AuthCookieService {
       httpOnly: cookies.httpOnly,
       secure: cookies.secure,
       sameSite: cookies.sameSite,
+      ...(cookies.partitioned ? { partitioned: true } : {}),
       ...(cookies.domain ? { domain: cookies.domain } : {}),
       path: cookies.path
     }

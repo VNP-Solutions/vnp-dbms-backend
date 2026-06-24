@@ -73,10 +73,20 @@ async function bootstrap() {
   const cookies = nestConfigService.get('cookies', { infer: true })!
   await app.listen(configService.app.port)
 
+  const corsOrigins =
+    nestConfigService.get('cors.origins', { infer: true }) ?? []
   console.log(
-    `Auth cookies: secure=${cookies.secure}, sameSite=${cookies.sameSite}` +
+    `Auth cookies: secure=${cookies.secure}, sameSite=${cookies.sameSite}, partitioned=${cookies.partitioned}` +
       (cookies.domain ? `, domain=${cookies.domain}` : '')
   )
+  console.log(
+    `CORS origins: ${corsOrigins.join(', ') || '(none — set CORS_ORIGIN)'}`
+  )
+  if (corsOrigins.length === 0) {
+    console.warn(
+      '[cookies] CORS_ORIGIN is not set — auth cookies fall back to localhost defaults (Lax, no Secure).'
+    )
+  }
   console.log(
     `Application is running on: http://localhost:${configService.app.port}`
   )
