@@ -13,6 +13,10 @@ async function bootstrap() {
 
   const nestConfigService = app.get(NestConfigService<Configuration>)
 
+  // Required behind nginx/ALB so Secure cookies and req.secure behave correctly.
+  const expressApp = app.getHttpAdapter().getInstance()
+  expressApp.set('trust proxy', 1)
+
   app.use(cookieParser())
   app.enableCors(
     buildCorsOptions({
@@ -66,8 +70,13 @@ async function bootstrap() {
   })
 
   const configService = app.get(ConfigService)
+  const cookies = nestConfigService.get('cookies', { infer: true })!
   await app.listen(configService.app.port)
 
+  console.log(
+    `Auth cookies: secure=${cookies.secure}, sameSite=${cookies.sameSite}` +
+      (cookies.domain ? `, domain=${cookies.domain}` : '')
+  )
   console.log(
     `Application is running on: http://localhost:${configService.app.port}`
   )

@@ -1,3 +1,4 @@
+import { resolveCookieSettings } from './cookie.config'
 import { normalizeCorsOrigin } from './cors.config'
 import { NodeEnvironment } from './configuration.schema'
 
@@ -73,14 +74,29 @@ export interface Configuration {
   }
 }
 
-export default (): Configuration => ({
+export default (): Configuration => {
+  const nodeEnv =
+    (process.env.NODE_ENV as NodeEnvironment) || NodeEnvironment.DEVELOPMENT
+
+  const corsOrigins = (process.env.CORS_ORIGIN || '')
+    .split(',')
+    .map(normalizeCorsOrigin)
+    .filter(Boolean)
+
+  const cookieSettings = resolveCookieSettings({
+    nodeEnv,
+    corsOrigins,
+    cookieSecure: process.env.COOKIE_SECURE,
+    cookieSameSite: process.env.COOKIE_SAME_SITE
+  })
+
+  return {
   port: parseInt(process.env.PORT || '3000', 10),
   app: {
     port: parseInt(process.env.PORT || '3000', 10)
   },
   appName: process.env.APP_NAME,
-  nodeEnv:
-    (process.env.NODE_ENV as NodeEnvironment) || NodeEnvironment.DEVELOPMENT,
+  nodeEnv,
   database: {
     url: process.env.DATABASE_URL!
   },
@@ -134,12 +150,8 @@ export default (): Configuration => ({
     domain: process.env.COOKIE_DOMAIN || undefined,
     path: process.env.COOKIE_PATH || '/',
     httpOnly: true,
-    secure:
-      (process.env.COOKIE_SECURE ??
-        (process.env.NODE_ENV === 'production' ? 'true' : 'false')) === 'true',
-    sameSite:
-      (process.env.COOKIE_SAME_SITE as 'lax' | 'none' | 'strict' | undefined) ||
-      (process.env.NODE_ENV === 'production' ? 'none' : 'lax'),
+    secure: cookieSettings.secure,
+    sameSite: cookieSettings.sameSite,
 
     sessionAccessMaxAgeMs: parseInt(
       process.env.COOKIE_SESSION_ACCESS_MAX_AGE_MS ||
@@ -157,9 +169,7 @@ export default (): Configuration => ({
       process.env.COOKIE_SESSION_REFRESH_EXPIRES_IN || '14d'
   },
   cors: {
-    origins: (process.env.CORS_ORIGIN || '')
-      .split(',')
-      .map(normalizeCorsOrigin)
-      .filter(Boolean)
+    origins: corsOrigins
   }
-})
+}
+}
