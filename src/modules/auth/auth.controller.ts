@@ -68,7 +68,7 @@ export class AuthController {
   @ApiOperation({
     summary: 'Verify OTP and login',
     description:
-      'Sets accessToken and refreshToken as HTTP-only cookies. Returns user profile only. Pass keep_sign_in=false for a shorter browser session (2h access, 18h refresh).'
+      'Sets accessToken and refreshToken as HTTP-only cookies. Returns user profile only. Pass keep_sign_in=false for a shorter browser session (2h for both cookies).'
   })
   @ApiResponse({
     status: 200,

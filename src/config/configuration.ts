@@ -141,19 +141,22 @@ export default (): Configuration => ({
       (process.env.NODE_ENV === 'production' ? 'none' : 'lax'),
 
     sessionAccessMaxAgeMs: parseInt(
-      process.env.JWT_ACCESS_EXPIRES_IN || String(2 * 60 * 60 * 1000),
+      process.env.COOKIE_SESSION_ACCESS_MAX_AGE_MS ||
+        String(2 * 60 * 60 * 1000),
       10
     ),
     sessionRefreshMaxAgeMs: parseInt(
-      process.env.JWT_REFRESH_EXPIRES_IN || String(18 * 60 * 60 * 1000),
+      process.env.COOKIE_SESSION_REFRESH_MAX_AGE_MS ||
+        String(2 * 60 * 60 * 1000),
       10
     ),
-
-    sessionAccessExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '7d',
-    sessionRefreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '14d'
+    sessionAccessExpiresIn:
+      process.env.COOKIE_SESSION_ACCESS_EXPIRES_IN || '2h',
+    sessionRefreshExpiresIn:
+      process.env.COOKIE_SESSION_REFRESH_EXPIRES_IN || '2h'
   },
   cors: {
-    origins: (process.env.CORS_ORIGIN || '')
+    origins: (process.env.CORS_ORIGIN || process.env.FRONTEND_URL || 'http://localhost:3000,http://localhost:5173')
       .split(',')
       .map(origin => origin.trim())
       .filter(Boolean)
