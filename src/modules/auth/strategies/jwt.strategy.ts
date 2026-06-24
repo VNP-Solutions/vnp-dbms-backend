@@ -1,8 +1,10 @@
 import { Inject, Injectable, UnauthorizedException } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { PassportStrategy } from '@nestjs/passport'
+import type { Request } from 'express'
 import { ExtractJwt, Strategy } from 'passport-jwt'
 import { Configuration } from '../../../config/configuration'
+import { AuthCookieService } from '../auth-cookie.service'
 import type { IAuthRepository, JwtPayload } from '../auth.interface'
 
 @Injectable()
@@ -11,10 +13,15 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     @Inject(ConfigService)
     private configService: ConfigService<Configuration>,
     @Inject('IAuthRepository')
-    private authRepository: IAuthRepository
+    private authRepository: IAuthRepository,
+    authCookieService: AuthCookieService
   ) {
+    const accessCookieName = authCookieService.accessTokenCookieName()
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      jwtFromRequest: ExtractJwt.fromExtractors([
+        (req: Request) => req?.cookies?.[accessCookieName] ?? null,
+        ExtractJwt.fromAuthHeaderAsBearerToken()
+      ]),
       ignoreExpiration: false,
       secretOrKey: configService.get('jwt.accessSecret', { infer: true })!
     })

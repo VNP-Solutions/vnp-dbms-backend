@@ -108,4 +108,36 @@ export class ConfigurationSchema {
   @IsNumber()
   @Min(1)
   REDIS_TTL?: number
+
+  @IsOptional()
+  @IsString()
+  CORS_ORIGIN?: string
+
+  @IsOptional()
+  @IsString()
+  FRONTEND_URL?: string
+
+  @IsOptional()
+  @IsString()
+  COOKIE_ACCESS_TOKEN_NAME?: string
+
+  @IsOptional()
+  @IsString()
+  COOKIE_REFRESH_TOKEN_NAME?: string
+
+  @IsOptional()
+  @IsString()
+  COOKIE_DOMAIN?: string
+
+  @IsOptional()
+  @IsString()
+  COOKIE_PATH?: string
+
+  @IsOptional()
+  @IsString()
+  COOKIE_SECURE?: string
+
+  @IsOptional()
+  @IsString()
+  COOKIE_SAME_SITE?: string
 }

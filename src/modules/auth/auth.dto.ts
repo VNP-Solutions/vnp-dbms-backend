@@ -1,11 +1,14 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
+import { Transform } from 'class-transformer'
 import {
     IsArray,
+    IsBoolean,
     IsEmail,
     IsNotEmpty,
     IsOptional,
     IsString,
-    Matches
+    Matches,
+    ValidateIf
 } from 'class-validator'
 
 export class CreateSuperAdminDto {
@@ -74,9 +77,33 @@ export class VerifyLoginOtpDto {
   @IsNotEmpty()
   email: string
 
+  @ApiPropertyOptional({
+    example: 'MyPassword123!',
+    description:
+      'Optional. Ignored during OTP verification; accepted for clients that send the same payload as the request-otp step.'
+  })
+  @IsOptional()
+  @IsString()
+  password?: string
+
+  @ApiPropertyOptional({
+    example: '123456',
+    description: 'Legacy alias for otp'
+  })
+  @IsOptional()
+  @IsString()
+  otp_code?: string
+
   @ApiProperty({
     example: '123456',
     description: '6-digit numeric OTP code'
+  })
+  @Transform(({ obj, value }: { obj: VerifyLoginOtpDto; value: unknown }) => {
+    const raw = value ?? obj.otp_code
+    if (raw === undefined || raw === null) {
+      return undefined
+    }
+    return String(raw).trim()
   })
   @IsString()
   @IsNotEmpty()
@@ -84,6 +111,30 @@ export class VerifyLoginOtpDto {
     message: 'OTP must be a 6-digit numeric code'
   })
   otp: string
+
+  @ApiPropertyOptional({
+    example: true,
+    description:
+      'When true (default), auth cookies use configured JWT expiry. When false, uses a shorter browser session (2h access, 18h refresh).'
+  })
+  @Transform(({ value }: { value: unknown }) => {
+    if (value === undefined || value === null || value === '') {
+      return undefined
+    }
+    if (typeof value === 'boolean') {
+      return value
+    }
+    if (value === 'true') {
+      return true
+    }
+    if (value === 'false') {
+      return false
+    }
+    return value
+  })
+  @IsOptional()
+  @IsBoolean()
+  keep_sign_in?: boolean
 }
 
 export class InviteUserDto {
@@ -243,13 +294,15 @@ export class ResetPasswordDto {
 }
 
 export class RefreshTokenDto {
-  @ApiProperty({
+  @ApiPropertyOptional({
     example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
-    description: 'Refresh token'
+    description:
+      'Optional legacy refresh token in body. Prefer HTTP-only refreshToken cookie.'
   })
+  @ValidateIf((o: RefreshTokenDto) => o.refresh_token !== undefined)
   @IsString()
   @IsNotEmpty()
-  refresh_token: string
+  refresh_token?: string
 }
 
 /** User object shape returned in auth responses */
@@ -285,18 +338,6 @@ export interface AuthResponseUserDto {
 
 export class AuthResponseDto {
   @ApiProperty({
-    example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
-    description: 'JWT access token'
-  })
-  access_token: string
-
-  @ApiProperty({
-    example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
-    description: 'JWT refresh token'
-  })
-  refresh_token: string
-
-  @ApiProperty({
     example: {
       id: '507f1f77bcf86cd799439011',
       email: 'user@example.com',
@@ -310,7 +351,7 @@ export class AuthResponseDto {
         user_permission: { permission_level: 'all', access_level: 'all' }
       }
     },
-    description: 'User information'
+    description: 'Authenticated user information (tokens are set as HTTP-only cookies)'
   })
   user: AuthResponseUserDto
 }

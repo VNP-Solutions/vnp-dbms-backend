@@ -1,12 +1,25 @@
 import { ValidationPipe } from '@nestjs/common'
+import { ConfigService as NestConfigService } from '@nestjs/config'
 import { NestFactory } from '@nestjs/core'
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger'
+import cookieParser from 'cookie-parser'
 import { AppModule } from './app.module'
+import { buildCorsOptions } from './config/cors.config'
+import { Configuration } from './config/configuration'
 import { ConfigService } from './config/config.service'
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule)
-  app.enableCors()
+
+  const nestConfigService = app.get(NestConfigService<Configuration>)
+
+  app.use(cookieParser())
+  app.enableCors(
+    buildCorsOptions({
+      nodeEnv: nestConfigService.get('nodeEnv', { infer: true })!,
+      origins: nestConfigService.get('cors.origins', { infer: true }) ?? []
+    })
+  )
 
   app.setGlobalPrefix('api', {
     exclude: ['/']
@@ -26,7 +39,9 @@ async function bootstrap() {
 
   const config = new DocumentBuilder()
     .setTitle('VNP Backend API')
-    .setDescription('The VNP Backend API Documentation')
+    .setDescription(
+      'The VNP Backend API Documentation. Authentication uses HTTP-only cookies (accessToken, refreshToken). Send credentials with cross-origin requests.'
+    )
     .setVersion('1.0')
     .addBearerAuth(
       {
@@ -34,7 +49,8 @@ async function bootstrap() {
         scheme: 'bearer',
         bearerFormat: 'JWT',
         name: 'JWT',
-        description: 'Enter JWT token',
+        description:
+          'Legacy Bearer token support. Browser clients should rely on HTTP-only accessToken cookie instead.',
         in: 'header'
       },
       'JWT-auth'
