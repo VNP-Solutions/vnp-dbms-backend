@@ -147,16 +147,16 @@ export default (): Configuration => ({
     ),
     sessionRefreshMaxAgeMs: parseInt(
       process.env.COOKIE_SESSION_REFRESH_MAX_AGE_MS ||
-        String(2 * 60 * 60 * 1000),
+        String(18 * 60 * 60 * 1000),
       10
     ),
     sessionAccessExpiresIn:
-      process.env.COOKIE_SESSION_ACCESS_EXPIRES_IN || '2h',
+      process.env.COOKIE_SESSION_ACCESS_EXPIRES_IN || '7d',
     sessionRefreshExpiresIn:
-      process.env.COOKIE_SESSION_REFRESH_EXPIRES_IN || '2h'
+      process.env.COOKIE_SESSION_REFRESH_EXPIRES_IN || '14d'
   },
   cors: {
-    origins: (process.env.CORS_ORIGIN || process.env.FRONTEND_URL || 'http://localhost:3000,http://localhost:5173')
+    origins: (process.env.CORS_ORIGIN || '')
       .split(',')
       .map(origin => origin.trim())
       .filter(Boolean)
