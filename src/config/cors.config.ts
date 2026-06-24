@@ -4,13 +4,18 @@ import type { Configuration } from './configuration'
 const DEV_LOCAL_ORIGIN =
   /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/
 
+/** Strip whitespace and trailing slashes (browsers never send Origin with a trailing slash). */
+export function normalizeCorsOrigin(origin: string): string {
+  return origin.trim().replace(/\/+$/, '')
+}
+
 export interface CorsConfigInput {
   nodeEnv: Configuration['nodeEnv']
   origins: string[]
 }
 
 function isOriginAllowed(origin: string, config: CorsConfigInput): boolean {
-  if (config.origins.includes(origin)) {
+  if (config.origins.includes(normalizeCorsOrigin(origin))) {
     return true
   }
 

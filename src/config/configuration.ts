@@ -1,3 +1,4 @@
+import { normalizeCorsOrigin } from './cors.config'
 import { NodeEnvironment } from './configuration.schema'
 
 export interface Configuration {
@@ -158,7 +159,7 @@ export default (): Configuration => ({
   cors: {
     origins: (process.env.CORS_ORIGIN || '')
       .split(',')
-      .map(origin => origin.trim())
+      .map(normalizeCorsOrigin)
       .filter(Boolean)
   }
 })
