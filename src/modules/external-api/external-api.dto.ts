@@ -415,10 +415,9 @@ export class TriggerLambdaDto {
   platform?: string
 }
 
-// ─── OTA ID → QP Username lookup ─────────────────────────────────────────────
-
-export interface OtaQpLookupResult {
-  expedia: Array<{ expedia_id: number; qp_username: string | null }>
-  booking: Array<{ booking_id: number; qp_username: string | null }>
-  agoda: Array<{ agoda_id: number; qp_username: string | null }>
+export interface OtaQpLookupResultItem {
+  hotel_id: number
+  qp_username: string | null
 }
+
+export type OtaQpLookupResult = OtaQpLookupResultItem[]
