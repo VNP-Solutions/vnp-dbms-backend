@@ -1524,7 +1524,10 @@ export class PropertyService implements IPropertyService {
   async importFromExcelAndSync(file: Express.Multer.File, user: IUserWithPermissions): Promise<ImportPropertiesResult> {
     const result = await this.importFromExcel(file, user)
     try {
-      await this.fanOutPropertyBulkCreate(result.properties ?? [])
+      await this.fanOutPropertyBulkCreate([
+        ...(result.properties ?? []),
+        ...(result.existingProperties ?? [])
+      ])
     } catch (e: any) {
       this.logger.error(`[sync] unexpected on bulk import: ${e?.message ?? e}`)
     }

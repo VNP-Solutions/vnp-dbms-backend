@@ -322,3 +322,12 @@ export interface BulkTransferResult {
   successCount: number
   skippedCount: number
 }
+
+export interface ImportPropertiesResult {
+  propertiesCreated: number
+  credentialsCreated: number
+  propertiesSkipped: number
+  properties: any[]
+  existingProperties?: any[]   // existed on DBMS — still attempt parser sync
+  skippedProperties: Array<{ name: string; reason: string }>
+}
