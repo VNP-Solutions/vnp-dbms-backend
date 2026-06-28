@@ -85,4 +85,16 @@ export class PropertyExpediaCheckerService {
       accountGroups: groups.size
     }
   }
+
+  /**
+   * Re-trigger the checker Lambda so it drains the next queued payload.
+   * Called by the scraper after a property check finishes, enabling the queue
+   * to be processed one account group at a time.
+   */
+  async triggerCheckLambda(): Promise<{ message: string }> {
+    await triggerLambda(this.lambdaFunctionName, this.lambdaPlatform)
+    return {
+      message: `Expedia check Lambda triggered for platform: ${this.lambdaPlatform}`
+    }
+  }
 }
