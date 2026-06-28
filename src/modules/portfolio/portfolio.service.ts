@@ -34,6 +34,8 @@ const INTERNAL_PORTFOLIO_NAME = 'Internal Portfolio'
 export class PortfolioService implements IPortfolioService, OnModuleInit {
   private readonly logger = new Logger(PortfolioService.name)
   private readonly scraperClient: AxiosInstance | null
+  private readonly dashboardClient: AxiosInstance | null
+
   constructor(
     @Inject('IPortfolioRepository')
     private readonly portfolioRepository: IPortfolioRepository,
@@ -48,6 +50,12 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
       ? axios.create({ baseURL: scrUrl, timeout, headers: { 'X-Service-Token': scrTok } })
       : null
     if (!this.scraperClient) this.logger.warn('[sync] scraper disabled — URL/token missing')
+    const dashUrl = this.config.get('dashboardBackendUrl', { infer: true }) ?? ''
+    const dashTok = this.config.get('dashboardServiceToken', { infer: true }) ?? ''
+    this.dashboardClient = dashUrl && dashTok
+      ? axios.create({ baseURL: dashUrl, timeout, headers: { 'X-Service-Token': dashTok } })
+      : null
+    if (!this.dashboardClient) this.logger.warn('[sync] dashboard disabled — URL/token missing')
   }
 
   async onModuleInit() {
@@ -87,6 +95,15 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
         is_commissionable: false
       }
     })
+  }
+
+  private async serviceTypeName(serviceTypeId?: string | null): Promise<string> {
+    if (!serviceTypeId) return 'OTA'
+    const st = await this.prisma.serviceType.findUnique({
+      where: { id: serviceTypeId },
+      select: { type: true }
+    })
+    return st?.type ?? 'OTA'
   }
 
   async create(data: CreatePortfolioDto, _user: IUserWithPermissions) {
@@ -228,15 +245,26 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
     return updated
   }
   private async fanOutPortfolioUpdate(oldName: string, newName: string) {
-    if (!this.scraperClient) {
+    if (this.scraperClient) {
+      try {
+        const r = await this.scraperClient.post('/portfolios/sync-update', { oldName, newName })
+        this.logger.log(`[sync] scraper portfolio update: ${JSON.stringify(r.data)}`)
+      } catch (e: any) {
+        this.logger.error(`[sync] scraper portfolio update failed: ${e?.message ?? e}`)
+      }
+    } else {
       this.logger.warn('[sync] scraper disabled, skipping portfolio update sync')
-      return
     }
-    try {
-      const r = await this.scraperClient.post('/portfolios/sync-update', { oldName, newName })
-      this.logger.log(`[sync] scraper portfolio update: ${JSON.stringify(r.data)}`)
-    } catch (e: any) {
-      this.logger.error(`[sync] scraper portfolio update failed: ${e?.message ?? e}`)
+  
+    if (this.dashboardClient) {
+      try {
+        const r = await this.dashboardClient.post('/api/portfolio/sync-update', { oldName, newName })
+        this.logger.log(`[sync] dashboard portfolio update: ${JSON.stringify(r.data)}`)
+      } catch (e: any) {
+        this.logger.error(`[sync] dashboard portfolio update failed: ${e?.message ?? e}`)
+      }
+    } else {
+      this.logger.warn('[sync] dashboard disabled, skipping portfolio update sync')
     }
   }
 
@@ -275,15 +303,26 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
     return result
   }
   private async fanOutPortfolioDelete(name: string) {
-    if (!this.scraperClient) {
+    if (this.scraperClient) {
+      try {
+        const r = await this.scraperClient.post('/portfolios/sync-delete', { name })
+        this.logger.log(`[sync] scraper portfolio delete: ${JSON.stringify(r.data)}`)
+      } catch (e: any) {
+        this.logger.error(`[sync] scraper portfolio delete failed: ${e?.message ?? e}`)
+      }
+    } else {
       this.logger.warn('[sync] scraper disabled, skipping portfolio delete sync')
-      return
     }
-    try {
-      const r = await this.scraperClient.post('/portfolios/sync-delete', { name })
-      this.logger.log(`[sync] scraper portfolio delete: ${JSON.stringify(r.data)}`)
-    } catch (e: any) {
-      this.logger.error(`[sync] scraper portfolio delete failed: ${e?.message ?? e}`)
+  
+    if (this.dashboardClient) {
+      try {
+        const r = await this.dashboardClient.post('/api/portfolio/sync-delete', { name })
+        this.logger.log(`[sync] dashboard portfolio delete: ${JSON.stringify(r.data)}`)
+      } catch (e: any) {
+        this.logger.error(`[sync] dashboard portfolio delete failed: ${e?.message ?? e}`)
+      }
+    } else {
+      this.logger.warn('[sync] dashboard disabled, skipping portfolio delete sync')
     }
   }
 
@@ -487,23 +526,43 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
     return createHash('sha256').update(JSON.stringify(query)).digest('hex').substring(0, 16)
   }
 
-  private async fanOutPortfolioCreate(name: string) {
-    if (!this.scraperClient) {
-      this.logger.warn('[sync] scraper disabled, skipping portfolio create sync')
-      return
+  private async fanOutPortfolioCreate(p: {
+    name: string
+    service_type_id?: string | null
+    is_active?: boolean
+    is_commissionable?: boolean
+    contact_email?: string | null
+  }) {
+    if (this.scraperClient) {
+      try {
+        const r = await this.scraperClient.post('/portfolios/sync-create', { name: p.name })
+        this.logger.log(`[sync] scraper portfolio create: ${JSON.stringify(r.data)}`)
+      } catch (e: any) {
+        this.logger.error(`[sync] scraper portfolio create failed: ${e?.message ?? e}`)
+      }
     }
-    try {
-      const r = await this.scraperClient.post('/portfolios/sync-create', { name })
-      this.logger.log(`[sync] scraper portfolio create: ${JSON.stringify(r.data)}`)
-    } catch (e: any) {
-      this.logger.error(`[sync] scraper portfolio create failed: ${e?.message ?? e}`)
+  
+    if (this.dashboardClient) {
+      const payload = {
+        name: p.name,
+        service_type: await this.serviceTypeName(p.service_type_id),
+        is_active: p.is_active,
+        is_commissionable: p.is_commissionable,
+        contact_email: p.contact_email ?? null
+      }
+      try {
+        const r = await this.dashboardClient.post('/api/portfolio/sync-create', payload)
+        this.logger.log(`[sync] dashboard portfolio create: ${JSON.stringify(r.data)}`)
+      } catch (e: any) {
+        this.logger.error(`[sync] dashboard portfolio create failed: ${e?.message ?? e}`)
+      }
     }
   }
   
   async createAndSync(data: CreatePortfolioDto, user: IUserWithPermissions) {
     const portfolio = await this.create(data, user)
     try {
-      await this.fanOutPortfolioCreate(portfolio.name)
+      await this.fanOutPortfolioCreate(portfolio)
     } catch (e: any) {
       this.logger.error(`[sync] unexpected on portfolio create: ${e?.message ?? e}`)
     }

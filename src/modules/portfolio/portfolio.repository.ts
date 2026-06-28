@@ -100,6 +100,7 @@ export class PortfolioRepository implements IPortfolioRepository {
       _count: undefined
     } as PortfolioWithCounts
   }
+  
 
   async findByName(name: string) {
     return this.prisma.portfolio.findUnique({ where: { name } })

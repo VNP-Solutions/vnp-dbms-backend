@@ -1576,12 +1576,7 @@ export class PropertyService implements IPropertyService {
   }
   
   private async fanOutPropertyBulkCreate(properties: any[]) {
-    if (!this.scraperClient) {
-      this.logger.warn('[sync] scraper disabled, skipping bulk import sync')
-      return
-    }
     if (!properties.length) return
-  
     const items = properties.map((p) => ({
       name:               p.name,
       portfolio_name:     p.portfolio?.name ?? null,
@@ -1593,12 +1588,25 @@ export class PropertyService implements IPropertyService {
       agoda_id:           p.agoda_id ?? null,
       agoda_status:       p.agoda_status ?? null,
     }))
-  
-    try {
-      const r = await this.scraperClient.post('/properties/sync-bulk-create', { items })
-      this.logger.log(`[sync] scraper bulk create: ${JSON.stringify(r.data?.data ?? r.data)}`)
-    } catch (e: any) {
-      this.logger.error(`[sync] scraper bulk create failed: ${e?.message ?? e}`)
+    if (this.scraperClient) {
+      try {
+        const r = await this.scraperClient.post('/properties/sync-bulk-create', { items })
+        this.logger.log(`[sync] scraper bulk create: ${JSON.stringify(r.data?.data ?? r.data)}`)
+      } catch (e: any) {
+        this.logger.error(`[sync] scraper bulk create failed: ${e?.message ?? e}`)
+      }
+    } else {
+      this.logger.warn('[sync] scraper disabled, skipping bulk import sync')
+    }
+    if (this.dashboardClient) {
+      try {
+        const r = await this.dashboardClient.post('/api/property/sync-bulk-create', { items })
+        this.logger.log(`[sync] dashboard bulk create: ${JSON.stringify(r.data?.data ?? r.data)}`)
+      } catch (e: any) {
+        this.logger.error(`[sync] dashboard bulk create failed: ${e?.message ?? e}`)
+      }
+    } else {
+      this.logger.warn('[sync] dashboard disabled, skipping bulk import sync')
     }
   }
 
@@ -2978,15 +2986,26 @@ export class PropertyService implements IPropertyService {
     agoda_id?: number | null
     agoda_status?: string | null
   }) {
-    if (!this.scraperClient) {
+    if (this.scraperClient) {
+      try {
+        const r = await this.scraperClient.post('/properties/sync-create', property)
+        this.logger.log(`[sync] scraper create: ${JSON.stringify(r.data)}`)
+      } catch (e: any) {
+        this.logger.error(`[sync] scraper create failed: ${e?.message ?? e}`)
+      }
+    } else {
       this.logger.warn('[sync] scraper disabled, skipping create sync')
-      return
     }
-    try {
-      const r = await this.scraperClient.post('/properties/sync-create', property)
-      this.logger.log(`[sync] scraper create: ${JSON.stringify(r.data)}`)
-    } catch (e: any) {
-      this.logger.error(`[sync] scraper create failed: ${e?.message ?? e}`)
+  
+    if (this.dashboardClient) {
+      try {
+        const r = await this.dashboardClient.post('/api/property/sync-create', property)
+        this.logger.log(`[sync] dashboard create: ${JSON.stringify(r.data)}`)
+      } catch (e: any) {
+        this.logger.error(`[sync] dashboard create failed: ${e?.message ?? e}`)
+      }
+    } else {
+      this.logger.warn('[sync] dashboard disabled, skipping create sync')
     }
   }
 
@@ -2995,18 +3014,28 @@ export class PropertyService implements IPropertyService {
     booking_id: number | null
     agoda_id: number | null
   }) {
-    if (!this.scraperClient) {
+    if (this.scraperClient) {
+      try {
+        const r = await this.scraperClient.post('/properties/sync-delete', otaIds)
+        this.logger.log(`[sync] scraper delete: ${JSON.stringify(r.data)}`)
+      } catch (e: any) {
+        this.logger.error(`[sync] scraper delete failed: ${e?.message ?? e}`)
+      }
+    } else {
       this.logger.warn('[sync] scraper disabled, skipping delete sync')
-      return
     }
-    try {
-      const r = await this.scraperClient.post('/properties/sync-delete', otaIds)
-      this.logger.log(`[sync] scraper delete: ${JSON.stringify(r.data)}`)
-    } catch (e: any) {
-      this.logger.error(`[sync] scraper delete failed: ${e?.message ?? e}`)
+  
+    if (this.dashboardClient) {
+      try {
+        const r = await this.dashboardClient.post('/api/property/sync-delete', otaIds)
+        this.logger.log(`[sync] dashboard delete: ${JSON.stringify(r.data)}`)
+      } catch (e: any) {
+        this.logger.error(`[sync] dashboard delete failed: ${e?.message ?? e}`)
+      }
+    } else {
+      this.logger.warn('[sync] dashboard disabled, skipping delete sync')
     }
   }
-
   private readonly inboundSyncFields = ['name', 'card_descriptor', 'is_active', 'next_due_date',
     'expedia_id', 'expedia_status', 'booking_id', 'booking_status', 'agoda_id', 'agoda_status']
     
