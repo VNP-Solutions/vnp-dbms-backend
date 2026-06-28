@@ -814,12 +814,27 @@ export class PropertyController {
 @Public()
 @Controller('property')
 export class PropertySyncController {
-  constructor(@Inject('IPropertyService') private readonly propertyService: IPropertyService) {}
+  constructor(
+    @Inject('IPropertyService') private readonly propertyService: IPropertyService,
+    private readonly expediaCheckerService: PropertyExpediaCheckerService
+  ) {}
   @Patch('sync-by-ota')
   @UseGuards(ServiceTokenGuard)
   @ApiHeader({ name: 'x-service-token', description: 'Service token' })
   @ApiOperation({ summary: 'Internal: sync property from scraper by OTA id' })
   syncByOta(@Body() dto: SyncByOtaDto) {
     return this.propertyService.syncByOta(dto)
+  }
+
+  @Post('expedia-check/trigger-lambda')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Internal: re-trigger the Expedia check Lambda',
+    description:
+      'Called by the scraper after a property check completes so the checker Lambda drains the next queued account group. Processes the SQS queue one group at a time.'
+  })
+  @ApiResponse({ status: 200, description: 'Lambda trigger requested' })
+  triggerExpediaCheckLambda() {
+    return this.expediaCheckerService.triggerCheckLambda()
   }
 }
