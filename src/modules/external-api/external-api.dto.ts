@@ -398,6 +398,25 @@ export class OtaQpLookupDto {
   agoda_ids?: number[]
 }
 
+// ─── Manual Lambda Trigger ────────────────────────────────────────────────────
+
+export class TriggerLambdaDto {
+  @ApiProperty({
+    type: String,
+    example: 'expedia',
+    description:
+      'Platform value forwarded as the Lambda payload. ' +
+      'Defaults to the EXPEDIA_CHECK_LAMBDA_PLATFORM env var when omitted.',
+    required: false
+  })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  platform?: string
+}
+
+// ─── OTA ID → QP Username lookup ─────────────────────────────────────────────
+
 export interface OtaQpLookupResult {
   expedia: Array<{ expedia_id: number; qp_username: string | null }>
   booking: Array<{ booking_id: number; qp_username: string | null }>

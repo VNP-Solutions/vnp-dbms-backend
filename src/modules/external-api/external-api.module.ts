@@ -6,6 +6,7 @@ import { ExternalPortfolioController } from './external-portfolio.controller'
 import { ExternalPortfolioService } from './external-portfolio.service'
 import { ExternalPropertyController } from './external-property.controller'
 import { ExternalPropertyService } from './external-property.service'
+import { ExternalLambdaTriggerController } from './external-lambda-trigger.controller'
 import { ExternalRecurringJobsController } from './external-recurring-jobs.controller'
 import { ExternalRecurringJobsService } from './external-recurring-jobs.service'
 import { ExternalSubportfolioController } from './external-subportfolio.controller'
@@ -17,7 +18,8 @@ import { ExternalSubportfolioService } from './external-subportfolio.service'
     ExternalPortfolioController,
     ExternalPropertyController,
     ExternalSubportfolioController,
-    ExternalRecurringJobsController
+    ExternalRecurringJobsController,
+    ExternalLambdaTriggerController
   ],
   providers: [
     PrismaService,
