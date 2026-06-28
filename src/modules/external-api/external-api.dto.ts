@@ -5,6 +5,7 @@ import {
   IsArray,
   IsDateString,
   IsIn,
+  IsInt,
   IsNotEmpty,
   IsNumber,
   IsOptional,
@@ -355,4 +356,50 @@ export class UpdatePropertyCredentialsExternalDto {
 
   @IsOptional() @IsString()
   reporting_contact_phone?: string
+}
+
+// ─── OTA ID → QP Username lookup ─────────────────────────────────────────────
+
+export class OtaQpLookupDto {
+  @ApiProperty({
+    type: [Number],
+    example: [12345678, 87654321],
+    description: 'List of Expedia property IDs to look up',
+    required: false,
+    default: []
+  })
+  @IsArray()
+  @IsInt({ each: true })
+  @IsOptional()
+  expedia_ids?: number[]
+
+  @ApiProperty({
+    type: [Number],
+    example: [11111111, 22222222],
+    description: 'List of Booking property IDs to look up',
+    required: false,
+    default: []
+  })
+  @IsArray()
+  @IsInt({ each: true })
+  @IsOptional()
+  booking_ids?: number[]
+
+  @ApiProperty({
+    type: [Number],
+    example: [33333333, 44444444],
+    description: 'List of Agoda property IDs to look up',
+    required: false,
+    default: []
+  })
+  @IsArray()
+  @IsInt({ each: true })
+  @IsOptional()
+  agoda_ids?: number[]
+}
+
+export interface OtaQpLookupResult {
+  expedia: Array<{ expedia_id: number; qp_username: string | null }>
+  booking: Array<{ booking_id: number; qp_username: string | null }>
+  agoda: Array<{ agoda_id: number; qp_username: string | null }>
 }

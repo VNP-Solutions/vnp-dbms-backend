@@ -4,6 +4,7 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
   Inject,
   Param,
   Patch,
@@ -40,6 +41,7 @@ import {
   BulkTransferPropertyDto,
   BulkUpdateResultDto,
   CreatePropertyDto,
+  ExpediaCheckPropertiesDto,
   ExportPropertyExcelDto,
   GetPropertyCredentialDto,
   GlobalFilterIdNameDto,
@@ -53,6 +55,7 @@ import {
 } from './property.dto'
 import type { IPropertyService } from './property.interface'
 import { ServiceTokenGuard } from './guards/service-token.guard'
+import { PropertyExpediaCheckerService } from './property-expedia-checker.service'
 
 @ApiTags('Property')
 @ApiBearerAuth('JWT-auth')
@@ -66,7 +69,8 @@ import { ServiceTokenGuard } from './guards/service-token.guard'
 export class PropertyController {
   constructor(
     @Inject('IPropertyService')
-    private readonly propertyService: IPropertyService
+    private readonly propertyService: IPropertyService,
+    private readonly expediaCheckerService: PropertyExpediaCheckerService
   ) {}
 
   @Post('credential')
@@ -776,6 +780,33 @@ export class PropertyController {
     @CurrentUser() user: IUserWithPermissions
   ) {
     return this.propertyService.bulkTransferPortfolio(dto.ids, dto.portfolio_id, dto.password, user)
+  }
+
+  @Post('expedia-check')
+  @HttpCode(200)
+  @RequirePermission(ModuleType.PROPERTY, PermissionAction.READ)
+  @ApiOperation({
+    summary: 'Dispatch Expedia property check',
+    description:
+      'Groups the given properties by Expedia account (expedia_username) and pushes one check payload per group to the AWS SQS queue. ' +
+      'After enqueueing, the checker Lambda is triggered asynchronously to drain the queue and process the checks in the background.'
+  })
+  @ApiBody({ type: ExpediaCheckPropertiesDto })
+  @ApiResponse({
+    status: 200,
+    description: 'All account groups enqueued — processing in background',
+    schema: {
+      example: {
+        message: 'Expedia property check dispatched. Payloads were queued to SQS and the checker Lambda was triggered.',
+        totalProperties: 3,
+        accountGroups: 2
+      }
+    }
+  })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
+  @ApiResponse({ status: 502, description: 'Expedia check queue is not configured' })
+  checkExpediaProperties(@Body() dto: ExpediaCheckPropertiesDto) {
+    return this.expediaCheckerService.checkProperties(dto.items)
   }
 }
 
