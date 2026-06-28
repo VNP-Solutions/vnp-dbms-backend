@@ -1520,6 +1520,46 @@ export class PropertyService implements IPropertyService {
     await this.redisService.deleteByPattern(ALL_PATTERN)
     return result
   }
+  
+  async importFromExcelAndSync(file: Express.Multer.File, user: IUserWithPermissions): Promise<ImportPropertiesResult> {
+    const result = await this.importFromExcel(file, user)
+    try {
+      await this.fanOutPropertyBulkCreate([
+        ...(result.properties ?? []),
+        ...(result.existingProperties ?? [])
+      ])
+    } catch (e: any) {
+      this.logger.error(`[sync] unexpected on bulk import: ${e?.message ?? e}`)
+    }
+    return result
+  }
+  
+  private async fanOutPropertyBulkCreate(properties: any[]) {
+    if (!this.scraperClient) {
+      this.logger.warn('[sync] scraper disabled, skipping bulk import sync')
+      return
+    }
+    if (!properties.length) return
+  
+    const items = properties.map((p) => ({
+      name:               p.name,
+      portfolio_name:     p.portfolio?.name ?? null,
+      sub_portfolio_name: p.subportfolio?.name ?? null,
+      expedia_id:         p.expedia_id ?? null,
+      expedia_status:     p.expedia_status ?? null,
+      booking_id:         p.booking_id ?? null,
+      booking_status:     p.booking_status ?? null,
+      agoda_id:           p.agoda_id ?? null,
+      agoda_status:       p.agoda_status ?? null,
+    }))
+  
+    try {
+      const r = await this.scraperClient.post('/properties/sync-bulk-create', { items })
+      this.logger.log(`[sync] scraper bulk create: ${JSON.stringify(r.data?.data ?? r.data)}`)
+    } catch (e: any) {
+      this.logger.error(`[sync] scraper bulk create failed: ${e?.message ?? e}`)
+    }
+  }
 
   async bulkUpdate(
     file: Express.Multer.File,

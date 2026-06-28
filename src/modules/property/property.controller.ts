@@ -135,7 +135,7 @@ export class PropertyController {
     if (!file) {
       throw new BadRequestException('Excel file is required')
     }
-    return this.propertyService.importFromExcel(file, user)
+    return this.propertyService.importFromExcelAndSync(file, user)
   }
 
   @Post('bulk-update')
