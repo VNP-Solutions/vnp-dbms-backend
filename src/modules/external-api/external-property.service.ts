@@ -533,31 +533,31 @@ export class ExternalPropertyService {
     const bookingIds = dto.booking_ids ?? []
     const agodaIds = dto.agoda_ids ?? []
 
-    type Row = { id: number; qp_username: string | null }
+    type RawRow<K extends string> = Record<K, number | null> & { qp_username: string | null }
 
-    const toRows = (items: { expedia_id?: number | null; booking_id?: number | null; agoda_id?: number | null; qp_username: string | null }[], key: 'expedia_id' | 'booking_id' | 'agoda_id'): Row[] =>
-      items.map(r => ({ id: (r[key] as number), qp_username: r.qp_username }))
+    const toMap = <K extends string>(rows: RawRow<K>[], key: K): Map<number, string | null> =>
+      new Map(rows.filter(r => r[key] != null).map(r => [r[key] as number, r.qp_username]))
 
     const [expediaRaw, bookingRaw, agodaRaw] = await Promise.all([
       expediaIds.length > 0
         ? this.prisma.property.findMany({ where: { expedia_id: { in: expediaIds } }, select: { expedia_id: true, qp_username: true } })
-        : ([] as { expedia_id: number | null; qp_username: string | null }[]),
+        : ([] as RawRow<'expedia_id'>[]),
       bookingIds.length > 0
         ? this.prisma.property.findMany({ where: { booking_id: { in: bookingIds } }, select: { booking_id: true, qp_username: true } })
-        : ([] as { booking_id: number | null; qp_username: string | null }[]),
+        : ([] as RawRow<'booking_id'>[]),
       agodaIds.length > 0
         ? this.prisma.property.findMany({ where: { agoda_id: { in: agodaIds } }, select: { agoda_id: true, qp_username: true } })
-        : ([] as { agoda_id: number | null; qp_username: string | null }[])
+        : ([] as RawRow<'agoda_id'>[])
     ])
 
-    const expediaMap = new Map<number, string | null>(toRows(expediaRaw, 'expedia_id').map(r => [r.id, r.qp_username]))
-    const bookingMap = new Map<number, string | null>(toRows(bookingRaw, 'booking_id').map(r => [r.id, r.qp_username]))
-    const agodaMap = new Map<number, string | null>(toRows(agodaRaw, 'agoda_id').map(r => [r.id, r.qp_username]))
+    const expediaMap = toMap(expediaRaw, 'expedia_id')
+    const bookingMap = toMap(bookingRaw, 'booking_id')
+    const agodaMap = toMap(agodaRaw, 'agoda_id')
 
-    return {
-      expedia: expediaIds.map(id => ({ expedia_id: id, qp_username: expediaMap.get(id) ?? null })),
-      booking: bookingIds.map(id => ({ booking_id: id, qp_username: bookingMap.get(id) ?? null })),
-      agoda: agodaIds.map(id => ({ agoda_id: id, qp_username: agodaMap.get(id) ?? null }))
-    }
+    return [
+      ...expediaIds.map(id => ({ hotel_id: id, qp_username: expediaMap.get(id) ?? null })),
+      ...bookingIds.map(id => ({ hotel_id: id, qp_username: bookingMap.get(id) ?? null })),
+      ...agodaIds.map(id => ({ hotel_id: id, qp_username: agodaMap.get(id) ?? null }))
+    ]
   }
 }

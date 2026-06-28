@@ -226,18 +226,13 @@ export class ExternalPropertyController {
   @ApiBody({ type: OtaQpLookupDto })
   @ApiResponse({
     status: 200,
-    description: 'Lookup results grouped by OTA',
+    description: 'Flat array of { hotel_id, qp_username } entries for all supplied OTA IDs',
     schema: {
-      example: {
-        expedia: [
-          { expedia_id: 12345678, qp_username: 'user@example.com' },
-          { expedia_id: 99999999, qp_username: null }
-        ],
-        booking: [
-          { booking_id: 11111111, qp_username: 'other@example.com' }
-        ],
-        agoda: []
-      }
+      example: [
+        { hotel_id: 12345678, qp_username: 'user@example.com' },
+        { hotel_id: 99999999, qp_username: null },
+        { hotel_id: 11111111, qp_username: 'other@example.com' }
+      ]
     }
   })
   qpLookup(@Body() dto: OtaQpLookupDto) {
