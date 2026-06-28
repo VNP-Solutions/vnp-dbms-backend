@@ -100,6 +100,18 @@ export class ConfigurationSchema {
 
   @IsOptional()
   @IsString()
+  EXPEDIA_CHECK_QUEUE_URL?: string
+
+  @IsOptional()
+  @IsString()
+  EXPEDIA_CHECK_LAMBDA_FUNCTION_NAME?: string
+
+  @IsOptional()
+  @IsString()
+  EXPEDIA_CHECK_LAMBDA_PLATFORM?: string
+
+  @IsOptional()
+  @IsString()
   REDIS_HOST?: string
 
   @IsOptional()

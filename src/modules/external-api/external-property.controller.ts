@@ -3,9 +3,11 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
   NotFoundException,
   Param,
   Patch,
+  Post,
   Query,
   UseGuards
 } from '@nestjs/common'
@@ -17,7 +19,7 @@ import { ProjectRoleGuard } from '../../common/guards/project-role.guard'
 import type { IUserWithProjectRole } from '../../common/utils/project-context.util'
 import { CurrentUser } from '../auth/decorators/current-user.decorator'
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
-import { UpdatePropertyCredentialsExternalDto } from './external-api.dto'
+import { OtaQpLookupDto, UpdatePropertyCredentialsExternalDto } from './external-api.dto'
 import { ExternalPropertyService } from './external-property.service'
 
 @ApiTags('External API - Property')
@@ -211,5 +213,34 @@ export class ExternalPropertyController {
       propertyId,
       credentialsData
     )
+  }
+
+  @Post('qp-lookup')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Look up QP username by OTA property IDs',
+    description:
+      'Accepts up to three arrays of OTA IDs (Expedia, Booking, Agoda) and returns the matching ' +
+      '`qp_username` for each. IDs that do not match any property return `null` for `qp_username`.'
+  })
+  @ApiBody({ type: OtaQpLookupDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Lookup results grouped by OTA',
+    schema: {
+      example: {
+        expedia: [
+          { expedia_id: 12345678, qp_username: 'user@example.com' },
+          { expedia_id: 99999999, qp_username: null }
+        ],
+        booking: [
+          { booking_id: 11111111, qp_username: 'other@example.com' }
+        ],
+        agoda: []
+      }
+    }
+  })
+  qpLookup(@Body() dto: OtaQpLookupDto) {
+    return this.externalPropertyService.getQpUsernameByOtaIds(dto)
   }
 }

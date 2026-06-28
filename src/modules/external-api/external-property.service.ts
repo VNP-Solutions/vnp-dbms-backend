@@ -6,7 +6,7 @@ import type { IUserWithProjectRole } from '../../common/utils/project-context.ut
 import { getProjectAccessibleResources } from '../../common/utils/project-context.util'
 import type { Configuration } from '../../config/configuration'
 import { PrismaService } from '../prisma/prisma.service'
-import type { DecryptedPropertyCredential, ExternalApiQueryDto, ExternalPropertyDto, UpdatePropertyCredentialsExternalDto } from './external-api.dto'
+import type { DecryptedPropertyCredential, ExternalApiQueryDto, ExternalPropertyDto, OtaQpLookupDto, OtaQpLookupResult, UpdatePropertyCredentialsExternalDto } from './external-api.dto'
 
 const relationIncludes = {
   service_type: true,
@@ -525,6 +525,39 @@ export class ExternalPropertyService {
     return {
       message: 'Credentials updated successfully',
       credentials: this.decryptCredentials(updatedCredentials)
+    }
+  }
+
+  async getQpUsernameByOtaIds(dto: OtaQpLookupDto): Promise<OtaQpLookupResult> {
+    const expediaIds = dto.expedia_ids ?? []
+    const bookingIds = dto.booking_ids ?? []
+    const agodaIds = dto.agoda_ids ?? []
+
+    type Row = { id: number; qp_username: string | null }
+
+    const toRows = (items: { expedia_id?: number | null; booking_id?: number | null; agoda_id?: number | null; qp_username: string | null }[], key: 'expedia_id' | 'booking_id' | 'agoda_id'): Row[] =>
+      items.map(r => ({ id: (r[key] as number), qp_username: r.qp_username }))
+
+    const [expediaRaw, bookingRaw, agodaRaw] = await Promise.all([
+      expediaIds.length > 0
+        ? this.prisma.property.findMany({ where: { expedia_id: { in: expediaIds } }, select: { expedia_id: true, qp_username: true } })
+        : ([] as { expedia_id: number | null; qp_username: string | null }[]),
+      bookingIds.length > 0
+        ? this.prisma.property.findMany({ where: { booking_id: { in: bookingIds } }, select: { booking_id: true, qp_username: true } })
+        : ([] as { booking_id: number | null; qp_username: string | null }[]),
+      agodaIds.length > 0
+        ? this.prisma.property.findMany({ where: { agoda_id: { in: agodaIds } }, select: { agoda_id: true, qp_username: true } })
+        : ([] as { agoda_id: number | null; qp_username: string | null }[])
+    ])
+
+    const expediaMap = new Map<number, string | null>(toRows(expediaRaw, 'expedia_id').map(r => [r.id, r.qp_username]))
+    const bookingMap = new Map<number, string | null>(toRows(bookingRaw, 'booking_id').map(r => [r.id, r.qp_username]))
+    const agodaMap = new Map<number, string | null>(toRows(agodaRaw, 'agoda_id').map(r => [r.id, r.qp_username]))
+
+    return {
+      expedia: expediaIds.map(id => ({ expedia_id: id, qp_username: expediaMap.get(id) ?? null })),
+      booking: bookingIds.map(id => ({ booking_id: id, qp_username: bookingMap.get(id) ?? null })),
+      agoda: agodaIds.map(id => ({ agoda_id: id, qp_username: agodaMap.get(id) ?? null }))
     }
   }
 }

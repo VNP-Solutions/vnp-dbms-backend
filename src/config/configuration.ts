@@ -46,6 +46,11 @@ export interface Configuration {
   scraperBackendUrl: string
   expediaCheckerBaseUrl: string
   expediaCheckerTimeoutMs: number
+  expediaCheck: {
+    queueUrl: string
+    lambdaFunctionName: string
+    lambdaPlatform: string
+  }
   redis: {
     host: string
     port: number
@@ -143,6 +148,11 @@ export default (): Configuration => {
   scraperBackendUrl: process.env.SCRAPER_BACKEND_URL || '',
   expediaCheckerBaseUrl: process.env.EXPEDIA_CHECKER_BASE_URL || '',
   expediaCheckerTimeoutMs: parseInt(process.env.EXPEDIA_CHECKER_TIMEOUT_MS || '30000', 10),
+  expediaCheck: {
+    queueUrl: process.env.EXPEDIA_CHECK_QUEUE_URL || '',
+    lambdaFunctionName: process.env.EXPEDIA_CHECK_LAMBDA_FUNCTION_NAME || '',
+    lambdaPlatform: process.env.EXPEDIA_CHECK_LAMBDA_PLATFORM || 'expedia'
+  },
   redis: {
     host: process.env.REDIS_HOST || 'localhost',
     port: parseInt(process.env.REDIS_PORT || '6379', 10),

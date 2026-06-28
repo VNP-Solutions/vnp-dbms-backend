@@ -788,26 +788,23 @@ export class PropertyController {
   @ApiOperation({
     summary: 'Dispatch Expedia property check',
     description:
-      'Groups the given properties by Expedia account (expedia_username) and dispatches one check request per group in parallel. ' +
-      'The upstream checker service acknowledges immediately and processes in the background. ' +
-      '409 means the checker is already busy with another job.'
+      'Groups the given properties by Expedia account (expedia_username) and pushes one check payload per group to the AWS SQS queue. ' +
+      'After enqueueing, the checker Lambda is triggered asynchronously to drain the queue and process the checks in the background.'
   })
   @ApiBody({ type: ExpediaCheckPropertiesDto })
   @ApiResponse({
     status: 200,
-    description: 'All account groups accepted — processing in background',
+    description: 'All account groups enqueued — processing in background',
     schema: {
       example: {
-        message: 'Expedia property check dispatched. Processing is running in background on the checker service.',
+        message: 'Expedia property check dispatched. Payloads were queued to SQS and the checker Lambda was triggered.',
         totalProperties: 3,
         accountGroups: 2
       }
     }
   })
   @ApiResponse({ status: 400, description: 'Invalid request body' })
-  @ApiResponse({ status: 409, description: 'Expedia checker is already busy — try again later' })
-  @ApiResponse({ status: 502, description: 'Upstream Expedia checker returned an error' })
-  @ApiResponse({ status: 504, description: 'Expedia checker timed out or is unreachable' })
+  @ApiResponse({ status: 502, description: 'Expedia check queue is not configured' })
   checkExpediaProperties(@Body() dto: ExpediaCheckPropertiesDto) {
     return this.expediaCheckerService.checkProperties(dto.items)
   }
