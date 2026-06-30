@@ -561,7 +561,7 @@ export class PropertyController {
   @ApiOperation({
     summary: 'Get unique filter values for global filter',
     description:
-      'Returns unique values from accessible portfolios and properties for group-filter / dropdown UIs. Includes OTA integration fields, contacts, statuses, processors, portfolio_id / subportfolio rows, service_type, qp_username, next_due_date, credential secondary usernames and need_another_domain (booleans as "true"/"false" strings). Built from the same cached portfolio + property sources as list endpoints.'
+      'Returns unique values from accessible portfolios and properties for group-filter / dropdown UIs. Includes OTA integration fields, contacts, statuses, processors, portfolio_id / subportfolio rows, service_type, qp_username, next_due_date, credential secondary usernames and need_another_domain (booleans as "true"/"false" strings). Subportfolios are loaded from the full accessible subportfolio list (same source as /subportfolio), not only those assigned to properties.'
   })
   @ApiResponse({
     status: 200,

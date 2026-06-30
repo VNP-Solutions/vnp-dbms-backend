@@ -11,6 +11,12 @@ export type SubportfolioWithCounts = SubportfolioWithPortfolio & {
   total_properties: number
 }
 
+export type GlobalFilterSubportfolioRow = {
+  id: string
+  name: string
+  portfolio_id: string
+}
+
 export interface ISubportfolioRepository {
   create(data: CreateSubportfolioDto): Promise<SubportfolioWithPortfolio>
   findAll(queryOptions: { where: any; skip?: number; take?: number; orderBy?: any }): Promise<SubportfolioWithCounts[]>
@@ -22,6 +28,9 @@ export interface ISubportfolioRepository {
   delete(id: string): Promise<Subportfolio>
   getAccessibleSubportfolioIds(userId: string): Promise<string[] | 'all'>
   getAccessiblePortfolioIdsForSubportfolio(userId: string): Promise<string[] | 'all'>
+  findAllForGlobalFilter(
+    accessibleIds: string[] | 'all'
+  ): Promise<GlobalFilterSubportfolioRow[]>
 }
 
 export interface ISubportfolioService {
@@ -31,4 +40,7 @@ export interface ISubportfolioService {
   findByPortfolioId(portfolioId: string, user: IUserWithPermissions): Promise<SubportfolioWithPortfolio[]>
   update(id: string, data: UpdateSubportfolioDto, user: IUserWithPermissions): Promise<SubportfolioWithPortfolio>
   remove(id: string, user: IUserWithPermissions): Promise<{ message: string }>
+  findAllCachedForGlobalFilter(
+    user: IUserWithPermissions
+  ): Promise<GlobalFilterSubportfolioRow[]>
 }

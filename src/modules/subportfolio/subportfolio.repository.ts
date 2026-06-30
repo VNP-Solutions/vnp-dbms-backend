@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { CreateSubportfolioDto, UpdateSubportfolioDto } from './subportfolio.dto'
 import type {
+  GlobalFilterSubportfolioRow,
   ISubportfolioRepository,
   SubportfolioWithCounts,
   SubportfolioWithPortfolio
@@ -133,5 +134,17 @@ export class SubportfolioRepository implements ISubportfolioRepository {
 
   async delete(id: string) {
     return this.prisma.subportfolio.delete({ where: { id } })
+  }
+
+  async findAllForGlobalFilter(
+    accessibleIds: string[] | 'all'
+  ): Promise<GlobalFilterSubportfolioRow[]> {
+    if (Array.isArray(accessibleIds) && accessibleIds.length === 0) return []
+    const where = accessibleIds === 'all' ? {} : { id: { in: accessibleIds } }
+    return this.prisma.subportfolio.findMany({
+      where,
+      select: { id: true, name: true, portfolio_id: true },
+      orderBy: { name: 'asc' }
+    })
   }
 }

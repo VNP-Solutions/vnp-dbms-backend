@@ -4,6 +4,7 @@ import { EncryptionUtil } from '../../common/utils/encryption.util'
 import { AuthModule } from '../auth/auth.module'
 import { PropertyCredentialsModule } from '../property-credentials/property-credentials.module'
 import { PortfolioModule } from '../portfolio/portfolio.module'
+import { SubportfolioModule } from '../subportfolio/subportfolio.module'
 import { RedisService } from '../redis/redis.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { PropertyController, PropertySyncController } from './property.controller'
@@ -13,7 +14,7 @@ import { PropertyService } from './property.service'
 import { ServiceTokenGuard } from './guards/service-token.guard'
 
 @Module({
-  imports: [AuthModule, PropertyCredentialsModule, forwardRef(() => PortfolioModule)],
+  imports: [AuthModule, PropertyCredentialsModule, forwardRef(() => PortfolioModule), SubportfolioModule],
   controllers: [PropertySyncController, PropertyController],
   providers: [
     { provide: 'IPropertyService', useClass: PropertyService },

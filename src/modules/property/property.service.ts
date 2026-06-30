@@ -15,6 +15,7 @@ import { EmailUtil } from '../../common/utils/email.util'
 import { EncryptionUtil } from '../../common/utils/encryption.util'
 import type { IAuthRepository } from '../auth/auth.interface'
 import type { IPortfolioService } from '../portfolio/portfolio.interface'
+import type { ISubportfolioService } from '../subportfolio/subportfolio.interface'
 import { PrismaService } from '../prisma/prisma.service'
 import type { IPropertyCredentialsService } from '../property-credentials/property-credentials.interface'
 import { RedisService } from '../redis/redis.service'
@@ -62,6 +63,8 @@ export class PropertyService implements IPropertyService {
     private readonly authRepository: IAuthRepository,
     @Inject('IPortfolioService')
     private readonly portfolioService: IPortfolioService,
+    @Inject('ISubportfolioService')
+    private readonly subportfolioService: ISubportfolioService,
     private readonly encryptionUtil: EncryptionUtil,
     private readonly prisma: PrismaService,
     private readonly redisService: RedisService,
@@ -2436,8 +2439,11 @@ export class PropertyService implements IPropertyService {
     // Delete all portfolio cache keys (portfolios are used in global filter)
     await this.redisService.deleteByPattern('portfolio:*')
 
+    // Delete all subportfolio cache keys (subportfolios are used in global filter)
+    await this.redisService.deleteByPattern('subportfolio:all:*')
+
     this.logger.log(
-      `[MANUAL CACHE REFRESH] Successfully cleared all property and portfolio cache keys`
+      `[MANUAL CACHE REFRESH] Successfully cleared all property, portfolio, and subportfolio cache keys`
     )
 
     return {
@@ -2446,9 +2452,10 @@ export class PropertyService implements IPropertyService {
   }
 
   async getAllDataForGlobalFilter(user: IUserWithPermissions) {
-    const [portfolios, properties] = await Promise.all([
+    const [portfolios, properties, subportfolios] = await Promise.all([
       this.portfolioService.findAllCached(user),
-      this.findAllCached(user)
+      this.findAllCached(user),
+      this.subportfolioService.findAllCachedForGlobalFilter(user)
     ])
 
     const uniqueExpediaServiceFees = new Set<string>()
@@ -2566,6 +2573,14 @@ export class PropertyService implements IPropertyService {
         uniquePortfolioContactEmails.add(portfolio.portfolio_contact_email)
     })
 
+    subportfolios.forEach((subportfolio) => {
+      subportfolioMap.set(subportfolio.id, {
+        id: subportfolio.id,
+        name: subportfolio.name,
+        portfolio_id: subportfolio.portfolio_id
+      })
+    })
+
     properties.forEach((property: any) => {
       if (property.portfolio_id) portfolioIdSet.add(property.portfolio_id)
       if (property.service_type)
@@ -2577,13 +2592,6 @@ export class PropertyService implements IPropertyService {
       if (property.agoda_id) uniqueAgodaIds.add(property.agoda_id)
       if (property.id && property.name) {
         propertyMap.set(property.id, { id: property.id, name: property.name })
-      }
-      if (property.subportfolio?.id) {
-        subportfolioMap.set(property.subportfolio.id, {
-          id: property.subportfolio.id,
-          name: property.subportfolio.name,
-          portfolio_id: property.subportfolio.portfolio_id
-        })
       }
       if (property.hotel_address)
         uniqueHotelAddresses.add(property.hotel_address)
