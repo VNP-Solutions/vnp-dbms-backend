@@ -1,7 +1,11 @@
 import { Inject, Injectable, Logger } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { CreatePropertyDto, UpdatePropertyDto } from './property.dto'
-import { collectPropertyUniqueConflicts } from './property-uniqueness.util'
+import {
+  collectPropertyUniqueConflicts,
+  normalizePropertyIdentifier,
+  propertyIdentifierKey
+} from './property-uniqueness.util'
 import type {
   ImportPropertiesResult,
   ImportPropertyRow,
@@ -313,6 +317,7 @@ export class PropertyRepository implements IPropertyRepository {
     const createdProperties: any[] = []
     const skippedProperties: Array<{ name: string; reason: string }> = []
     const existingProperties: any[] = []
+    const seenIdentifiersInBatch = new Set<string>()
 
     for (const row of rows) {
       const { propertyName, portfolioName } = row
@@ -439,8 +444,10 @@ export class PropertyRepository implements IPropertyRepository {
       if (row.propertyAddress) propertyPayload.hotel_address = row.propertyAddress
       if (row.cardDescriptor) propertyPayload.card_descriptor = row.cardDescriptor
       if (row.description) propertyPayload.description = row.description
-      if (row.propertyIdentifier)
-        propertyPayload.property_identifier = row.propertyIdentifier
+      const normalizedIdentifier = normalizePropertyIdentifier(row.propertyIdentifier)
+      if (normalizedIdentifier) {
+        propertyPayload.property_identifier = normalizedIdentifier
+      }
       if (row.portfolioContact)
         propertyPayload.portfolio_contact = row.portfolioContact
       if (row.expediaId) propertyPayload.expedia_id = parseInt(row.expediaId) || undefined
@@ -661,6 +668,19 @@ export class PropertyRepository implements IPropertyRepository {
         })
         propertiesSkipped++
         continue
+      }
+
+      if (normalizedIdentifier) {
+        const identifierKey = propertyIdentifierKey(normalizedIdentifier)
+        if (seenIdentifiersInBatch.has(identifierKey)) {
+          skippedProperties.push({
+            name: propertyName,
+            reason: `Duplicate property identifier in import file: ${normalizedIdentifier}`
+          })
+          propertiesSkipped++
+          continue
+        }
+        seenIdentifiersInBatch.add(identifierKey)
       }
 
       try {
