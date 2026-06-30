@@ -27,6 +27,7 @@ export interface ISubportfolioRepository {
 export interface ISubportfolioService {
   create(data: CreateSubportfolioDto, user: IUserWithPermissions): Promise<SubportfolioWithPortfolio>
   findAll(query: SubportfolioQueryDto, user: IUserWithPermissions): Promise<PaginatedResult<SubportfolioWithCounts>>
+  findAllCached(user: IUserWithPermissions): Promise<SubportfolioWithCounts[]>
   findOne(id: string, user: IUserWithPermissions): Promise<SubportfolioWithCounts>
   findByPortfolioId(portfolioId: string, user: IUserWithPermissions): Promise<SubportfolioWithPortfolio[]>
   update(id: string, data: UpdateSubportfolioDto, user: IUserWithPermissions): Promise<SubportfolioWithPortfolio>

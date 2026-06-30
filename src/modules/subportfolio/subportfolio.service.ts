@@ -1,5 +1,7 @@
-import { ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common'
+import { ConflictException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common'
 import { QueryBuilder } from '../../common/utils/query-builder.util'
+import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
+import { RedisService } from '../redis/redis.service'
 import { CreateSubportfolioDto, SubportfolioQueryDto, UpdateSubportfolioDto } from './subportfolio.dto'
 import type {
   ISubportfolioRepository,
@@ -7,19 +9,25 @@ import type {
   SubportfolioWithCounts,
   SubportfolioWithPortfolio
 } from './subportfolio.interface'
-import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
+
+const ALL_PATTERN = 'subportfolio:all:*'
 
 @Injectable()
 export class SubportfolioService implements ISubportfolioService {
+  private readonly logger = new Logger(SubportfolioService.name)
+
   constructor(
     @Inject('ISubportfolioRepository')
-    private readonly repo: ISubportfolioRepository
+    private readonly repo: ISubportfolioRepository,
+    private readonly redisService: RedisService
   ) {}
 
   async create(data: CreateSubportfolioDto, _user: IUserWithPermissions): Promise<SubportfolioWithPortfolio> {
     const existing = await this.repo.findByName(data.name)
     if (existing) throw new ConflictException('Subportfolio with this name already exists')
-    return this.repo.create(data)
+    const subportfolio = await this.repo.create(data)
+    await this.redisService.deleteByPattern(ALL_PATTERN)
+    return subportfolio
   }
 
   async findAll(query: SubportfolioQueryDto, user: IUserWithPermissions) {
@@ -89,6 +97,28 @@ export class SubportfolioService implements ISubportfolioService {
     }
   }
 
+  async findAllCached(user: IUserWithPermissions): Promise<SubportfolioWithCounts[]> {
+    const cacheKey = `subportfolio:all:${user.id}`
+    const cached = await this.redisService.get<SubportfolioWithCounts[]>(cacheKey)
+    if (cached) {
+      this.logger.log(`[CACHE HIT] subportfolio:findAllCached — served from Redis (key: ${cacheKey})`)
+      return cached
+    }
+    this.logger.log(`[CACHE MISS] subportfolio:findAllCached — fetching from MongoDB (key: ${cacheKey})`)
+
+    const accessibleIds = await this.repo.getAccessibleSubportfolioIds(user.id)
+    if (Array.isArray(accessibleIds) && accessibleIds.length === 0) {
+      return []
+    }
+
+    const where = accessibleIds === 'all' ? {} : { id: { in: accessibleIds } }
+    const data = await this.repo.findAll({ where, orderBy: { created_at: 'desc' } })
+
+    // TTL 0 = no expiry; invalidated explicitly on every write operation
+    await this.redisService.set(cacheKey, data, 0)
+    return data
+  }
+
   async findOne(id: string, user: IUserWithPermissions): Promise<SubportfolioWithCounts> {
     const accessibleIds = await this.repo.getAccessibleSubportfolioIds(user.id)
     if (Array.isArray(accessibleIds) && !accessibleIds.includes(id)) {
@@ -115,12 +145,21 @@ export class SubportfolioService implements ISubportfolioService {
         throw new ConflictException('Subportfolio with this name already exists')
       }
     }
-    return this.repo.update(id, data)
+    const updated = await this.repo.update(id, data)
+    await Promise.all([
+      this.redisService.deleteByPattern(ALL_PATTERN),
+      this.redisService.deleteByPattern('property:all:*')
+    ])
+    return updated
   }
 
   async remove(id: string, user: IUserWithPermissions) {
     await this.findOne(id, user)
     await this.repo.delete(id)
+    await Promise.all([
+      this.redisService.deleteByPattern(ALL_PATTERN),
+      this.redisService.deleteByPattern('property:all:*')
+    ])
     return { message: 'Subportfolio deleted successfully' }
   }
 }

@@ -37,6 +37,18 @@ export class SubportfolioController {
     return this.subportfolioService.findAll(query, user)
   }
 
+  @Get('all')
+  @RequirePermission(ModuleType.PORTFOLIO, PermissionAction.READ)
+  @ApiOperation({
+    summary: 'Get all subportfolios (no filter, no pagination)',
+    description:
+      'Returns every subportfolio accessible to the current user in a single array. Results are Redis-cached per user and invalidated on any write.'
+  })
+  @ApiResponse({ status: 200, description: 'Full list of subportfolios' })
+  findAllCached(@CurrentUser() user: IUserWithPermissions) {
+    return this.subportfolioService.findAllCached(user)
+  }
+
   @Get('portfolio/:portfolioId')
   @RequirePermission(ModuleType.PORTFOLIO, PermissionAction.READ, true)
   @ApiOperation({ summary: 'Get subportfolios by portfolio ID' })

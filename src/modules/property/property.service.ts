@@ -15,6 +15,7 @@ import { EmailUtil } from '../../common/utils/email.util'
 import { EncryptionUtil } from '../../common/utils/encryption.util'
 import type { IAuthRepository } from '../auth/auth.interface'
 import type { IPortfolioService } from '../portfolio/portfolio.interface'
+import type { ISubportfolioService } from '../subportfolio/subportfolio.interface'
 import { PrismaService } from '../prisma/prisma.service'
 import type { IPropertyCredentialsService } from '../property-credentials/property-credentials.interface'
 import { RedisService } from '../redis/redis.service'
@@ -28,7 +29,11 @@ import {
   SyncByOtaDto,
   UpdatePropertyDto
 } from './property.dto'
-import { collectPropertyUniqueConflicts } from './property-uniqueness.util'
+import {
+  collectPropertyUniqueConflicts,
+  normalizePropertyIdentifier,
+  propertyIdentifierKey
+} from './property-uniqueness.util'
 import { mapPropertyToExcelRow, writePropertyExportBuffer } from '../../common/utils/property-excel.util'
 import type { Priority } from '@prisma/client'
 import type {
@@ -62,6 +67,8 @@ export class PropertyService implements IPropertyService {
     private readonly authRepository: IAuthRepository,
     @Inject('IPortfolioService')
     private readonly portfolioService: IPortfolioService,
+    @Inject('ISubportfolioService')
+    private readonly subportfolioService: ISubportfolioService,
     private readonly encryptionUtil: EncryptionUtil,
     private readonly prisma: PrismaService,
     private readonly redisService: RedisService,
@@ -88,9 +95,10 @@ export class PropertyService implements IPropertyService {
     data: CreatePropertyDto,
     _user: IUserWithPermissions
   ): Promise<PropertyWithRelations> {
+    const normalizedIdentifier = normalizePropertyIdentifier(data.property_identifier)
     const conflicts = await collectPropertyUniqueConflicts(this.prisma, {
+      property_identifier: normalizedIdentifier,
       name: data.name,
-      property_identifier: data.property_identifier,
       expedia_id: data.expedia_id,
       booking_id: data.booking_id,
       agoda_id: data.agoda_id
@@ -109,6 +117,9 @@ export class PropertyService implements IPropertyService {
     } = data
 
     const encryptedData: any = { ...propertyData }
+    if (data.property_identifier !== undefined) {
+      encryptedData.property_identifier = normalizedIdentifier ?? null
+    }
     if (qp_username) encryptedData.qp_username = qp_username
     if (qp_password)
       encryptedData.qp_password = this.encryptionUtil.encrypt(qp_password)
@@ -910,6 +921,11 @@ export class PropertyService implements IPropertyService {
   ): Promise<PropertyWithRelations> {
     await this.findOne(id, user)
 
+    const normalizedIdentifier =
+      data.property_identifier !== undefined
+        ? normalizePropertyIdentifier(data.property_identifier) ?? null
+        : undefined
+
     const fieldsToCheck: {
       name?: string | null
       property_identifier?: string | null
@@ -917,10 +933,10 @@ export class PropertyService implements IPropertyService {
       booking_id?: number | null
       agoda_id?: number | null
     } = {}
-    if (data.name !== undefined) fieldsToCheck.name = data.name
-    if (data.property_identifier !== undefined) {
-      fieldsToCheck.property_identifier = data.property_identifier
+    if (normalizedIdentifier !== undefined) {
+      fieldsToCheck.property_identifier = normalizedIdentifier
     }
+    if (data.name !== undefined) fieldsToCheck.name = data.name
     if (data.expedia_id !== undefined) fieldsToCheck.expedia_id = data.expedia_id
     if (data.booking_id !== undefined) fieldsToCheck.booking_id = data.booking_id
     if (data.agoda_id !== undefined) fieldsToCheck.agoda_id = data.agoda_id
@@ -945,6 +961,9 @@ export class PropertyService implements IPropertyService {
     } = data
 
     const encryptedData: any = { ...propertyData }
+    if (normalizedIdentifier !== undefined) {
+      encryptedData.property_identifier = normalizedIdentifier
+    }
     if (qp_username !== undefined) encryptedData.qp_username = qp_username
     if (qp_password)
       encryptedData.qp_password = this.encryptionUtil.encrypt(qp_password)
@@ -1770,6 +1789,7 @@ export class PropertyService implements IPropertyService {
 
       // Fetch accessible IDs once for the whole batch
       const accessibleIds = await this.repo.getAccessiblePropertyIds(user.id)
+      const seenIdentifiersInBatch = new Set<string>()
 
       for (let i = 0; i < data.length; i++) {
         const row = data[i]
@@ -1777,10 +1797,13 @@ export class PropertyService implements IPropertyService {
 
         try {
           // Match by property_identifier first; fall back to name when not found
-          const propertyIdentifier = findValue(row, ['Property Identifier', 'Property identifier', 'Identifier'])
+          const propertyIdentifierRaw = findValue(row, ['Property Identifier', 'Property identifier', 'Identifier'])
+          const normalizedRowIdentifier = propertyIdentifierRaw
+            ? normalizePropertyIdentifier(propertyIdentifierRaw)
+            : undefined
           const propertyName = findValue(row, ['Property Name', 'Property name', 'Name'])
 
-          if (!propertyIdentifier && !propertyName) {
+          if (!normalizedRowIdentifier && !propertyName) {
             result.errors.push({ row: rowNumber, propertyName: 'Unknown', error: 'Either Property Identifier or Property Name is required' })
             result.failureCount++
             continue
@@ -1788,10 +1811,17 @@ export class PropertyService implements IPropertyService {
 
           let existingProperty: any
           let matchedByIdentifier = false
-          const rowLabel = propertyIdentifier ?? propertyName!
+          const rowLabel = normalizedRowIdentifier ?? propertyName!
 
-          if (propertyIdentifier) {
-            existingProperty = await this.prisma.property.findFirst({ where: { property_identifier: propertyIdentifier } })
+          if (normalizedRowIdentifier) {
+            existingProperty = await this.prisma.property.findFirst({
+              where: {
+                property_identifier: {
+                  equals: normalizedRowIdentifier,
+                  mode: 'insensitive'
+                }
+              }
+            })
             if (existingProperty) {
               matchedByIdentifier = true
             }
@@ -1805,8 +1835,8 @@ export class PropertyService implements IPropertyService {
             result.errors.push({
               row: rowNumber,
               propertyName: rowLabel,
-              error: propertyIdentifier
-                ? `Property not found with identifier: ${propertyIdentifier}${propertyName ? ` or name: ${propertyName}` : ''}`
+              error: normalizedRowIdentifier
+                ? `Property not found with identifier: ${normalizedRowIdentifier}${propertyName ? ` or name: ${propertyName}` : ''}`
                 : `Property not found: ${propertyName}`
             })
             result.failureCount++
@@ -1886,7 +1916,7 @@ export class PropertyService implements IPropertyService {
           }
 
           // Assign property_identifier only when matched by name and the property has no identifier yet
-          if (!matchedByIdentifier && propertyIdentifier) {
+          if (!matchedByIdentifier && normalizedRowIdentifier) {
             const existingIdentifier = existingProperty.property_identifier
             const hasExistingIdentifier =
               existingIdentifier !== null &&
@@ -1913,7 +1943,19 @@ export class PropertyService implements IPropertyService {
               continue
             }
 
-            updateData.property_identifier = propertyIdentifier
+            const identifierKey = propertyIdentifierKey(normalizedRowIdentifier)
+            if (seenIdentifiersInBatch.has(identifierKey)) {
+              result.errors.push({
+                row: rowNumber,
+                propertyName: existingProperty.name,
+                error: `Duplicate property identifier in file: ${normalizedRowIdentifier}`
+              })
+              result.failureCount++
+              continue
+            }
+
+            updateData.property_identifier = normalizedRowIdentifier
+            seenIdentifiersInBatch.add(identifierKey)
           }
 
           // Hotel address
@@ -2435,9 +2477,10 @@ export class PropertyService implements IPropertyService {
     
     // Delete all portfolio cache keys (portfolios are used in global filter)
     await this.redisService.deleteByPattern('portfolio:*')
+    await this.redisService.deleteByPattern('subportfolio:*')
 
     this.logger.log(
-      `[MANUAL CACHE REFRESH] Successfully cleared all property and portfolio cache keys`
+      `[MANUAL CACHE REFRESH] Successfully cleared all property, portfolio, and subportfolio cache keys`
     )
 
     return {
@@ -2446,9 +2489,10 @@ export class PropertyService implements IPropertyService {
   }
 
   async getAllDataForGlobalFilter(user: IUserWithPermissions) {
-    const [portfolios, properties] = await Promise.all([
+    const [portfolios, properties, subportfolios] = await Promise.all([
       this.portfolioService.findAllCached(user),
-      this.findAllCached(user)
+      this.findAllCached(user),
+      this.subportfolioService.findAllCached(user)
     ])
 
     const uniqueExpediaServiceFees = new Set<string>()
@@ -2566,6 +2610,16 @@ export class PropertyService implements IPropertyService {
         uniquePortfolioContactEmails.add(portfolio.portfolio_contact_email)
     })
 
+    subportfolios.forEach((subportfolio: any) => {
+      if (subportfolio.id && subportfolio.name) {
+        subportfolioMap.set(subportfolio.id, {
+          id: subportfolio.id,
+          name: subportfolio.name,
+          portfolio_id: subportfolio.portfolio_id
+        })
+      }
+    })
+
     properties.forEach((property: any) => {
       if (property.portfolio_id) portfolioIdSet.add(property.portfolio_id)
       if (property.service_type)
@@ -2577,13 +2631,6 @@ export class PropertyService implements IPropertyService {
       if (property.agoda_id) uniqueAgodaIds.add(property.agoda_id)
       if (property.id && property.name) {
         propertyMap.set(property.id, { id: property.id, name: property.name })
-      }
-      if (property.subportfolio?.id) {
-        subportfolioMap.set(property.subportfolio.id, {
-          id: property.subportfolio.id,
-          name: property.subportfolio.name,
-          portfolio_id: property.subportfolio.portfolio_id
-        })
       }
       if (property.hotel_address)
         uniqueHotelAddresses.add(property.hotel_address)
