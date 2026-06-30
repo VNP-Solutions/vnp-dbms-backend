@@ -28,6 +28,7 @@ import {
   SyncByOtaDto,
   UpdatePropertyDto
 } from './property.dto'
+import { collectPropertyUniqueConflicts } from './property-uniqueness.util'
 import { mapPropertyToExcelRow, writePropertyExportBuffer } from '../../common/utils/property-excel.util'
 import type { Priority } from '@prisma/client'
 import type {
@@ -87,9 +88,16 @@ export class PropertyService implements IPropertyService {
     data: CreatePropertyDto,
     _user: IUserWithPermissions
   ): Promise<PropertyWithRelations> {
-    const existing = await this.repo.findByName(data.name)
-    if (existing)
-      throw new ConflictException('Property with this name already exists')
+    const conflicts = await collectPropertyUniqueConflicts(this.prisma, {
+      name: data.name,
+      property_identifier: data.property_identifier,
+      expedia_id: data.expedia_id,
+      booking_id: data.booking_id,
+      agoda_id: data.agoda_id
+    })
+    if (conflicts.length) {
+      throw new ConflictException(conflicts.join('; '))
+    }
 
     const {
       credentials,
@@ -901,11 +909,29 @@ export class PropertyService implements IPropertyService {
     user: IUserWithPermissions
   ): Promise<PropertyWithRelations> {
     await this.findOne(id, user)
-    if (data.name) {
-      const existing = await this.repo.findByName(data.name)
-      if (existing && existing.id !== id) {
-        throw new ConflictException('Property with this name already exists')
-      }
+
+    const fieldsToCheck: {
+      name?: string | null
+      property_identifier?: string | null
+      expedia_id?: number | null
+      booking_id?: number | null
+      agoda_id?: number | null
+    } = {}
+    if (data.name !== undefined) fieldsToCheck.name = data.name
+    if (data.property_identifier !== undefined) {
+      fieldsToCheck.property_identifier = data.property_identifier
+    }
+    if (data.expedia_id !== undefined) fieldsToCheck.expedia_id = data.expedia_id
+    if (data.booking_id !== undefined) fieldsToCheck.booking_id = data.booking_id
+    if (data.agoda_id !== undefined) fieldsToCheck.agoda_id = data.agoda_id
+
+    const conflicts = await collectPropertyUniqueConflicts(
+      this.prisma,
+      fieldsToCheck,
+      id
+    )
+    if (conflicts.length) {
+      throw new ConflictException(conflicts.join('; '))
     }
 
     const {
@@ -1856,12 +1882,6 @@ export class PropertyService implements IPropertyService {
           // Rename: only possible when matched by property_identifier.
           // The "Property Name" column then carries the new name.
           if (matchedByIdentifier && propertyName && propertyName !== existingProperty.name) {
-            const nameConflict = await this.repo.findByName(propertyName)
-            if (nameConflict && nameConflict.id !== propertyId) {
-              result.errors.push({ row: rowNumber, propertyName: existingProperty.name, error: `Another property already has the name: ${propertyName}` })
-              result.failureCount++
-              continue
-            }
             updateData.name = propertyName
           }
 
@@ -1893,21 +1913,6 @@ export class PropertyService implements IPropertyService {
               continue
             }
 
-            const identifierConflict = await this.prisma.property.findFirst({
-              where: {
-                property_identifier: propertyIdentifier,
-                id: { not: propertyId }
-              }
-            })
-            if (identifierConflict) {
-              result.errors.push({
-                row: rowNumber,
-                propertyName: existingProperty.name,
-                error: `Another property already has the identifier: ${propertyIdentifier}`
-              })
-              result.failureCount++
-              continue
-            }
             updateData.property_identifier = propertyIdentifier
           }
 
@@ -2244,6 +2249,27 @@ export class PropertyService implements IPropertyService {
 
           // Apply property-level update
           if (hasPropertyUpdate) {
+            const uniqueConflicts = await collectPropertyUniqueConflicts(
+              this.prisma,
+              {
+                name: updateData.name,
+                property_identifier: updateData.property_identifier,
+                expedia_id: updateData.expedia_id,
+                booking_id: updateData.booking_id,
+                agoda_id: updateData.agoda_id
+              },
+              propertyId
+            )
+            if (uniqueConflicts.length) {
+              result.errors.push({
+                row: rowNumber,
+                propertyName: existingProperty.name,
+                error: uniqueConflicts.join('; ')
+              })
+              result.failureCount++
+              continue
+            }
+
             await this.repo.update(propertyId, updateData)
           }
 
