@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
 import { CreatePropertyDto, UpdatePropertyDto } from './property.dto'
+import { collectPropertyUniqueConflicts } from './property-uniqueness.util'
 import type {
   ImportPropertiesResult,
   ImportPropertyRow,
@@ -642,6 +643,25 @@ export class PropertyRepository implements IPropertyRepository {
       if (!propertyPayload.expedia_status) propertyPayload.expedia_status = 'Access Required'
       if (!propertyPayload.booking_status) propertyPayload.booking_status = 'Access Required'
       if (!propertyPayload.agoda_status) propertyPayload.agoda_status = 'Access Required'
+
+      const uniqueConflicts = await collectPropertyUniqueConflicts(
+        this.prisma,
+        {
+          name: propertyPayload.name,
+          property_identifier: propertyPayload.property_identifier,
+          expedia_id: propertyPayload.expedia_id,
+          booking_id: propertyPayload.booking_id,
+          agoda_id: propertyPayload.agoda_id
+        }
+      )
+      if (uniqueConflicts.length) {
+        skippedProperties.push({
+          name: propertyName,
+          reason: uniqueConflicts.join('; ')
+        })
+        propertiesSkipped++
+        continue
+      }
 
       try {
         const created = await this.prisma.property.create({
