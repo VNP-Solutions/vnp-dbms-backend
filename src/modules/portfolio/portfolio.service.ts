@@ -391,10 +391,10 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
   }
 
   async removeAndSync(id: string, user: IUserWithPermissions) {
-    const before = await this.findOne(id, user) // capture name BEFORE deletion
+    const before = await this.findOne(id, user)
     const result = await this.remove(id, user)
     try {
-      await this.fanOutPortfolioDelete(before.name)
+      await this.fanOutPortfolioDelete(before.id, before.name)
     } catch (e: any) {
       this.logger.error(
         `[sync] unexpected on portfolio delete: ${e?.message ?? e}`
@@ -402,20 +402,51 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
     }
     return result
   }
-  private async fanOutPortfolioDelete(name: string) {
-    if (!this.scraperClient) {
+
+  private async fanOutPortfolioDelete(_id: string, name: string) {
+    const payload = { _id, name }
+    const jobs: Array<Promise<void>> = []
+
+    if (this.scraperClient) {
+      jobs.push(
+        this.postSync(
+          this.scraperClient,
+          '/portfolios/sync-delete',
+          payload,
+          'scraper',
+          'delete'
+        )
+      )
+    } else {
       this.logger.warn(
         '[sync] scraper disabled, skipping portfolio delete sync'
       )
-      return
     }
-    await this.postSync(
-      this.scraperClient,
-      '/portfolios/sync-delete',
-      { name },
-      'scraper',
-      'delete'
-    )
+
+    if (this.dashboardClient) {
+      jobs.push(
+        this.postSync(
+          this.dashboardClient,
+          '/api/portfolio/sync-delete',
+          payload,
+          'dashboard',
+          'delete'
+        )
+      )
+    } else {
+      this.logger.warn(
+        '[sync] dashboard disabled, skipping portfolio delete sync'
+      )
+    }
+
+    const results = await Promise.allSettled(jobs)
+    for (const result of results) {
+      if (result.status === 'rejected') {
+        this.logger.error(
+          `[sync] portfolio delete fan-out failed: ${result.reason}`
+        )
+      }
+    }
   }
 
   async importFromExcel(
