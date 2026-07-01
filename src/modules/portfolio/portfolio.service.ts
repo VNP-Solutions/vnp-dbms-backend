@@ -282,34 +282,85 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
     data: UpdatePortfolioDto,
     user: IUserWithPermissions
   ) {
-    const before = await this.findOne(id, user) // capture OLD name first
+    const before = await this.findOne(id, user)
     const updated = await this.update(id, data, user)
+    const full = await this.portfolioRepository.findById(updated.id)
     try {
-      const newName = updated.name?.trim()
-      if (newName && newName !== before.name) {
-        await this.fanOutPortfolioUpdate(before.name, newName)
-      }
+      if (full) await this.fanOutPortfolioUpdate(full, before.name)
     } catch (e: any) {
       this.logger.error(
         `[sync] unexpected on portfolio update: ${e?.message ?? e}`
       )
     }
-    return updated
+    return full ?? updated
   }
-  private async fanOutPortfolioUpdate(oldName: string, newName: string) {
-    if (!this.scraperClient) {
+
+  private async fanOutPortfolioUpdate(
+    portfolio: PortfolioWithCounts,
+    oldName: string
+  ) {
+    const scraperPayload = {
+      _id: portfolio.id,
+      oldName,
+      name: portfolio.name
+    }
+    const dashboardPayload = {
+      _id: portfolio.id,
+      oldName,
+      name: portfolio.name,
+      ...(portfolio.service_type?.type
+        ? { service_type: portfolio.service_type.type }
+        : {}),
+      is_active: portfolio.is_active,
+      is_commissionable: portfolio.is_commissionable,
+      ...(portfolio.contact_email !== undefined &&
+      portfolio.contact_email !== null
+        ? { contact_email: portfolio.contact_email }
+        : {})
+    }
+
+    const jobs: Array<Promise<void>> = []
+
+    if (this.scraperClient) {
+      jobs.push(
+        this.postSync(
+          this.scraperClient,
+          '/portfolios/sync-update',
+          scraperPayload,
+          'scraper',
+          'update'
+        )
+      )
+    } else {
       this.logger.warn(
         '[sync] scraper disabled, skipping portfolio update sync'
       )
-      return
     }
-    await this.postSync(
-      this.scraperClient,
-      '/portfolios/sync-update',
-      { oldName, newName },
-      'scraper',
-      'update'
-    )
+
+    if (this.dashboardClient) {
+      jobs.push(
+        this.postSync(
+          this.dashboardClient,
+          '/api/portfolio/sync-update',
+          dashboardPayload,
+          'dashboard',
+          'update'
+        )
+      )
+    } else {
+      this.logger.warn(
+        '[sync] dashboard disabled, skipping portfolio update sync'
+      )
+    }
+
+    const results = await Promise.allSettled(jobs)
+    for (const result of results) {
+      if (result.status === 'rejected') {
+        this.logger.error(
+          `[sync] portfolio update fan-out failed: ${result.reason}`
+        )
+      }
+    }
   }
 
   async remove(id: string, user: IUserWithPermissions) {
@@ -618,11 +669,11 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
 
   private async fanOutPortfolioCreate(portfolio: PortfolioWithCounts) {
     const scraperPayload = {
-      id: portfolio.id,
+      _id: portfolio.id,
       name: portfolio.name
     }
     const dashboardPayload = {
-      id: portfolio.id,
+      _id: portfolio.id,
       name: portfolio.name,
       ...(portfolio.service_type?.type
         ? { service_type: portfolio.service_type.type }
