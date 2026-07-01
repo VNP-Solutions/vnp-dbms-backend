@@ -67,7 +67,8 @@ export class PropertyExpediaCheckerService {
 
       return {
         groupId: String(groupItems[0].expedia_id),
-        body: payload
+        body: payload,
+        messageGroupPrefix: 'expedia-check'
       }
     })
 

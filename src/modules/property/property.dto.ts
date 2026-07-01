@@ -1743,3 +1743,49 @@ export interface ExpediaCheckerUpstreamPayload {
   password: string
   expedia_ids: ExpediaCheckerUpstreamItem[]
 }
+
+// ─── Agoda Property Checker ───────────────────────────────────────────────────
+
+export class AgodaCheckPropertyItemDto {
+  @ApiProperty({ example: '507f1f77bcf86cd799439011', description: 'Internal MongoDB _id of the property' })
+  @IsString()
+  @IsNotEmpty()
+  _id: string
+
+  @ApiProperty({ example: 12345678, description: 'Agoda property ID' })
+  @Type(() => Number)
+  @IsInt()
+  agoda_id: number
+
+  @ApiProperty({ example: 'partner@example.com', description: 'Agoda account username (email)' })
+  @IsString()
+  @IsNotEmpty()
+  agoda_username: string
+
+  @ApiProperty({ example: 'secret123', description: 'Agoda account password (never logged)' })
+  @IsString()
+  @IsNotEmpty()
+  agoda_password: string
+}
+
+export class AgodaCheckPropertiesDto {
+  @ApiProperty({
+    type: [AgodaCheckPropertyItemDto],
+    description: 'List of properties to check. Items are grouped by agoda_username internally.'
+  })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => AgodaCheckPropertyItemDto)
+  items: AgodaCheckPropertyItemDto[]
+}
+
+export interface AgodaCheckerUpstreamItem {
+  _id: string
+  agoda_id: number
+}
+
+export interface AgodaCheckerUpstreamPayload {
+  username: string
+  password: string
+  agoda_ids: AgodaCheckerUpstreamItem[]
+}
