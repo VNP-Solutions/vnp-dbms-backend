@@ -20,6 +20,8 @@ export interface SqsMessage {
   groupId: string
   /** JSON-serializable payload placed under the message "body" envelope */
   body: unknown
+  /** FIFO message group prefix (defaults to expedia-check) */
+  messageGroupPrefix?: string
 }
 
 /**
@@ -63,7 +65,7 @@ export async function pushMessagesToQueue(
             timeout: 300000 // 5 minute timeout
           }
         }),
-        MessageGroupId: `expedia-check-${message.groupId}`, // Used by FIFO queues
+        MessageGroupId: `${message.messageGroupPrefix ?? 'expedia-check'}-${message.groupId}`, // Used by FIFO queues
         MessageDeduplicationId: `${message.groupId}-${Date.now()}-${index}`
       }))
 

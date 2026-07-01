@@ -42,6 +42,7 @@ import {
   BulkTransferPropertyDto,
   BulkUpdateResultDto,
   CreatePropertyDto,
+  AgodaCheckPropertiesDto,
   ExpediaCheckPropertiesDto,
   ExportPropertyExcelDto,
   GetPropertyCredentialDto,
@@ -56,6 +57,7 @@ import {
 } from './property.dto'
 import type { IPropertyService } from './property.interface'
 import { ServiceTokenGuard } from './guards/service-token.guard'
+import { PropertyAgodaCheckerService } from './property-agoda-checker.service'
 import { PropertyExpediaCheckerService } from './property-expedia-checker.service'
 
 @ApiTags('Property')
@@ -71,7 +73,8 @@ export class PropertyController {
   constructor(
     @Inject('IPropertyService')
     private readonly propertyService: IPropertyService,
-    private readonly expediaCheckerService: PropertyExpediaCheckerService
+    private readonly expediaCheckerService: PropertyExpediaCheckerService,
+    private readonly agodaCheckerService: PropertyAgodaCheckerService
   ) {}
 
   @Post('credential')
@@ -809,6 +812,33 @@ export class PropertyController {
   checkExpediaProperties(@Body() dto: ExpediaCheckPropertiesDto) {
     return this.expediaCheckerService.checkProperties(dto.items)
   }
+
+  @Post('agoda-check')
+  @HttpCode(200)
+  @RequirePermission(ModuleType.PROPERTY, PermissionAction.READ)
+  @ApiOperation({
+    summary: 'Dispatch Agoda property check',
+    description:
+      'Groups the given properties by Agoda account (agoda_username) and pushes one check payload per group to the AWS SQS queue. ' +
+      'After enqueueing, the checker Lambda is triggered asynchronously to drain the queue and process the checks in the background.'
+  })
+  @ApiBody({ type: AgodaCheckPropertiesDto })
+  @ApiResponse({
+    status: 200,
+    description: 'All account groups enqueued — processing in background',
+    schema: {
+      example: {
+        message: 'Agoda property check dispatched. Payloads were queued to SQS and the checker Lambda was triggered.',
+        totalProperties: 3,
+        accountGroups: 2
+      }
+    }
+  })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
+  @ApiResponse({ status: 502, description: 'Agoda check queue is not configured' })
+  checkAgodaProperties(@Body() dto: AgodaCheckPropertiesDto) {
+    return this.agodaCheckerService.checkProperties(dto.items)
+  }
 }
 
 @ApiTags('PropertySync')
@@ -817,7 +847,8 @@ export class PropertyController {
 export class PropertySyncController {
   constructor(
     @Inject('IPropertyService') private readonly propertyService: IPropertyService,
-    private readonly expediaCheckerService: PropertyExpediaCheckerService
+    private readonly expediaCheckerService: PropertyExpediaCheckerService,
+    private readonly agodaCheckerService: PropertyAgodaCheckerService
   ) {}
   @Patch('sync-by-ota')
   @UseGuards(ServiceTokenGuard)
@@ -837,5 +868,17 @@ export class PropertySyncController {
   @ApiResponse({ status: 200, description: 'Lambda trigger requested' })
   triggerExpediaCheckLambda() {
     return this.expediaCheckerService.triggerCheckLambda()
+  }
+
+  @Post('agoda-check/trigger-lambda')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Internal: re-trigger the Agoda check Lambda',
+    description:
+      'Called after an Agoda property check completes so the checker Lambda drains the next queued account group. Processes the SQS queue one group at a time.'
+  })
+  @ApiResponse({ status: 200, description: 'Lambda trigger requested' })
+  triggerAgodaCheckLambda() {
+    return this.agodaCheckerService.triggerCheckLambda()
   }
 }

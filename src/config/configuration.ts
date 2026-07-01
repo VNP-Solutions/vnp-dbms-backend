@@ -51,6 +51,11 @@ export interface Configuration {
     lambdaFunctionName: string
     lambdaPlatform: string
   }
+  agodaCheck: {
+    queueUrl: string
+    lambdaFunctionName: string
+    lambdaPlatform: string
+  }
   redis: {
     host: string
     port: number
@@ -152,6 +157,14 @@ export default (): Configuration => {
     queueUrl: process.env.EXPEDIA_CHECK_QUEUE_URL || '',
     lambdaFunctionName: process.env.EXPEDIA_CHECK_LAMBDA_FUNCTION_NAME || '',
     lambdaPlatform: process.env.EXPEDIA_CHECK_LAMBDA_PLATFORM || 'expedia'
+  },
+  agodaCheck: {
+    queueUrl: process.env.AGODA_CHECK_QUEUE_URL || process.env.EXPEDIA_CHECK_QUEUE_URL || '',
+    lambdaFunctionName:
+      process.env.AGODA_CHECK_LAMBDA_FUNCTION_NAME ||
+      process.env.EXPEDIA_CHECK_LAMBDA_FUNCTION_NAME ||
+      '',
+    lambdaPlatform: process.env.AGODA_CHECK_LAMBDA_PLATFORM || 'agoda'
   },
   redis: {
     host: process.env.REDIS_HOST || 'localhost',

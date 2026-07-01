@@ -112,6 +112,18 @@ export class ConfigurationSchema {
 
   @IsOptional()
   @IsString()
+  AGODA_CHECK_QUEUE_URL?: string
+
+  @IsOptional()
+  @IsString()
+  AGODA_CHECK_LAMBDA_FUNCTION_NAME?: string
+
+  @IsOptional()
+  @IsString()
+  AGODA_CHECK_LAMBDA_PLATFORM?: string
+
+  @IsOptional()
+  @IsString()
   REDIS_HOST?: string
 
   @IsOptional()
