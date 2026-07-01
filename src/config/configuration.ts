@@ -17,6 +17,8 @@ export interface Configuration {
     refreshSecret: string
     accessExpiresIn: string
     refreshExpiresIn: string
+    communicationSecret?: string
+    communicationExpiresIn: string
   }
   s3: {
     bucketName: string
@@ -109,56 +111,62 @@ export default (): Configuration => {
   )
 
   return {
-  port: parseInt(process.env.PORT || '3000', 10),
-  app: {
-    port: parseInt(process.env.PORT || '3000', 10)
-  },
-  appName: process.env.APP_NAME,
-  nodeEnv,
-  database: {
-    url: process.env.DATABASE_URL!
-  },
-  jwt: {
-    refreshSecret: process.env.JWT_REFRESH_SECRET!,
-    accessSecret: process.env.JWT_ACCESS_SECRET!,
-    accessExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '7d',
-    refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '14d'
-  },
-  s3: {
-    bucketName: process.env.S3_BUCKET_NAME!,
-    region: process.env.S3_REGION!,
-    accessKey: process.env.S3_ACCESS_KEY!,
-    secretKey: process.env.S3_SECRET_KEY!,
-    bucketUrl: process.env.S3_BUCKET_URL!
-  },
-  smtp: {
-    email: process.env.SMTP_EMAIL!,
-    password: process.env.SMTP_PASSWORD!
-  },
-  invitationRedirectUrl: process.env.INVITATION_REDIRECT_URL,
-  dashboardUrl: process.env.DASHBOARD_URL || 'https://new.dashboardvnps.com/',
-  auth: {
-    passwordRegex:
-      /^(?=.*[a-zA-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]).{8,32}$/,
-    otpExpiryMinutes: 5,
-    tempPasswordExpiryDays: 5
-  },
-  encryption: {
-    secret: process.env.JWT_ACCESS_SECRET!
-  },
-  parallel: {
-    workers: parseInt(process.env.PARALLEL_WORKERS || '8', 10)
-  },
-  superAdminSecret: process.env.SUPER_ADMIN_SECRET || '',
-  scraperBackendUrl: process.env.SCRAPER_BACKEND_URL || '',
-  expediaCheckerBaseUrl: process.env.EXPEDIA_CHECKER_BASE_URL || '',
-  expediaCheckerTimeoutMs: parseInt(process.env.EXPEDIA_CHECKER_TIMEOUT_MS || '30000', 10),
-  expediaCheck: {
-    queueUrl: process.env.EXPEDIA_CHECK_QUEUE_URL || '',
-    lambdaFunctionName: process.env.EXPEDIA_CHECK_LAMBDA_FUNCTION_NAME || '',
-    lambdaPlatform: process.env.EXPEDIA_CHECK_LAMBDA_PLATFORM || 'expedia'
-  },
-  agodaCheck: {
+    port: parseInt(process.env.PORT || '3000', 10),
+    app: {
+      port: parseInt(process.env.PORT || '3000', 10)
+    },
+    appName: process.env.APP_NAME,
+    nodeEnv,
+    database: {
+      url: process.env.DATABASE_URL!
+    },
+    jwt: {
+      refreshSecret: process.env.JWT_REFRESH_SECRET!,
+      accessSecret: process.env.JWT_ACCESS_SECRET!,
+      accessExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '7d',
+      refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '14d',
+      communicationSecret: process.env.JWT_COMMUNICATION_SECRET || undefined,
+      communicationExpiresIn:
+        process.env.JWT_COMMUNICATION_TOKEN_EXPIRES_IN || '1d'
+    },
+    s3: {
+      bucketName: process.env.S3_BUCKET_NAME!,
+      region: process.env.S3_REGION!,
+      accessKey: process.env.S3_ACCESS_KEY!,
+      secretKey: process.env.S3_SECRET_KEY!,
+      bucketUrl: process.env.S3_BUCKET_URL!
+    },
+    smtp: {
+      email: process.env.SMTP_EMAIL!,
+      password: process.env.SMTP_PASSWORD!
+    },
+    invitationRedirectUrl: process.env.INVITATION_REDIRECT_URL,
+    dashboardUrl: process.env.DASHBOARD_URL || 'https://new.dashboardvnps.com/',
+    auth: {
+      passwordRegex:
+        /^(?=.*[a-zA-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]).{8,32}$/,
+      otpExpiryMinutes: 5,
+      tempPasswordExpiryDays: 5
+    },
+    encryption: {
+      secret: process.env.JWT_ACCESS_SECRET!
+    },
+    parallel: {
+      workers: parseInt(process.env.PARALLEL_WORKERS || '8', 10)
+    },
+    superAdminSecret: process.env.SUPER_ADMIN_SECRET || '',
+    scraperBackendUrl: process.env.SCRAPER_BACKEND_URL || '',
+    expediaCheckerBaseUrl: process.env.EXPEDIA_CHECKER_BASE_URL || '',
+    expediaCheckerTimeoutMs: parseInt(
+      process.env.EXPEDIA_CHECKER_TIMEOUT_MS || '30000',
+      10
+    ),
+    expediaCheck: {
+      queueUrl: process.env.EXPEDIA_CHECK_QUEUE_URL || '',
+      lambdaFunctionName: process.env.EXPEDIA_CHECK_LAMBDA_FUNCTION_NAME || '',
+      lambdaPlatform: process.env.EXPEDIA_CHECK_LAMBDA_PLATFORM || 'expedia'
+    },
+    agodaCheck: {
     queueUrl: process.env.AGODA_CHECK_QUEUE_URL || process.env.EXPEDIA_CHECK_QUEUE_URL || '',
     lambdaFunctionName:
       process.env.AGODA_CHECK_LAMBDA_FUNCTION_NAME ||
@@ -167,43 +175,43 @@ export default (): Configuration => {
     lambdaPlatform: process.env.AGODA_CHECK_LAMBDA_PLATFORM || 'agoda'
   },
   redis: {
-    host: process.env.REDIS_HOST || 'localhost',
-    port: parseInt(process.env.REDIS_PORT || '6379', 10),
-    password: process.env.REDIS_PASSWORD || undefined,
-    ttl: parseInt(process.env.REDIS_TTL || '300', 10)
-  },
-  dashboardBackendUrl: process.env.DASHBOARD_BACKEND_URL || '',
-  dashboardServiceToken: process.env.DASHBOARD_SERVICE_TOKEN || '',
-  scraperServiceToken: process.env.SCRAPER_SERVICE_TOKEN || '',
-  syncTimeoutMs: parseInt(process.env.SYNC_TIMEOUT_MS || '15000', 10),
-  serviceToken: process.env.SERVICE_TOKEN || '',
-  cookies: {
-    accessTokenName: process.env.COOKIE_ACCESS_TOKEN_NAME || 'accessToken',
-    refreshTokenName: process.env.COOKIE_REFRESH_TOKEN_NAME || 'refreshToken',
-    domain: cookieDomain,
-    path: process.env.COOKIE_PATH || '/',
-    httpOnly: true,
-    secure: cookieSettings.secure,
-    sameSite: cookieSettings.sameSite,
-    partitioned: cookieSettings.partitioned,
+      host: process.env.REDIS_HOST || 'localhost',
+      port: parseInt(process.env.REDIS_PORT || '6379', 10),
+      password: process.env.REDIS_PASSWORD || undefined,
+      ttl: parseInt(process.env.REDIS_TTL || '300', 10)
+    },
+    dashboardBackendUrl: process.env.DASHBOARD_BACKEND_URL || '',
+    dashboardServiceToken: process.env.DASHBOARD_SERVICE_TOKEN || '',
+    scraperServiceToken: process.env.SCRAPER_SERVICE_TOKEN || '',
+    syncTimeoutMs: parseInt(process.env.SYNC_TIMEOUT_MS || '15000', 10),
+    serviceToken: process.env.SERVICE_TOKEN || '',
+    cookies: {
+      accessTokenName: process.env.COOKIE_ACCESS_TOKEN_NAME || 'accessToken',
+      refreshTokenName: process.env.COOKIE_REFRESH_TOKEN_NAME || 'refreshToken',
+      domain: cookieDomain,
+      path: process.env.COOKIE_PATH || '/',
+      httpOnly: true,
+      secure: cookieSettings.secure,
+      sameSite: cookieSettings.sameSite,
+      partitioned: cookieSettings.partitioned,
 
-    sessionAccessMaxAgeMs: parseInt(
-      process.env.COOKIE_SESSION_ACCESS_MAX_AGE_MS ||
-        String(2 * 60 * 60 * 1000),
-      10
-    ),
-    sessionRefreshMaxAgeMs: parseInt(
-      process.env.COOKIE_SESSION_REFRESH_MAX_AGE_MS ||
-        String(18 * 60 * 60 * 1000),
-      10
-    ),
-    sessionAccessExpiresIn:
-      process.env.COOKIE_SESSION_ACCESS_EXPIRES_IN || '7d',
-    sessionRefreshExpiresIn:
-      process.env.COOKIE_SESSION_REFRESH_EXPIRES_IN || '14d'
-  },
-  cors: {
-    origins: corsOrigins
+      sessionAccessMaxAgeMs: parseInt(
+        process.env.COOKIE_SESSION_ACCESS_MAX_AGE_MS ||
+          String(2 * 60 * 60 * 1000),
+        10
+      ),
+      sessionRefreshMaxAgeMs: parseInt(
+        process.env.COOKIE_SESSION_REFRESH_MAX_AGE_MS ||
+          String(18 * 60 * 60 * 1000),
+        10
+      ),
+      sessionAccessExpiresIn:
+        process.env.COOKIE_SESSION_ACCESS_EXPIRES_IN || '7d',
+      sessionRefreshExpiresIn:
+        process.env.COOKIE_SESSION_REFRESH_EXPIRES_IN || '14d'
+    },
+    cors: {
+      origins: corsOrigins
+    }
   }
-}
 }
