@@ -684,8 +684,8 @@ model OtpStatus {
   status     OtpStatusValue @default(Released)
   platform   OtpPlatform
   job_id     String?        @db.ObjectId
-  created_at DateTime       @default(now())
-  updated_at DateTime       @updatedAt
+  created_at DateTime?      @default(now())
+  updated_at DateTime?      @updatedAt
 
   @@unique([platform])
   @@map("otp_statuses")
