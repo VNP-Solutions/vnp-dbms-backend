@@ -37,6 +37,7 @@ import { PriorityModule } from './modules/priority/priority.module'
 import { ProcessorModule } from './modules/processor/processor.module'
 import { ScheduleModule } from '@nestjs/schedule'
 import { OtaAccessNotificationModule } from './modules/ota-access-notification/ota-access-notification.module'
+import { OtpStatusModule } from './modules/otp-status/otp-status.module'
 
 @Module({
   imports: [
@@ -70,7 +71,8 @@ import { OtaAccessNotificationModule } from './modules/ota-access-notification/o
     FrequencyModule,
     ProcessorModule,
     NotificationEmailModule,
-    OtaAccessNotificationModule
+    OtaAccessNotificationModule,
+    OtpStatusModule
   ],
   controllers: [AppController],
   providers: [
