@@ -663,3 +663,30 @@ model ActivityLog {
 
   @@map("activity_logs")
 }
+
+// ─── OTP Status ───────────────────────────────────────────────────────────────
+
+enum OtpPlatform {
+  expedia
+  agoda
+  booking
+  expedia_retrieval
+  agoda_retrieval
+}
+
+enum OtpStatusValue {
+  Released
+  Occupied
+}
+
+model OtpStatus {
+  id         String         @id @default(auto()) @map("_id") @db.ObjectId
+  status     OtpStatusValue @default(Released)
+  platform   OtpPlatform
+  job_id     String?        @db.ObjectId
+  created_at DateTime       @default(now())
+  updated_at DateTime       @updatedAt
+
+  @@unique([platform])
+  @@map("otp_statuses")
+}
