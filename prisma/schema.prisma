@@ -72,6 +72,7 @@ model User {
   sentInvitations              UserInvitation[]              @relation("InvitedBy")
   receivedInvitations          UserInvitation[]              @relation("InvitedUser")
   userProjectRoles             UserProjectRole[]
+  uploadedFiles                File[]
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -212,6 +213,23 @@ type AccessLogsPermission {
   access_level     AccessLevel
 }
 
+model File {
+  id           String     @id @default(auto()) @map("_id") @db.ObjectId
+  url          String
+  name         String
+  description  String?
+  is_active    Boolean    @default(true)
+  uploaded_by  String     @db.ObjectId
+  uploadedBy   User       @relation(fields: [uploaded_by], references: [id])
+  portfolio_id String?    @db.ObjectId
+  portfolio    Portfolio? @relation(fields: [portfolio_id], references: [id])
+  created_at   DateTime   @default(now())
+  updated_at   DateTime   @updatedAt
+
+  @@index([portfolio_id])
+  @@index([uploaded_by])
+}
+
 model UserAccessedProperty {
   id           String   @id @default(auto()) @map("_id") @db.ObjectId
   user_id      String   @db.ObjectId
@@ -275,7 +293,8 @@ model Portfolio {
   is_commissionable            Boolean
   commission                   Float?
   attachment                   String?
-  attachments                  String[]      @default([])
+  attachments                  String[]                      @default([])
+  contact_urls                 File[]
   contract_signed              Boolean?
   subportfolios                Subportfolio[]
   properties                   Property[]
