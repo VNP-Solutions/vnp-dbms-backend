@@ -6,9 +6,10 @@ import { PrismaService } from '../prisma/prisma.service'
 import { PortfolioController } from './portfolio.controller'
 import { PortfolioRepository } from './portfolio.repository'
 import { PortfolioService } from './portfolio.service'
+import { FileUploadModule } from '../file-upload/file-upload.module'
 
 @Module({
-  imports: [JwtModule.register({})],
+  imports: [JwtModule.register({}), FileUploadModule],
   controllers: [PortfolioController],
   providers: [
     { provide: 'IPortfolioService', useClass: PortfolioService },

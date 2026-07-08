@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common'
-import { Portfolio } from '@prisma/client'
+import { File, Portfolio } from '@prisma/client'
 import { PrismaService } from '../prisma/prisma.service'
 import { CreatePortfolioDto, UpdatePortfolioDto } from './portfolio.dto'
 import type { IPortfolioRepository, PortfolioWithCounts } from './portfolio.interface'
@@ -118,5 +118,9 @@ export class PortfolioRepository implements IPortfolioRepository {
 
   async countProperties(portfolioId: string): Promise<number> {
     return this.prisma.property.count({ where: { portfolio_id: portfolioId } })
+  }
+
+  async findContractUrls(portfolioId: string): Promise<File[]> {
+    return this.prisma.file.findMany({ where: { portfolio_id: portfolioId } })
   }
 }

@@ -246,6 +246,38 @@ export class FileUploadService implements IFileUploadService {
     })
   }
 
+  async createBulkFiles(
+    files: Express.Multer.File[],
+    data: UploadAndCreateFileDto,
+    user: IUserWithPermissions
+  ): Promise<{ created: FileWithRelations[]; failed: string[] }> {
+    if (!files || files.length === 0) {
+      throw new BadRequestException('No files provided')
+    }
+
+    const portfolioId = data.portfolio_id?.trim() || undefined
+    const description = data.description?.trim() || undefined
+
+    await this.assertPortfolioAccess(user, portfolioId)
+
+    const results = await Promise.allSettled(
+      files.map((file) => this.createFile(file, { portfolio_id: portfolioId, description }, user))
+    )
+
+    const created: FileWithRelations[] = []
+    const failed: string[] = []
+
+    results.forEach((result, i) => {
+      if (result.status === 'fulfilled') {
+        created.push(result.value)
+      } else {
+        failed.push(`${files[i].originalname}: ${result.reason?.message ?? 'Unknown error'}`)
+      }
+    })
+
+    return { created, failed }
+  }
+
   async findAllFiles(
     query: FileQueryDto,
     user: IUserWithPermissions

@@ -294,7 +294,7 @@ model Portfolio {
   commission                   Float?
   attachment                   String?
   attachments                  String[]                      @default([])
-  contact_urls                 File[]
+  contract_urls                File[]
   contract_signed              Boolean?
   subportfolios                Subportfolio[]
   properties                   Property[]

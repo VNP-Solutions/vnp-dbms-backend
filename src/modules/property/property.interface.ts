@@ -278,6 +278,14 @@ export interface IPropertyRepository {
   findIdsByOtaIds(ota: { expedia_id?: number | null; booking_id?: number | null; agoda_id?: number | null }): Promise<string[]>;
 }
 
+export type PropertyContact = {
+  case_management_contact: string | null
+  access_contact: string | null
+  reporting_contact: string | null
+  portfolio_contact_email: string | null
+  portfolio_contact: string | null
+}
+
 export interface IPropertyService {
   create(data: CreatePropertyDto, user: IUserWithPermissions): Promise<PropertyWithRelations>
   createAndSync(data: CreatePropertyDto, user: IUserWithPermissions): Promise<PropertyWithRelations>
@@ -316,6 +324,7 @@ export interface IPropertyService {
   bulkTransferPortfolio(ids: string[], portfolioId: string, password: string, user: IUserWithPermissions): Promise<BulkTransferResult>
   importFromExcelAndSync(file: Express.Multer.File, user: IUserWithPermissions): Promise<ImportPropertiesResult>
   removeAndSync(id: string, user: IUserWithPermissions): Promise<{ message: string }>
+  getContact(id: string, user: IUserWithPermissions): Promise<PropertyContact>
 }
 
 export interface BulkTransferResult {

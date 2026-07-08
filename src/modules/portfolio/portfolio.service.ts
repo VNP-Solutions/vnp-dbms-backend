@@ -23,8 +23,11 @@ import type {
   ImportPortfoliosResult,
   IPortfolioRepository,
   IPortfolioService,
+  PortfolioContact,
   PortfolioWithCounts
 } from './portfolio.interface'
+import type { IFileUploadService } from '../file-upload/file-upload.interface'
+import type { UploadAndCreateFileDto } from '../file-upload/file-upload.dto'
 import axios, { AxiosInstance } from 'axios'
 import { ConfigService } from '@nestjs/config'
 import type { Configuration } from '../../config/configuration'
@@ -44,6 +47,8 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
   constructor(
     @Inject('IPortfolioRepository')
     private readonly portfolioRepository: IPortfolioRepository,
+    @Inject('IFileUploadService')
+    private readonly fileUploadService: IFileUploadService,
     private readonly prisma: PrismaService,
     private readonly redisService: RedisService,
     private readonly config: ConfigService<Configuration, true>,
@@ -246,6 +251,111 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
 
     await this.redisService.set(cacheKey, portfolio, CACHE_TTL_ITEM)
     return portfolio
+  }
+
+  async getContractUrls(
+    id: string,
+    user: IUserWithPermissions
+  ) {
+    const accessibleIds =
+      await this.portfolioRepository.getAccessiblePortfolioIds(user.id)
+    if (Array.isArray(accessibleIds) && !accessibleIds.includes(id)) {
+      throw new NotFoundException('Portfolio not found')
+    }
+
+    const portfolio = await this.portfolioRepository.findById(id)
+    if (!portfolio) throw new NotFoundException('Portfolio not found')
+
+    return this.portfolioRepository.findContractUrls(id)
+  }
+
+  async getContact(
+    id: string,
+    user: IUserWithPermissions
+  ): Promise<PortfolioContact> {
+    const accessibleIds =
+      await this.portfolioRepository.getAccessiblePortfolioIds(user.id)
+    if (Array.isArray(accessibleIds) && !accessibleIds.includes(id)) {
+      throw new NotFoundException('Portfolio not found')
+    }
+
+    const portfolio = await this.portfolioRepository.findById(id)
+    if (!portfolio) throw new NotFoundException('Portfolio not found')
+
+    return {
+      contact_email: portfolio.contact_email,
+      portfolio_contact_email: portfolio.portfolio_contact_email,
+      portfolio_contact_name: portfolio.portfolio_contact_name,
+      portfolio_contact_phone: portfolio.portfolio_contact_phone
+    }
+  }
+
+  async uploadContractUrls(
+    id: string,
+    files: Express.Multer.File[],
+    dto: UploadAndCreateFileDto,
+    user: IUserWithPermissions
+  ) {
+    const accessibleIds =
+      await this.portfolioRepository.getAccessiblePortfolioIds(user.id)
+    if (Array.isArray(accessibleIds) && !accessibleIds.includes(id)) {
+      throw new NotFoundException('Portfolio not found')
+    }
+
+    const portfolio = await this.portfolioRepository.findById(id)
+    if (!portfolio) throw new NotFoundException('Portfolio not found')
+
+    const result = await this.fileUploadService.createBulkFiles(
+      files,
+      { ...dto, portfolio_id: id },
+      user
+    )
+
+    if (result.created.length > 0) {
+      await this.syncFileCount(id, result.created.length)
+    }
+
+    return result
+  }
+
+  private async syncFileCount(
+    portfolioId: string,
+    count: number,
+    type: 'increment' | 'decrement' = 'increment'
+  ): Promise<void> {
+    if (!this.dashboardClient) {
+      this.logger.warn('[sync] dashboard disabled, skipping file count sync')
+      return
+    }
+    await this.postSync(
+      this.dashboardClient,
+      `/api/portfolio/sync-file-count/${portfolioId}`,
+      { type, count },
+      'dashboard',
+      'file-count-sync'
+    )
+  }
+
+  async deleteContractUrl(
+    id: string,
+    fileId: string,
+    user: IUserWithPermissions
+  ): Promise<{ message: string }> {
+    const accessibleIds =
+      await this.portfolioRepository.getAccessiblePortfolioIds(user.id)
+    if (Array.isArray(accessibleIds) && !accessibleIds.includes(id)) {
+      throw new NotFoundException('Portfolio not found')
+    }
+
+    const portfolio = await this.portfolioRepository.findById(id)
+    if (!portfolio) throw new NotFoundException('Portfolio not found')
+
+    const file = await this.fileUploadService.findOneFile(fileId, user)
+    if (file.portfolio_id !== id) throw new NotFoundException('Contract URL not found')
+
+    const result = await this.fileUploadService.removeFile(fileId, user)
+    await this.syncFileCount(id, 1, 'decrement')
+    return result
   }
 
   async update(

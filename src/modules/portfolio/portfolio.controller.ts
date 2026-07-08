@@ -9,9 +9,11 @@ import {
   Patch,
   Post,
   UploadedFile,
+  UploadedFiles,
   UseGuards,
   UseInterceptors
 } from '@nestjs/common'
+import { FilesInterceptor } from '@nestjs/platform-express'
 import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger'
 import { ExcelFileInterceptor } from '../../common/interceptors/excel-file.interceptor'
 import { ParseQuery } from '../../common/decorators/parse-query.decorator'
@@ -23,6 +25,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator'
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
 import { CreatePortfolioDto, PortfolioQueryDto, UpdatePortfolioDto } from './portfolio.dto'
 import type { IPortfolioService } from './portfolio.interface'
+import { UploadAndCreateFileDto } from '../file-upload/file-upload.dto'
 
 @ApiTags('Portfolio')
 @ApiBearerAuth('JWT-auth')
@@ -104,6 +107,69 @@ export class PortfolioController {
   @ApiResponse({ status: 404, description: 'Portfolio not found' })
   findOne(@Param('id') id: string, @CurrentUser() user: IUserWithPermissions) {
     return this.portfolioService.findOne(id, user)
+  }
+
+  @Post(':id/contract-urls')
+  @RequirePermission(ModuleType.PORTFOLIO, PermissionAction.UPDATE, true)
+  @UseInterceptors(FilesInterceptor('files', 20, { limits: { fileSize: 50 * 1024 * 1024 } }))
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({ summary: 'Upload one or more contract URL files for a portfolio (max 20, 50 MB each)' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['files'],
+      properties: {
+        files: {
+          type: 'array',
+          items: { type: 'string', format: 'binary' },
+          description: 'One or more files to upload'
+        },
+        description: { type: 'string', description: 'Optional description applied to all files' }
+      }
+    }
+  })
+  @ApiResponse({ status: 201, description: 'Files uploaded and contract URLs created' })
+  @ApiResponse({ status: 400, description: 'No files provided' })
+  @ApiResponse({ status: 404, description: 'Portfolio not found' })
+  uploadContractUrls(
+    @Param('id') id: string,
+    @UploadedFiles() files: Express.Multer.File[],
+    @Body() dto: UploadAndCreateFileDto,
+    @CurrentUser() user: IUserWithPermissions
+  ) {
+    if (!files || files.length === 0) throw new BadRequestException('At least one file is required')
+    return this.portfolioService.uploadContractUrls(id, files, dto, user)
+  }
+
+  @Get(':id/contract-urls')
+  @RequirePermission(ModuleType.PORTFOLIO, PermissionAction.READ, true)
+  @ApiOperation({ summary: 'Get all contract URLs for a portfolio' })
+  @ApiResponse({ status: 200, description: 'List of contract URLs' })
+  @ApiResponse({ status: 404, description: 'Portfolio not found' })
+  getContractUrls(@Param('id') id: string, @CurrentUser() user: IUserWithPermissions) {
+    return this.portfolioService.getContractUrls(id, user)
+  }
+
+  @Delete(':id/contract-urls/:fileId')
+  @RequirePermission(ModuleType.PORTFOLIO, PermissionAction.UPDATE, true)
+  @ApiOperation({ summary: 'Delete a contract URL file from a portfolio' })
+  @ApiResponse({ status: 200, description: 'Contract URL deleted' })
+  @ApiResponse({ status: 404, description: 'Portfolio or contract URL not found' })
+  deleteContractUrl(
+    @Param('id') id: string,
+    @Param('fileId') fileId: string,
+    @CurrentUser() user: IUserWithPermissions
+  ) {
+    return this.portfolioService.deleteContractUrl(id, fileId, user)
+  }
+
+  @Get(':id/contact')
+  @RequirePermission(ModuleType.PORTFOLIO, PermissionAction.READ, true)
+  @ApiOperation({ summary: 'Get contact information for a portfolio' })
+  @ApiResponse({ status: 200, description: 'Portfolio contact information' })
+  @ApiResponse({ status: 404, description: 'Portfolio not found' })
+  getContact(@Param('id') id: string, @CurrentUser() user: IUserWithPermissions) {
+    return this.portfolioService.getContact(id, user)
   }
 
   @Patch(':id')

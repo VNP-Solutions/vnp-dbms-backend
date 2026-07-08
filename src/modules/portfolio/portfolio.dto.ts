@@ -1,5 +1,6 @@
 import { PartialType } from '@nestjs/mapped-types'
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
+import { Transform } from 'class-transformer'
 import {
   IsArray,
   IsBoolean,
@@ -12,7 +13,6 @@ import {
   IsString
 } from 'class-validator'
 import { QueryDto } from '../../common/dto/query.dto'
-import { Transform } from 'class-transformer'
 
 export class CreatePortfolioDto {
   @ApiProperty({ example: 'Luxury Hotels Portfolio', description: 'Portfolio name' })
