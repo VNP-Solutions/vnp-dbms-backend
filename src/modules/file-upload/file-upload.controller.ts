@@ -19,9 +19,19 @@ import {
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
 import {
   BulkFileUploadResponseDto,
-  FileUploadResponseDto
+  FileUploadResponseDto,
+  FileQueryDto,
+  UpdateFileDto,
+  UploadAndCreateFileDto
 } from './file-upload.dto'
 import type { IFileUploadService } from './file-upload.interface'
+import { Body, Delete, Get, Param, Patch } from '@nestjs/common'
+import { ParseQuery } from '../../common/decorators/parse-query.decorator'
+import { RequirePermission } from '../../common/decorators/require-permission.decorator'
+import { PermissionGuard } from '../../common/guards/permission.guard'
+import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
+import { ModuleType, PermissionAction } from '../../common/interfaces/permission.interface'
+import { CurrentUser } from '../auth/decorators/current-user.decorator'
 
 @ApiTags('File Upload')
 @ApiBearerAuth('JWT-auth')
@@ -109,5 +119,88 @@ export class FileUploadController {
     @UploadedFiles() files: Express.Multer.File[]
   ): Promise<BulkFileUploadResponseDto> {
     return this.fileUploadService.uploadBulkFiles(files)
+  }
+  
+  @Post('file')
+  @UseGuards(PermissionGuard)
+  @RequirePermission(ModuleType.PORTFOLIO, PermissionAction.CREATE)
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: 50 * 1024 * 1024 } })
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({ summary: 'Upload a file to S3 and create its record' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['file'],
+      properties: {
+        file: { type: 'string', format: 'binary' },
+        description: { type: 'string' },
+        portfolio_id: { type: 'string' }
+      }
+    }
+  })
+  createFile(
+    @UploadedFile() file: Express.Multer.File,
+    @Body() dto: UploadAndCreateFileDto,
+    @CurrentUser() user: IUserWithPermissions
+  ) {
+    return this.fileUploadService.createFile(file, dto, user)
+  }
+
+  @Get('file')
+  @UseGuards(PermissionGuard)
+  @RequirePermission(ModuleType.PORTFOLIO, PermissionAction.READ)
+  @ApiOperation({ summary: 'Get all files (paginated, search, filter, sort)' })
+  findAllFiles(
+    @ParseQuery() query: FileQueryDto,
+    @CurrentUser() user: IUserWithPermissions
+  ) {
+    return this.fileUploadService.findAllFiles(query, user)
+  }
+
+  @Get('file/portfolio/:portfolioId')
+  @UseGuards(PermissionGuard)
+  @RequirePermission(ModuleType.PORTFOLIO, PermissionAction.READ, true)
+  @ApiOperation({ summary: 'Get all files for a portfolio' })
+  findFilesByPortfolio(
+    @Param('portfolioId') portfolioId: string,
+    @CurrentUser() user: IUserWithPermissions
+  ) {
+    return this.fileUploadService.findFilesByPortfolio(portfolioId, user)
+  }
+
+  @Get('file/:id')
+  @UseGuards(PermissionGuard)
+  @RequirePermission(ModuleType.PORTFOLIO, PermissionAction.READ, true)
+  @ApiOperation({ summary: 'Get a file by ID' })
+  findOneFile(
+    @Param('id') id: string,
+    @CurrentUser() user: IUserWithPermissions
+  ) {
+    return this.fileUploadService.findOneFile(id, user)
+  }
+
+  @Patch('file/:id')
+  @UseGuards(PermissionGuard)
+  @RequirePermission(ModuleType.PORTFOLIO, PermissionAction.UPDATE, true)
+  @ApiOperation({ summary: 'Update a file' })
+  updateFile(
+    @Param('id') id: string,
+    @Body() dto: UpdateFileDto,
+    @CurrentUser() user: IUserWithPermissions
+  ) {
+    return this.fileUploadService.updateFile(id, dto, user)
+  }
+
+  @Delete('file/:id')
+  @UseGuards(PermissionGuard)
+  @RequirePermission(ModuleType.PORTFOLIO, PermissionAction.DELETE, true)
+  @ApiOperation({ summary: 'Delete a file' })
+  removeFile(
+    @Param('id') id: string,
+    @CurrentUser() user: IUserWithPermissions
+  ) {
+    return this.fileUploadService.removeFile(id, user)
   }
 }
