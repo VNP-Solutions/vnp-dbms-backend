@@ -14,18 +14,26 @@ import { QueryBuilder } from '../../common/utils/query-builder.util'
 import { RedisService } from '../redis/redis.service'
 import { PrismaService } from '../prisma/prisma.service'
 import type { PaginatedResult } from '../../common/dto/query.dto'
-import { CreatePortfolioDto, PortfolioQueryDto, UpdatePortfolioDto } from './portfolio.dto'
+import {
+  CreatePortfolioDto,
+  PortfolioQueryDto,
+  UpdatePortfolioDto
+} from './portfolio.dto'
 import type {
   ImportPortfoliosResult,
   IPortfolioRepository,
   IPortfolioService,
+  PortfolioContact,
   PortfolioWithCounts
 } from './portfolio.interface'
+import type { IFileUploadService } from '../file-upload/file-upload.interface'
+import type { UploadAndCreateFileDto } from '../file-upload/file-upload.dto'
 import axios, { AxiosInstance } from 'axios'
 import { ConfigService } from '@nestjs/config'
 import type { Configuration } from '../../config/configuration'
+import { SyncCommunicationService } from '../../common/services/sync-communication.service'
 
-const CACHE_TTL_ITEM = 5 * 60 * 1000   // 5 minutes for individual records
+const CACHE_TTL_ITEM = 5 * 60 * 1000 // 5 minutes for individual records
 const CACHE_KEY = (id: string) => `portfolio:${id}`
 const ALL_PATTERN = 'portfolio:all:*'
 const INTERNAL_PORTFOLIO_NAME = 'Internal Portfolio'
@@ -33,43 +41,71 @@ const INTERNAL_PORTFOLIO_NAME = 'Internal Portfolio'
 @Injectable()
 export class PortfolioService implements IPortfolioService, OnModuleInit {
   private readonly logger = new Logger(PortfolioService.name)
+  private readonly dashboardClient: AxiosInstance | null
   private readonly scraperClient: AxiosInstance | null
+
   constructor(
     @Inject('IPortfolioRepository')
     private readonly portfolioRepository: IPortfolioRepository,
+    @Inject('IFileUploadService')
+    private readonly fileUploadService: IFileUploadService,
     private readonly prisma: PrismaService,
     private readonly redisService: RedisService,
-    private readonly config: ConfigService<Configuration, true>
+    private readonly config: ConfigService<Configuration, true>,
+    private readonly syncCommunication: SyncCommunicationService
   ) {
     const timeout = this.config.get('syncTimeoutMs', { infer: true }) ?? 15000
+    const dashUrl =
+      this.config.get('dashboardBackendUrl', { infer: true }) ?? ''
     const scrUrl = this.config.get('scraperBackendUrl', { infer: true }) ?? ''
-    const scrTok = this.config.get('scraperServiceToken', { infer: true }) ?? ''
-    this.scraperClient = scrUrl && scrTok
-      ? axios.create({ baseURL: scrUrl, timeout, headers: { 'X-Service-Token': scrTok } })
-      : null
-    if (!this.scraperClient) this.logger.warn('[sync] scraper disabled — URL/token missing')
+    const syncAuthReady = this.syncCommunication.isConfigured()
+
+    this.dashboardClient =
+      dashUrl && syncAuthReady
+        ? axios.create({ baseURL: dashUrl, timeout })
+        : null
+    this.scraperClient =
+      scrUrl && syncAuthReady
+        ? axios.create({ baseURL: scrUrl, timeout })
+        : null
+
+    if (!syncAuthReady) {
+      this.logger.warn(
+        '[sync] portfolio sync disabled — JWT_COMMUNICATION_SECRET missing'
+      )
+    }
+    if (!this.dashboardClient) {
+      this.logger.warn(
+        '[sync] dashboard portfolio sync disabled — URL missing or auth not configured'
+      )
+    }
+    if (!this.scraperClient) {
+      this.logger.warn(
+        '[sync] scraper portfolio sync disabled — URL missing or auth not configured'
+      )
+    }
   }
 
   async onModuleInit() {
     await this.ensureInternalPortfolio()
   }
-  
+
   private async ensureInternalPortfolio() {
     const existing = await this.prisma.portfolio.findUnique({
       where: { name: INTERNAL_PORTFOLIO_NAME }
     })
     if (existing) return existing
-  
+
     let defaultServiceType = await this.prisma.serviceType.findFirst({
       where: { type: { equals: 'OTA', mode: 'insensitive' } }
     })
-  
+
     if (!defaultServiceType) {
       const maxOrder = await this.prisma.serviceType.findFirst({
         orderBy: { order: 'desc' },
         select: { order: true }
       })
-  
+
       defaultServiceType = await this.prisma.serviceType.create({
         data: {
           type: 'OTA',
@@ -78,7 +114,7 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
         }
       })
     }
-  
+
     return this.prisma.portfolio.create({
       data: {
         name: INTERNAL_PORTFOLIO_NAME,
@@ -90,35 +126,45 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
   }
 
   async create(data: CreatePortfolioDto, _user: IUserWithPermissions) {
-    if (data.name.trim().toLowerCase() === INTERNAL_PORTFOLIO_NAME.toLowerCase()) {
-      throw new ConflictException(`"${INTERNAL_PORTFOLIO_NAME}" is reserved by the system`)
+    if (
+      data.name.trim().toLowerCase() === INTERNAL_PORTFOLIO_NAME.toLowerCase()
+    ) {
+      throw new ConflictException(
+        `"${INTERNAL_PORTFOLIO_NAME}" is reserved by the system`
+      )
     }
     const existing = await this.portfolioRepository.findByName(data.name)
-    if (existing) throw new ConflictException('Portfolio with this name already exists')
+    if (existing)
+      throw new ConflictException('Portfolio with this name already exists')
     const portfolio = await this.portfolioRepository.create(data)
     await this.redisService.deleteByPattern(ALL_PATTERN)
     return portfolio
   }
 
-  async findAll(query: PortfolioQueryDto, user: IUserWithPermissions): Promise<PaginatedResult<PortfolioWithCounts>> {
+  async findAll(
+    query: PortfolioQueryDto,
+    user: IUserWithPermissions
+  ): Promise<PaginatedResult<PortfolioWithCounts>> {
     this.logger.log(`portfolio:findAll — fetching from MongoDB (no cache)`)
 
-    const accessibleIds = await this.portfolioRepository.getAccessiblePortfolioIds(user.id)
+    const accessibleIds =
+      await this.portfolioRepository.getAccessiblePortfolioIds(user.id)
     if (Array.isArray(accessibleIds) && accessibleIds.length === 0) {
       const usePagination = query.page != null && query.limit != null
       return {
         data: [],
         metadata: {
           totalDocuments: 0,
-          currentPage: usePagination ? (query.page || 1) : 1,
+          currentPage: usePagination ? query.page || 1 : 1,
           totalPages: 0,
-          limit: usePagination ? (query.limit || 10) : 0
+          limit: usePagination ? query.limit || 10 : 0
         }
       }
     }
 
     const additionalFilters: any = {}
-    if (query.service_type_id) additionalFilters.service_type_id = query.service_type_id
+    if (query.service_type_id)
+      additionalFilters.service_type_id = query.service_type_id
     if (query.is_active !== undefined && query.is_active !== 'All') {
       additionalFilters.is_active = query.is_active
     }
@@ -131,28 +177,32 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
 
     const mergedQuery = {
       ...query,
-      filters: { ...(typeof query.filters === 'object' ? query.filters : {}), ...additionalFilters }
+      filters: {
+        ...(typeof query.filters === 'object' ? query.filters : {}),
+        ...additionalFilters
+      }
     }
 
     const queryConfig = {
       searchFields: ['name'],
       filterableFields: ['service_type_id', 'is_active'],
-      sortableFields: ['name', 'created_at', 'updated_at', 'is_active', 'is_commissionable'],
+      sortableFields: [
+        'name',
+        'created_at',
+        'updated_at',
+        'is_active',
+        'is_commissionable'
+      ],
       defaultSortField: 'created_at',
       defaultSortOrder: 'desc' as const,
       nestedFieldMap: {}
     }
 
     const baseWhere =
-      accessibleIds === 'all'
-        ? {}
-        : { id: { in: accessibleIds } }
+      accessibleIds === 'all' ? {} : { id: { in: accessibleIds } }
 
-    const { where, skip, take, orderBy, usePagination } = QueryBuilder.buildPrismaQuery(
-      mergedQuery,
-      queryConfig,
-      baseWhere
-    )
+    const { where, skip, take, orderBy, usePagination } =
+      QueryBuilder.buildPrismaQuery(mergedQuery, queryConfig, baseWhere)
 
     const [data, total] = await Promise.all([
       this.portfolioRepository.findAll({ where, skip, take, orderBy }),
@@ -160,9 +210,9 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
     ])
 
     const totalPages = usePagination ? Math.ceil(total / (take || 10)) || 1 : 1
-    const currentPage = usePagination ? (query.page || 1) : 1
-    const limit = usePagination ? (take || 10) : data.length
-    
+    const currentPage = usePagination ? query.page || 1 : 1
+    const limit = usePagination ? take || 10 : data.length
+
     return {
       data,
       metadata: {
@@ -174,8 +224,12 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
     }
   }
 
-  async findOne(id: string, user: IUserWithPermissions): Promise<PortfolioWithCounts> {
-    const accessibleIds = await this.portfolioRepository.getAccessiblePortfolioIds(user.id)
+  async findOne(
+    id: string,
+    user: IUserWithPermissions
+  ): Promise<PortfolioWithCounts> {
+    const accessibleIds =
+      await this.portfolioRepository.getAccessiblePortfolioIds(user.id)
     if (Array.isArray(accessibleIds) && !accessibleIds.includes(id)) {
       throw new NotFoundException('Portfolio not found')
     }
@@ -183,10 +237,14 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
     const cacheKey = CACHE_KEY(id)
     const cached = await this.redisService.get<PortfolioWithCounts>(cacheKey)
     if (cached) {
-      this.logger.log(`[CACHE HIT] portfolio:findOne — served from Redis (key: ${cacheKey})`)
+      this.logger.log(
+        `[CACHE HIT] portfolio:findOne — served from Redis (key: ${cacheKey})`
+      )
       return cached
     }
-    this.logger.log(`[CACHE MISS] portfolio:findOne — fetching from MongoDB (key: ${cacheKey})`)
+    this.logger.log(
+      `[CACHE MISS] portfolio:findOne — fetching from MongoDB (key: ${cacheKey})`
+    )
 
     const portfolio = await this.portfolioRepository.findById(id)
     if (!portfolio) throw new NotFoundException('Portfolio not found')
@@ -195,16 +253,131 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
     return portfolio
   }
 
-  async update(id: string, data: UpdatePortfolioDto, user: IUserWithPermissions) {
+  async getContractUrls(
+    id: string,
+    user: IUserWithPermissions
+  ) {
+    const accessibleIds =
+      await this.portfolioRepository.getAccessiblePortfolioIds(user.id)
+    if (Array.isArray(accessibleIds) && !accessibleIds.includes(id)) {
+      throw new NotFoundException('Portfolio not found')
+    }
+
+    const portfolio = await this.portfolioRepository.findById(id)
+    if (!portfolio) throw new NotFoundException('Portfolio not found')
+
+    return this.portfolioRepository.findContractUrls(id)
+  }
+
+  async getContact(
+    id: string,
+    user: IUserWithPermissions
+  ): Promise<PortfolioContact> {
+    const accessibleIds =
+      await this.portfolioRepository.getAccessiblePortfolioIds(user.id)
+    if (Array.isArray(accessibleIds) && !accessibleIds.includes(id)) {
+      throw new NotFoundException('Portfolio not found')
+    }
+
+    const portfolio = await this.portfolioRepository.findById(id)
+    if (!portfolio) throw new NotFoundException('Portfolio not found')
+
+    return {
+      contact_email: portfolio.contact_email,
+      portfolio_contact_email: portfolio.portfolio_contact_email,
+      portfolio_contact_name: portfolio.portfolio_contact_name,
+      portfolio_contact_phone: portfolio.portfolio_contact_phone
+    }
+  }
+
+  async uploadContractUrls(
+    id: string,
+    files: Express.Multer.File[],
+    dto: UploadAndCreateFileDto,
+    user: IUserWithPermissions
+  ) {
+    const accessibleIds =
+      await this.portfolioRepository.getAccessiblePortfolioIds(user.id)
+    if (Array.isArray(accessibleIds) && !accessibleIds.includes(id)) {
+      throw new NotFoundException('Portfolio not found')
+    }
+
+    const portfolio = await this.portfolioRepository.findById(id)
+    if (!portfolio) throw new NotFoundException('Portfolio not found')
+
+    const result = await this.fileUploadService.createBulkFiles(
+      files,
+      { ...dto, portfolio_id: id },
+      user
+    )
+
+    if (result.created.length > 0) {
+      await this.syncFileCount(id, result.created.length)
+    }
+
+    return result
+  }
+
+  private async syncFileCount(
+    portfolioId: string,
+    count: number,
+    type: 'increment' | 'decrement' = 'increment'
+  ): Promise<void> {
+    if (!this.dashboardClient) {
+      this.logger.warn('[sync] dashboard disabled, skipping file count sync')
+      return
+    }
+    await this.postSync(
+      this.dashboardClient,
+      `/api/portfolio/sync-file-count/${portfolioId}`,
+      { type, count },
+      'dashboard',
+      'file-count-sync'
+    )
+  }
+
+  async deleteContractUrl(
+    id: string,
+    fileId: string,
+    user: IUserWithPermissions
+  ): Promise<{ message: string }> {
+    const accessibleIds =
+      await this.portfolioRepository.getAccessiblePortfolioIds(user.id)
+    if (Array.isArray(accessibleIds) && !accessibleIds.includes(id)) {
+      throw new NotFoundException('Portfolio not found')
+    }
+
+    const portfolio = await this.portfolioRepository.findById(id)
+    if (!portfolio) throw new NotFoundException('Portfolio not found')
+
+    const file = await this.fileUploadService.findOneFile(fileId, user)
+    if (file.portfolio_id !== id) throw new NotFoundException('Contract URL not found')
+
+    const result = await this.fileUploadService.removeFile(fileId, user)
+    await this.syncFileCount(id, 1, 'decrement')
+    return result
+  }
+
+  async update(
+    id: string,
+    data: UpdatePortfolioDto,
+    user: IUserWithPermissions
+  ) {
     const existing = await this.findOne(id, user)
     if (!existing) {
       throw new NotFoundException('Portfolio not found')
     }
     if (existing.name === INTERNAL_PORTFOLIO_NAME) {
-      throw new BadRequestException(`"${INTERNAL_PORTFOLIO_NAME}" cannot be updated`)
+      throw new BadRequestException(
+        `"${INTERNAL_PORTFOLIO_NAME}" cannot be updated`
+      )
     }
-    if (data.name?.trim().toLowerCase() === INTERNAL_PORTFOLIO_NAME.toLowerCase()) {
-      throw new ConflictException(`"${INTERNAL_PORTFOLIO_NAME}" is reserved by the system`)
+    if (
+      data.name?.trim().toLowerCase() === INTERNAL_PORTFOLIO_NAME.toLowerCase()
+    ) {
+      throw new ConflictException(
+        `"${INTERNAL_PORTFOLIO_NAME}" is reserved by the system`
+      )
     }
     const updated = await this.portfolioRepository.update(id, data)
     await Promise.all([
@@ -214,29 +387,89 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
     return updated
   }
 
-  async updateAndSync(id: string, data: UpdatePortfolioDto, user: IUserWithPermissions) {
-    const before = await this.findOne(id, user)   // capture OLD name first
+  async updateAndSync(
+    id: string,
+    data: UpdatePortfolioDto,
+    user: IUserWithPermissions
+  ) {
+    const before = await this.findOne(id, user)
     const updated = await this.update(id, data, user)
+    const full = await this.portfolioRepository.findById(updated.id)
     try {
-      const newName = updated.name?.trim()
-      if (newName && newName !== before.name) {
-        await this.fanOutPortfolioUpdate(before.name, newName)
-      }
+      if (full) await this.fanOutPortfolioUpdate(full, before.name)
     } catch (e: any) {
-      this.logger.error(`[sync] unexpected on portfolio update: ${e?.message ?? e}`)
+      this.logger.error(
+        `[sync] unexpected on portfolio update: ${e?.message ?? e}`
+      )
     }
-    return updated
+    return full ?? updated
   }
-  private async fanOutPortfolioUpdate(oldName: string, newName: string) {
-    if (!this.scraperClient) {
-      this.logger.warn('[sync] scraper disabled, skipping portfolio update sync')
-      return
+
+  private async fanOutPortfolioUpdate(
+    portfolio: PortfolioWithCounts,
+    oldName: string
+  ) {
+    const scraperPayload = {
+      _id: portfolio.id,
+      oldName,
+      name: portfolio.name
     }
-    try {
-      const r = await this.scraperClient.post('/portfolios/sync-update', { oldName, newName })
-      this.logger.log(`[sync] scraper portfolio update: ${JSON.stringify(r.data)}`)
-    } catch (e: any) {
-      this.logger.error(`[sync] scraper portfolio update failed: ${e?.message ?? e}`)
+    const dashboardPayload = {
+      _id: portfolio.id,
+      oldName,
+      name: portfolio.name,
+      ...(portfolio.service_type?.type
+        ? { service_type: portfolio.service_type.type }
+        : {}),
+      is_active: portfolio.is_active,
+      is_commissionable: portfolio.is_commissionable,
+      ...(portfolio.contact_email !== undefined &&
+      portfolio.contact_email !== null
+        ? { contact_email: portfolio.contact_email }
+        : {})
+    }
+
+    const jobs: Array<Promise<void>> = []
+
+    if (this.scraperClient) {
+      jobs.push(
+        this.postSync(
+          this.scraperClient,
+          '/portfolios/sync-update',
+          scraperPayload,
+          'scraper',
+          'update'
+        )
+      )
+    } else {
+      this.logger.warn(
+        '[sync] scraper disabled, skipping portfolio update sync'
+      )
+    }
+
+    if (this.dashboardClient) {
+      jobs.push(
+        this.postSync(
+          this.dashboardClient,
+          '/api/portfolio/sync-update',
+          dashboardPayload,
+          'dashboard',
+          'update'
+        )
+      )
+    } else {
+      this.logger.warn(
+        '[sync] dashboard disabled, skipping portfolio update sync'
+      )
+    }
+
+    const results = await Promise.allSettled(jobs)
+    for (const result of results) {
+      if (result.status === 'rejected') {
+        this.logger.error(
+          `[sync] portfolio update fan-out failed: ${result.reason}`
+        )
+      }
     }
   }
 
@@ -246,13 +479,16 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
       throw new NotFoundException('Portfolio not found')
     }
     if (portfolio.name === INTERNAL_PORTFOLIO_NAME) {
-      throw new BadRequestException(`"${INTERNAL_PORTFOLIO_NAME}" cannot be deleted`)
+      throw new BadRequestException(
+        `"${INTERNAL_PORTFOLIO_NAME}" cannot be deleted`
+      )
     }
     const internalPortfolio = await this.ensureInternalPortfolio()
-    const movedProperties = await this.portfolioRepository.reassignPropertiesToPortfolio(
-      id,
-      internalPortfolio.id
-    )
+    const movedProperties =
+      await this.portfolioRepository.reassignPropertiesToPortfolio(
+        id,
+        internalPortfolio.id
+      )
     await this.portfolioRepository.delete(id)
     await Promise.all([
       this.redisService.del(CACHE_KEY(id)),
@@ -260,34 +496,73 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
       this.redisService.deleteByPattern('property:all:*')
     ])
     return {
-       message: `Portfolio deleted successfully. ${movedProperties} properties were moved to "${INTERNAL_PORTFOLIO_NAME}".`
-      }
+      message: `Portfolio deleted successfully. ${movedProperties} properties were moved to "${INTERNAL_PORTFOLIO_NAME}".`
+    }
   }
 
   async removeAndSync(id: string, user: IUserWithPermissions) {
-    const before = await this.findOne(id, user)   // capture name BEFORE deletion
+    const before = await this.findOne(id, user)
     const result = await this.remove(id, user)
     try {
-      await this.fanOutPortfolioDelete(before.name)
+      await this.fanOutPortfolioDelete(before.id, before.name)
     } catch (e: any) {
-      this.logger.error(`[sync] unexpected on portfolio delete: ${e?.message ?? e}`)
+      this.logger.error(
+        `[sync] unexpected on portfolio delete: ${e?.message ?? e}`
+      )
     }
     return result
   }
-  private async fanOutPortfolioDelete(name: string) {
-    if (!this.scraperClient) {
-      this.logger.warn('[sync] scraper disabled, skipping portfolio delete sync')
-      return
+
+  private async fanOutPortfolioDelete(_id: string, name: string) {
+    const payload = { _id, name }
+    const jobs: Array<Promise<void>> = []
+
+    if (this.scraperClient) {
+      jobs.push(
+        this.postSync(
+          this.scraperClient,
+          '/portfolios/sync-delete',
+          payload,
+          'scraper',
+          'delete'
+        )
+      )
+    } else {
+      this.logger.warn(
+        '[sync] scraper disabled, skipping portfolio delete sync'
+      )
     }
-    try {
-      const r = await this.scraperClient.post('/portfolios/sync-delete', { name })
-      this.logger.log(`[sync] scraper portfolio delete: ${JSON.stringify(r.data)}`)
-    } catch (e: any) {
-      this.logger.error(`[sync] scraper portfolio delete failed: ${e?.message ?? e}`)
+
+    if (this.dashboardClient) {
+      jobs.push(
+        this.postSync(
+          this.dashboardClient,
+          '/api/portfolio/sync-delete',
+          payload,
+          'dashboard',
+          'delete'
+        )
+      )
+    } else {
+      this.logger.warn(
+        '[sync] dashboard disabled, skipping portfolio delete sync'
+      )
+    }
+
+    const results = await Promise.allSettled(jobs)
+    for (const result of results) {
+      if (result.status === 'rejected') {
+        this.logger.error(
+          `[sync] portfolio delete fan-out failed: ${result.reason}`
+        )
+      }
     }
   }
 
-  async importFromExcel(file: Express.Multer.File, _user: IUserWithPermissions): Promise<ImportPortfoliosResult> {
+  async importFromExcel(
+    file: Express.Multer.File,
+    _user: IUserWithPermissions
+  ): Promise<ImportPortfoliosResult> {
     const buffer = file.buffer || (file as any).buffer
     if (!buffer || buffer.length === 0) {
       throw new BadRequestException('File buffer is empty')
@@ -303,20 +578,36 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
     }
 
     const headers = Object.keys(data[0] as object)
-    if (!headers.some((h) => h.toLowerCase().includes('portfolio') && h.toLowerCase().includes('name'))) {
-      const hasName = headers.some((h) => h.toLowerCase() === 'portfolio' || h.toLowerCase() === 'name')
+    if (
+      !headers.some(
+        h =>
+          h.toLowerCase().includes('portfolio') &&
+          h.toLowerCase().includes('name')
+      )
+    ) {
+      const hasName = headers.some(
+        h => h.toLowerCase() === 'portfolio' || h.toLowerCase() === 'name'
+      )
       if (!hasName) {
-        throw new BadRequestException('Excel must contain "Portfolio" or "Portfolio Name" column')
+        throw new BadRequestException(
+          'Excel must contain "Portfolio" or "Portfolio Name" column'
+        )
       }
     }
 
-    const portfolioCol = headers.find(
-      (h) => h.toLowerCase() === 'portfolio name' || h.toLowerCase() === 'portfolio'
-    ) || 'Portfolio'
+    const portfolioCol =
+      headers.find(
+        h =>
+          h.toLowerCase() === 'portfolio name' ||
+          h.toLowerCase() === 'portfolio'
+      ) || 'Portfolio'
 
-    const serviceTypeCol = headers.find(
-      (h) => h.toLowerCase().includes('service') && h.toLowerCase().includes('type')
-    ) || 'Service Type'
+    const serviceTypeCol =
+      headers.find(
+        h =>
+          h.toLowerCase().includes('service') &&
+          h.toLowerCase().includes('type')
+      ) || 'Service Type'
 
     // Find or create default "OTA" service type and resolve to ID
     let defaultServiceType = await this.prisma.serviceType.findFirst({
@@ -339,14 +630,13 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
       this.logger.log('Default "OTA" service type created successfully')
     }
 
-
     let portfoliosCreated = 0
     const portfolios: any[] = []
     const skipped_portfolios: any[] = []
     const portfolioNames = [
       ...new Set(
         data
-          .map((row) => {
+          .map(row => {
             const val = (row as any)[portfolioCol]
             return val && String(val).trim() ? String(val).trim() : null
           })
@@ -354,10 +644,14 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
       )
     ] as string[]
 
-    this.logger.log(`Processing ${portfolioNames.length} unique portfolios from ${data.length} rows`)
+    this.logger.log(
+      `Processing ${portfolioNames.length} unique portfolios from ${data.length} rows`
+    )
 
     for (const name of portfolioNames) {
-      const rowIndex = data.findIndex((r) => String((r as any)[portfolioCol]).trim() === name)
+      const rowIndex = data.findIndex(
+        r => String((r as any)[portfolioCol]).trim() === name
+      )
       const row_no = rowIndex >= 0 ? rowIndex + 2 : 0 // +2 accounting for 0-index and header row
 
       try {
@@ -402,26 +696,37 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
         }
 
         const valActive = row?.['Active status']
-        const is_active = valActive !== undefined
-          ? ['active', 'yes', 'true', '1'].includes(String(valActive).toLowerCase().trim())
-          : true
+        const is_active =
+          valActive !== undefined
+            ? ['active', 'yes', 'true', '1'].includes(
+                String(valActive).toLowerCase().trim()
+              )
+            : true
 
         const valCommissionable = row?.['Commissionable']
-        const is_commissionable = valCommissionable !== undefined
-          ? ['yes', 'true', '1'].includes(String(valCommissionable).toLowerCase().trim())
-          : false
+        const is_commissionable =
+          valCommissionable !== undefined
+            ? ['yes', 'true', '1'].includes(
+                String(valCommissionable).toLowerCase().trim()
+              )
+            : false
 
         const valContractSigned = row?.['Contract Signed']
-        const contract_signed = valContractSigned !== undefined
-          ? ['yes', 'true', '1'].includes(String(valContractSigned).toLowerCase().trim())
-          : undefined
+        const contract_signed =
+          valContractSigned !== undefined
+            ? ['yes', 'true', '1'].includes(
+                String(valContractSigned).toLowerCase().trim()
+              )
+            : undefined
 
         const dto: CreatePortfolioDto = {
           name,
           service_type_id,
           is_active,
           is_commissionable,
-          contact_email: row?.['Contact Email'] ? String(row['Contact Email']).trim() : undefined,
+          contact_email: row?.['Contact Email']
+            ? String(row['Contact Email']).trim()
+            : undefined,
           portfolio_contact_email: row?.['Portfolio Contact Email']
             ? String(row['Portfolio Contact Email']).trim()
             : undefined,
@@ -431,8 +736,11 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
           portfolio_contact_phone: row?.['Portfolio Contact Phone']
             ? String(row['Portfolio Contact Phone']).trim()
             : undefined,
-          commission: row?.['Commission'] != null ? Number(row['Commission']) : undefined,
-          attachment: row?.['Documents'] ? String(row['Documents']).trim() : undefined,
+          commission:
+            row?.['Commission'] != null ? Number(row['Commission']) : undefined,
+          attachment: row?.['Documents']
+            ? String(row['Documents']).trim()
+            : undefined,
           attachments: row?.['Attachments']
             ? String(row['Attachments'])
                 .split(',')
@@ -461,22 +769,32 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
     return { portfoliosCreated, portfolios, skipped_portfolios }
   }
 
-  async findAllCached(user: IUserWithPermissions): Promise<PortfolioWithCounts[]> {
+  async findAllCached(
+    user: IUserWithPermissions
+  ): Promise<PortfolioWithCounts[]> {
     const cacheKey = `portfolio:all:${user.id}`
     const cached = await this.redisService.get<PortfolioWithCounts[]>(cacheKey)
     if (cached) {
-      this.logger.log(`[CACHE HIT] portfolio:findAllCached — served from Redis (key: ${cacheKey})`)
+      this.logger.log(
+        `[CACHE HIT] portfolio:findAllCached — served from Redis (key: ${cacheKey})`
+      )
       return cached
     }
-    this.logger.log(`[CACHE MISS] portfolio:findAllCached — fetching from MongoDB (key: ${cacheKey})`)
+    this.logger.log(
+      `[CACHE MISS] portfolio:findAllCached — fetching from MongoDB (key: ${cacheKey})`
+    )
 
-    const accessibleIds = await this.portfolioRepository.getAccessiblePortfolioIds(user.id)
+    const accessibleIds =
+      await this.portfolioRepository.getAccessiblePortfolioIds(user.id)
     if (Array.isArray(accessibleIds) && accessibleIds.length === 0) {
       return []
     }
 
     const where = accessibleIds === 'all' ? {} : { id: { in: accessibleIds } }
-    const data = await this.portfolioRepository.findAll({ where, orderBy: { created_at: 'desc' } })
+    const data = await this.portfolioRepository.findAll({
+      where,
+      orderBy: { created_at: 'desc' }
+    })
 
     // TTL 0 = no expiry; invalidated explicitly on every write operation
     await this.redisService.set(cacheKey, data, 0)
@@ -484,29 +802,103 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
   }
 
   private hashQuery(query: object): string {
-    return createHash('sha256').update(JSON.stringify(query)).digest('hex').substring(0, 16)
+    return createHash('sha256')
+      .update(JSON.stringify(query))
+      .digest('hex')
+      .substring(0, 16)
   }
 
-  private async fanOutPortfolioCreate(name: string) {
-    if (!this.scraperClient) {
-      this.logger.warn('[sync] scraper disabled, skipping portfolio create sync')
-      return
+  private async fanOutPortfolioCreate(portfolio: PortfolioWithCounts) {
+    const scraperPayload = {
+      _id: portfolio.id,
+      name: portfolio.name
     }
-    try {
-      const r = await this.scraperClient.post('/portfolios/sync-create', { name })
-      this.logger.log(`[sync] scraper portfolio create: ${JSON.stringify(r.data)}`)
-    } catch (e: any) {
-      this.logger.error(`[sync] scraper portfolio create failed: ${e?.message ?? e}`)
+    const dashboardPayload = {
+      _id: portfolio.id,
+      name: portfolio.name,
+      ...(portfolio.service_type?.type
+        ? { service_type: portfolio.service_type.type }
+        : {}),
+      is_active: portfolio.is_active,
+      is_commissionable: portfolio.is_commissionable,
+      ...(portfolio.contact_email
+        ? { contact_email: portfolio.contact_email }
+        : {})
+    }
+
+    const jobs: Array<Promise<void>> = []
+
+    if (this.scraperClient) {
+      jobs.push(
+        this.postSync(
+          this.scraperClient,
+          '/portfolios/sync-create',
+          scraperPayload,
+          'scraper'
+        )
+      )
+    } else {
+      this.logger.warn(
+        '[sync] scraper disabled, skipping portfolio create sync'
+      )
+    }
+
+    if (this.dashboardClient) {
+      jobs.push(
+        this.postSync(
+          this.dashboardClient,
+          '/api/portfolio/sync-create',
+          dashboardPayload,
+          'dashboard'
+        )
+      )
+    } else {
+      this.logger.warn(
+        '[sync] dashboard disabled, skipping portfolio create sync'
+      )
+    }
+
+    const results = await Promise.allSettled(jobs)
+    for (const result of results) {
+      if (result.status === 'rejected') {
+        this.logger.error(
+          `[sync] portfolio create fan-out failed: ${result.reason}`
+        )
+      }
     }
   }
-  
+
+  private async postSync(
+    client: AxiosInstance,
+    path: string,
+    body: Record<string, unknown>,
+    target: string,
+    operation = 'create'
+  ): Promise<void> {
+    try {
+      const r = await client.post(path, body, {
+        headers: this.syncCommunication.createAuthHeaders()
+      })
+      this.logger.log(
+        `[sync] ${target} portfolio ${operation}: ${JSON.stringify(r.data)}`
+      )
+    } catch (e: any) {
+      this.logger.error(
+        `[sync] ${target} portfolio ${operation} failed: ${e?.response?.data ? JSON.stringify(e.response.data) : (e?.message ?? e)}`
+      )
+    }
+  }
+
   async createAndSync(data: CreatePortfolioDto, user: IUserWithPermissions) {
     const portfolio = await this.create(data, user)
+    const full = await this.portfolioRepository.findById(portfolio.id)
     try {
-      await this.fanOutPortfolioCreate(portfolio.name)
+      if (full) await this.fanOutPortfolioCreate(full)
     } catch (e: any) {
-      this.logger.error(`[sync] unexpected on portfolio create: ${e?.message ?? e}`)
+      this.logger.error(
+        `[sync] unexpected on portfolio create: ${e?.message ?? e}`
+      )
     }
-    return portfolio
+    return full ?? portfolio
   }
 }

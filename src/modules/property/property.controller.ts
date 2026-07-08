@@ -628,6 +628,15 @@ export class PropertyController {
     return this.propertyService.findOne(id, user)
   }
 
+  @Get(':id/contact')
+  @RequirePermission(ModuleType.PROPERTY, PermissionAction.READ, true)
+  @ApiOperation({ summary: 'Get contact information for a property' })
+  @ApiResponse({ status: 200, description: 'Contact information returned' })
+  @ApiResponse({ status: 404, description: 'Property not found' })
+  getContact(@Param('id') id: string, @CurrentUser() user: IUserWithPermissions) {
+    return this.propertyService.getContact(id, user)
+  }
+
   @Patch(':id/transfer')
   @RequirePermission(ModuleType.PROPERTY, PermissionAction.UPDATE, true)
   @ApiOperation({

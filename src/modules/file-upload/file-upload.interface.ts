@@ -16,6 +16,11 @@ export interface IFileUploadService {
     data: UploadAndCreateFileDto,
     user: IUserWithPermissions
   ): Promise<FileWithRelations>
+  createBulkFiles(
+    files: Express.Multer.File[],
+    data: UploadAndCreateFileDto,
+    user: IUserWithPermissions
+  ): Promise<{ created: FileWithRelations[]; failed: string[] }>
 }
 
 export interface FileUploadResponse {

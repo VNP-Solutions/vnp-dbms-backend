@@ -1,7 +1,28 @@
-import { Portfolio, ServiceType } from '@prisma/client'
+import { File, Portfolio, ServiceType } from '@prisma/client'
 import { PaginatedResult } from '../../common/dto/query.dto'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
 import { CreatePortfolioDto, PortfolioQueryDto, UpdatePortfolioDto } from './portfolio.dto'
+import type { FileWithRelations } from '../file-upload/file-upload.interface'
+import type { UploadAndCreateFileDto } from '../file-upload/file-upload.dto'
+
+export type PortfolioContractUrl = {
+  id: string
+  url: string
+  name: string
+  description: string | null
+  is_active: boolean
+  uploaded_by: string
+  portfolio_id: string | null
+  created_at: Date
+  updated_at: Date
+}
+
+export type PortfolioContact = {
+  contact_email: string | null
+  portfolio_contact_email: string | null
+  portfolio_contact_name: string | null
+  portfolio_contact_phone: string | null
+}
 
 export type PortfolioWithCounts = Portfolio & {
   total_properties: number
@@ -27,6 +48,7 @@ export interface IPortfolioRepository {
   update(id: string, data: UpdatePortfolioDto): Promise<Portfolio>
   delete(id: string): Promise<Portfolio>
   countProperties(portfolioId: string): Promise<number>
+  findContractUrls(portfolioId: string): Promise<File[]>
   getAccessiblePortfolioIds(userId: string): Promise<string[] | 'all'>
 }
 
@@ -53,6 +75,19 @@ export interface IPortfolioService {
     file: Express.Multer.File,
     user: IUserWithPermissions
   ): Promise<ImportPortfoliosResult>
+  getContractUrls(id: string, user: IUserWithPermissions): Promise<File[]>
+  getContact(id: string, user: IUserWithPermissions): Promise<PortfolioContact>
+  uploadContractUrls(
+    id: string,
+    files: Express.Multer.File[],
+    dto: UploadAndCreateFileDto,
+    user: IUserWithPermissions
+  ): Promise<{ created: FileWithRelations[]; failed: string[] }>
+  deleteContractUrl(
+    id: string,
+    fileId: string,
+    user: IUserWithPermissions
+  ): Promise<{ message: string }>
   createAndSync(data: CreatePortfolioDto, user: IUserWithPermissions): Promise<Portfolio>
   updateAndSync(id: string, data: UpdatePortfolioDto, user: IUserWithPermissions): Promise<Portfolio>
   removeAndSync(id: string, user: IUserWithPermissions): Promise<{ message: string }>

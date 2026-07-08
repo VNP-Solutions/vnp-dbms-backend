@@ -41,6 +41,7 @@ import type {
   ImportPropertyRow,
   IPropertyRepository,
   IPropertyService,
+  PropertyContact,
   PropertyWithRelations
 } from './property.interface'
 import axios, { AxiosInstance } from 'axios'
@@ -912,6 +913,27 @@ export class PropertyService implements IPropertyService {
 
     await this.redisService.set(cacheKey, property, CACHE_TTL_ITEM)
     return property
+  }
+
+  async getContact(
+    id: string,
+    user: IUserWithPermissions
+  ): Promise<PropertyContact> {
+    const accessibleIds = await this.repo.getAccessiblePropertyIds(user.id)
+    if (Array.isArray(accessibleIds) && !accessibleIds.includes(id)) {
+      throw new NotFoundException('Property not found')
+    }
+
+    const property = await this.repo.findById(id)
+    if (!property) throw new NotFoundException('Property not found')
+
+    return {
+      case_management_contact: property.case_management_contact,
+      access_contact: property.access_contact,
+      reporting_contact: property.reporting_contact,
+      portfolio_contact_email: property.portfolio_contact_email,
+      portfolio_contact: property.portfolio_contact
+    }
   }
 
   async update(
