@@ -1,4 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger'
+import { PartialType } from '@nestjs/mapped-types'
+import { ApiPropertyOptional } from '@nestjs/swagger'
+import { IsBoolean, IsNotEmpty, IsOptional, IsString, IsUrl } from 'class-validator'
+import { QueryDto } from '../../common/dto/query.dto'
 
 export class FileUploadResponseDto {
   @ApiProperty({
@@ -64,4 +68,53 @@ export class BulkFileUploadResponseDto {
     required: false
   })
   errors?: string[]
+}
+
+export class CreateFileDto {
+  @ApiProperty({
+    example: 'https://bucket-name.s3.region.amazonaws.com/uploads/contract.pdf',
+    description: 'S3 URL returned from POST /file-upload'
+  })
+  @IsUrl()
+  @IsNotEmpty()
+  url: string
+
+  @ApiProperty({ example: 'Master Service Agreement 2024.pdf' })
+  @IsString()
+  @IsNotEmpty()
+  name: string
+
+  @ApiPropertyOptional({ example: 'Signed portfolio contract' })
+  @IsString()
+  @IsOptional()
+  description?: string
+
+  @ApiPropertyOptional({ example: '507f1f77bcf86cd799439011' })
+  @IsString()
+  @IsOptional()
+  portfolio_id?: string
+
+  @ApiPropertyOptional({ example: true })
+  @IsBoolean()
+  @IsOptional()
+  is_active?: boolean
+}
+
+export class UpdateFileDto extends PartialType(CreateFileDto) {}
+
+export class FileQueryDto extends QueryDto {
+  @ApiPropertyOptional({ example: '507f1f77bcf86cd799439011' })
+  @IsOptional()
+  @IsString()
+  portfolio_id?: string
+
+  @ApiPropertyOptional({ example: 'true' })
+  @IsOptional()
+  @IsString()
+  is_active?: string
+
+  @ApiPropertyOptional({ example: '507f1f77bcf86cd799439011' })
+  @IsOptional()
+  @IsString()
+  uploaded_by?: string
 }
