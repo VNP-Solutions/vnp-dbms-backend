@@ -20,9 +20,9 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
 import {
   BulkFileUploadResponseDto,
   FileUploadResponseDto,
-  CreateFileDto,
   FileQueryDto,
-  UpdateFileDto
+  UpdateFileDto,
+  UploadAndCreateFileDto
 } from './file-upload.dto'
 import type { IFileUploadService } from './file-upload.interface'
 import { Body, Delete, Get, Param, Patch } from '@nestjs/common'
@@ -124,12 +124,28 @@ export class FileUploadController {
   @Post('file')
   @UseGuards(PermissionGuard)
   @RequirePermission(ModuleType.PORTFOLIO, PermissionAction.CREATE)
-  @ApiOperation({ summary: 'Create a file record after S3 upload' })
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: 50 * 1024 * 1024 } })
+  )
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({ summary: 'Upload a file to S3 and create its record' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['file'],
+      properties: {
+        file: { type: 'string', format: 'binary' },
+        description: { type: 'string' },
+        portfolio_id: { type: 'string' }
+      }
+    }
+  })
   createFile(
-    @Body() dto: CreateFileDto,
+    @UploadedFile() file: Express.Multer.File,
+    @Body() dto: UploadAndCreateFileDto,
     @CurrentUser() user: IUserWithPermissions
   ) {
-    return this.fileUploadService.createFile(dto, user)
+    return this.fileUploadService.createFile(file, dto, user)
   }
 
   @Get('file')

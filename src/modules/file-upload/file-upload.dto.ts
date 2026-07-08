@@ -118,3 +118,15 @@ export class FileQueryDto extends QueryDto {
   @IsString()
   uploaded_by?: string
 }
+
+export class UploadAndCreateFileDto {
+  @ApiPropertyOptional({ example: 'Signed portfolio contract' })
+  @IsString()
+  @IsOptional()
+  description?: string
+
+  @ApiPropertyOptional({ example: '507f1f77bcf86cd799439011' })
+  @IsString()
+  @IsOptional()
+  portfolio_id?: string
+}

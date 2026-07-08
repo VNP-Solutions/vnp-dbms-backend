@@ -1,17 +1,21 @@
 import { File as FileModel, Prisma } from '@prisma/client'
 import { PaginatedResult } from '../../common/dto/query.dto'
 import { IUserWithPermissions } from '../../common/interfaces/permission.interface'
-import { CreateFileDto, FileQueryDto, UpdateFileDto } from './file-upload.dto'
+import { FileQueryDto, UpdateFileDto, UploadAndCreateFileDto } from './file-upload.dto'
 
 export interface IFileUploadService {
   uploadFile(file: Express.Multer.File): Promise<FileUploadResponse>
   uploadBulkFiles(files: Express.Multer.File[]): Promise<BulkFileUploadResponse>
-  createFile(data: CreateFileDto, user: IUserWithPermissions): Promise<FileWithRelations>
   findAllFiles(query: FileQueryDto, user: IUserWithPermissions): Promise<PaginatedResult<FileWithRelations>>
   findOneFile(id: string, user: IUserWithPermissions): Promise<FileWithRelations>
   findFilesByPortfolio(portfolioId: string, user: IUserWithPermissions): Promise<FileWithRelations[]>
   updateFile(id: string, data: UpdateFileDto, user: IUserWithPermissions): Promise<FileWithRelations>
   removeFile(id: string, user: IUserWithPermissions): Promise<{ message: string }>
+  createFile(
+    file: Express.Multer.File,
+    data: UploadAndCreateFileDto,
+    user: IUserWithPermissions
+  ): Promise<FileWithRelations>
 }
 
 export interface FileUploadResponse {

@@ -18,7 +18,7 @@ import { PaginatedResult } from '../../common/dto/query.dto'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
 import { QueryBuilder } from '../../common/utils/query-builder.util'
 import type { IPortfolioRepository } from '../portfolio/portfolio.interface'
-import { CreateFileDto, FileQueryDto, UpdateFileDto } from './file-upload.dto'
+import { FileQueryDto, UpdateFileDto, UploadAndCreateFileDto } from './file-upload.dto'
 
 // const fileInclude = {
 //   portfolio: { select: { id: true, name: true } },
@@ -222,16 +222,27 @@ export class FileUploadService implements IFileUploadService {
     }
   }
 
-  async createFile(data: CreateFileDto, user: IUserWithPermissions) {
-    await this.assertPortfolioAccess(user, data.portfolio_id)
-
+  async createFile(
+    file: Express.Multer.File,
+    data: UploadAndCreateFileDto,
+    user: IUserWithPermissions
+  ) {
+    if (!file) throw new BadRequestException('No file provided')
+  
+    const portfolioId = data.portfolio_id?.trim() || undefined
+    const description = data.description?.trim() || undefined
+  
+    await this.assertPortfolioAccess(user, portfolioId)
+  
+    const uploaded = await this.uploadFile(file)
+  
     return this.fileRepository.create({
-      url: data.url,
-      name: data.name,
-      description: data.description,
-      portfolio_id: data.portfolio_id,
+      url: uploaded.url,
+      name: uploaded.originalName,
+      description,
+      portfolio_id: portfolioId,
       uploaded_by: user.id,
-      is_active: data.is_active ?? true
+      is_active: true
     })
   }
 
