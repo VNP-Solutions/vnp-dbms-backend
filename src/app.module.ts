@@ -15,6 +15,7 @@ import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard'
 import { CurrencyModule } from './modules/currency/currency.module'
 import { EmailModule } from './modules/email/email.module'
 import { ExternalApiModule } from './modules/external-api/external-api.module'
+import { ExternalAuthModule } from './modules/external-auth/external-auth.module'
 import { FileUploadModule } from './modules/file-upload/file-upload.module'
 import { PermissionModule } from './modules/permission/permission.module'
 import { PortfolioModule } from './modules/portfolio/portfolio.module'
@@ -65,6 +66,7 @@ import { OtpStatusModule } from './modules/otp-status/otp-status.module'
     ServiceTypeModule,
     CurrencyModule,
     ExternalApiModule,
+    ExternalAuthModule,
     ActivityLogModule,
     BillingTypeModule,
     PriorityModule,

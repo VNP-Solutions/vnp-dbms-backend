@@ -1,4 +1,4 @@
-import { File, Portfolio, ServiceType } from '@prisma/client'
+import { Currency, File, Portfolio, ServiceType } from '@prisma/client'
 import { PaginatedResult } from '../../common/dto/query.dto'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
 import { CreatePortfolioDto, PortfolioQueryDto, UpdatePortfolioDto } from './portfolio.dto'
@@ -28,6 +28,7 @@ export type PortfolioWithCounts = Portfolio & {
   total_properties: number
   total_subportfolios: number
   service_type: ServiceType | null
+  currency: Currency | null
 }
 
 export interface IPortfolioRepository {

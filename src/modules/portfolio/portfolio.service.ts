@@ -463,6 +463,8 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
       )
     }
 
+    this.queueUpsertSync(jobs, portfolio, 'update')
+
     const results = await Promise.allSettled(jobs)
     for (const result of results) {
       if (result.status === 'rejected') {
@@ -858,6 +860,8 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
       )
     }
 
+    this.queueUpsertSync(jobs, portfolio, 'create')
+
     const results = await Promise.allSettled(jobs)
     for (const result of results) {
       if (result.status === 'rejected') {
@@ -866,6 +870,38 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
         )
       }
     }
+  }
+
+  private queueUpsertSync(
+    jobs: Array<Promise<void>>,
+    portfolio: PortfolioWithCounts,
+    operation: 'create' | 'update'
+  ) {
+    if (!this.dashboardClient) {
+      this.logger.warn(
+        `[sync] dashboard disabled, skipping portfolio upsert ${operation} sync`
+      )
+      return
+    }
+    jobs.push(
+      this.postSync(
+        this.dashboardClient,
+        `/api/portfolio/sync-upsert/${portfolio.id}`,
+        {
+          name: portfolio.name,
+          service_type: portfolio.service_type?.type ?? '',
+          currency: {
+            code: portfolio.currency?.code ?? 'USD',
+            name: portfolio.currency?.name ?? 'USD',
+            symbol: portfolio.currency?.symbol ?? null
+          },
+          is_active: portfolio.is_active,
+          is_commissionable: portfolio.is_commissionable
+        },
+        'dashboard',
+        `upsert-${operation}`
+      )
+    )
   }
 
   private async postSync(

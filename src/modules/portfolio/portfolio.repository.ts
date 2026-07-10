@@ -67,6 +67,7 @@ export class PortfolioRepository implements IPortfolioRepository {
       orderBy,
       include: {
         service_type: true,
+        currency: true,
         _count: {
           select: { properties: true, subportfolios: true }
         }
@@ -89,6 +90,7 @@ export class PortfolioRepository implements IPortfolioRepository {
       where: { id },
       include: {
         service_type: true,
+        currency: true,
         _count: { select: { properties: true, subportfolios: true } }
       }
     })
