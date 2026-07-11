@@ -27,6 +27,7 @@ import {
 import { ParseQuery } from '../../common/decorators/parse-query.decorator'
 import { RequirePermission } from '../../common/decorators/require-permission.decorator'
 import { PermissionGuard } from '../../common/guards/permission.guard'
+import { ExternalJwtGuard } from '../../common/guards/external-jwt.guard'
 import { ExcelFileInterceptor } from '../../common/interceptors/excel-file.interceptor'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
 import {
@@ -629,12 +630,15 @@ export class PropertyController {
   }
 
   @Get(':id/contact')
-  @RequirePermission(ModuleType.PROPERTY, PermissionAction.READ, true)
+  @Public()
+  @UseGuards(ExternalJwtGuard)
+  @ApiBearerAuth('external-jwt')
   @ApiOperation({ summary: 'Get contact information for a property' })
   @ApiResponse({ status: 200, description: 'Contact information returned' })
+  @ApiResponse({ status: 401, description: 'Invalid or missing communication JWT' })
   @ApiResponse({ status: 404, description: 'Property not found' })
-  getContact(@Param('id') id: string, @CurrentUser() user: IUserWithPermissions) {
-    return this.propertyService.getContact(id, user)
+  getContact(@Param('id') id: string) {
+    return this.propertyService.getContactExternal(id)
   }
 
   @Patch(':id/transfer')

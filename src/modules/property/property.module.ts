@@ -1,6 +1,10 @@
 import { Module, forwardRef } from '@nestjs/common'
+import { JwtModule } from '@nestjs/jwt'
 import { EmailUtil } from '../../common/utils/email.util'
 import { EncryptionUtil } from '../../common/utils/encryption.util'
+import { SyncCommunicationService } from '../../common/services/sync-communication.service'
+import { ExternalJwtGuard } from '../../common/guards/external-jwt.guard'
+import { ExternalRawSecretGuard } from '../../common/guards/external-raw-secret.guard'
 import { AuthModule } from '../auth/auth.module'
 import { PropertyCredentialsModule } from '../property-credentials/property-credentials.module'
 import { PortfolioModule } from '../portfolio/portfolio.module'
@@ -15,7 +19,13 @@ import { PropertyService } from './property.service'
 import { ServiceTokenGuard } from './guards/service-token.guard'
 
 @Module({
-  imports: [AuthModule, PropertyCredentialsModule, forwardRef(() => PortfolioModule), SubportfolioModule],
+  imports: [
+    AuthModule,
+    PropertyCredentialsModule,
+    forwardRef(() => PortfolioModule),
+    SubportfolioModule,
+    JwtModule.register({})
+  ],
   controllers: [PropertySyncController, PropertyController],
   providers: [
     { provide: 'IPropertyService', useClass: PropertyService },
@@ -26,7 +36,10 @@ import { ServiceTokenGuard } from './guards/service-token.guard'
     EmailUtil,
     ServiceTokenGuard,
     PropertyExpediaCheckerService,
-    PropertyAgodaCheckerService
+    PropertyAgodaCheckerService,
+    SyncCommunicationService,
+    ExternalJwtGuard,
+    ExternalRawSecretGuard
   ],
   exports: [{ provide: 'IPropertyService', useClass: PropertyService }]
 })

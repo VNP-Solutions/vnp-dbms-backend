@@ -174,4 +174,8 @@ export class ConfigurationSchema {
   @IsOptional()
   @IsString()
   COOKIE_SAME_SITE?: string
+
+  @IsNotEmpty()
+  @IsString()
+  JWT_COMMUNICATION_SECRET: string
 }

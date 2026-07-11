@@ -19,6 +19,8 @@ import { ExcelFileInterceptor } from '../../common/interceptors/excel-file.inter
 import { ParseQuery } from '../../common/decorators/parse-query.decorator'
 import { RequirePermission } from '../../common/decorators/require-permission.decorator'
 import { PermissionGuard } from '../../common/guards/permission.guard'
+import { ExternalJwtGuard } from '../../common/guards/external-jwt.guard'
+import { Public } from '../auth/decorators/public.decorator'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
 import { ModuleType, PermissionAction } from '../../common/interfaces/permission.interface'
 import { CurrentUser } from '../auth/decorators/current-user.decorator'
@@ -142,12 +144,15 @@ export class PortfolioController {
   }
 
   @Get(':id/contract-urls')
-  @RequirePermission(ModuleType.PORTFOLIO, PermissionAction.READ, true)
+  @Public()
+  @UseGuards(ExternalJwtGuard)
+  @ApiBearerAuth('external-jwt')
   @ApiOperation({ summary: 'Get all contract URLs for a portfolio' })
   @ApiResponse({ status: 200, description: 'List of contract URLs' })
+  @ApiResponse({ status: 401, description: 'Invalid or missing communication JWT' })
   @ApiResponse({ status: 404, description: 'Portfolio not found' })
-  getContractUrls(@Param('id') id: string, @CurrentUser() user: IUserWithPermissions) {
-    return this.portfolioService.getContractUrls(id, user)
+  getContractUrls(@Param('id') id: string) {
+    return this.portfolioService.getContractUrlsExternal(id)
   }
 
   @Delete(':id/contract-urls/:fileId')
@@ -164,12 +169,15 @@ export class PortfolioController {
   }
 
   @Get(':id/contact')
-  @RequirePermission(ModuleType.PORTFOLIO, PermissionAction.READ, true)
+  @Public()
+  @UseGuards(ExternalJwtGuard)
+  @ApiBearerAuth('external-jwt')
   @ApiOperation({ summary: 'Get contact information for a portfolio' })
   @ApiResponse({ status: 200, description: 'Portfolio contact information' })
+  @ApiResponse({ status: 401, description: 'Invalid or missing communication JWT' })
   @ApiResponse({ status: 404, description: 'Portfolio not found' })
-  getContact(@Param('id') id: string, @CurrentUser() user: IUserWithPermissions) {
-    return this.portfolioService.getContact(id, user)
+  getContact(@Param('id') id: string) {
+    return this.portfolioService.getContactExternal(id)
   }
 
   @Patch(':id')
@@ -194,3 +202,4 @@ export class PortfolioController {
     return this.portfolioService.removeAndSync(id, user)
   }
 }
+

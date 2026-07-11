@@ -47,6 +47,7 @@ import type {
 import axios, { AxiosInstance } from 'axios'
 import { ConfigService } from '@nestjs/config'
 import type { Configuration } from '../../config/configuration'
+import { SyncCommunicationService } from '../../common/services/sync-communication.service'
 
 const CACHE_TTL_ITEM = 5 * 60 * 1000 // 5 minutes for individual records
 const CACHE_TTL_ALL = 60 * 60 * 1000 // 1 hour for all properties cache
@@ -57,6 +58,7 @@ const ALL_PATTERN = 'property:all:*'
 export class PropertyService implements IPropertyService {
   private readonly logger = new Logger(PropertyService.name)
   private readonly dashboardClient: AxiosInstance | null
+  private readonly dashboardJwtClient: AxiosInstance | null
   private readonly scraperClient: AxiosInstance | null
 
   constructor(
@@ -74,7 +76,8 @@ export class PropertyService implements IPropertyService {
     private readonly prisma: PrismaService,
     private readonly redisService: RedisService,
     private readonly emailUtil: EmailUtil,
-    private readonly config: ConfigService<Configuration>
+    private readonly config: ConfigService<Configuration>,
+    private readonly syncCommunication: SyncCommunicationService
   ) {
     const timeout = this.config.get('syncTimeoutMs', { infer: true }) ?? 15000
     const dashUrl = this.config.get('dashboardBackendUrl', { infer: true }) ?? ''
@@ -84,12 +87,15 @@ export class PropertyService implements IPropertyService {
     this.dashboardClient = dashUrl && dashTok
       ? axios.create({ baseURL: dashUrl, timeout, headers: { 'X-Service-Token': dashTok } })
       : null
+    this.dashboardJwtClient = dashUrl && this.syncCommunication.isConfigured()
+      ? axios.create({ baseURL: dashUrl, timeout })
+      : null
     this.scraperClient = scrUrl && scrTok
       ? axios.create({ baseURL: scrUrl, timeout, headers: { 'X-Service-Token': scrTok } })
       : null
     if (!this.dashboardClient) this.logger.warn('[sync] dashboard disabled — URL/token missing')
+    if (!this.dashboardJwtClient) this.logger.warn('[sync] dashboard JWT client disabled — URL or JWT_COMMUNICATION_SECRET missing')
     if (!this.scraperClient)  this.logger.warn('[sync] scraper disabled — URL/token missing')
-  
   }
 
   async create(
@@ -148,7 +154,13 @@ export class PropertyService implements IPropertyService {
     }
 
     await this.redisService.deleteByPattern(ALL_PATTERN)
-    return this.repo.findById(property.id) as Promise<PropertyWithRelations>
+    const created = await this.repo.findById(property.id) as PropertyWithRelations
+    try {
+      await this.syncUpsertPropertyToDashboard(created)
+    } catch (e: any) {
+      this.logger.error(`[sync] unexpected on property upsert sync (create): ${e?.message ?? e}`)
+    }
+    return created
   }
 
   async createAndSync(
@@ -936,6 +948,19 @@ export class PropertyService implements IPropertyService {
     }
   }
 
+  async getContactExternal(id: string): Promise<PropertyContact> {
+    const property = await this.repo.findById(id)
+    if (!property) throw new NotFoundException('Property not found')
+
+    return {
+      case_management_contact: property.case_management_contact,
+      access_contact: property.access_contact,
+      reporting_contact: property.reporting_contact,
+      portfolio_contact_email: property.portfolio_contact_email,
+      portfolio_contact: property.portfolio_contact
+    }
+  }
+
   async update(
     id: string,
     data: UpdatePropertyDto,
@@ -1020,7 +1045,13 @@ export class PropertyService implements IPropertyService {
       this.redisService.del(CACHE_KEY(id)),
       this.redisService.deleteByPattern(ALL_PATTERN)
     ])
-    return this.repo.findById(id) as Promise<PropertyWithRelations>
+    const updated = await this.repo.findById(id) as PropertyWithRelations
+    try {
+      await this.syncUpsertPropertyToDashboard(updated)
+    } catch (e: any) {
+      this.logger.error(`[sync] unexpected on property upsert sync (update): ${e?.message ?? e}`)
+    }
+    return updated
   }
 
   async updateAndSync(id: string, data: UpdatePropertyDto, user: IUserWithPermissions) {
@@ -1049,6 +1080,22 @@ export class PropertyService implements IPropertyService {
       this.redisService.del(CACHE_KEY(id)),
       this.redisService.deleteByPattern(ALL_PATTERN)
     ])
+    try {
+      if (this.dashboardJwtClient) {
+        const r = await this.dashboardJwtClient.post(
+          `/api/property/sync-delete/${id}`,
+          {},
+          { headers: this.syncCommunication.createAuthHeaders() }
+        )
+        this.logger.log(`[sync] dashboard property sync-delete: ${JSON.stringify(r.data)}`)
+      } else {
+        this.logger.warn('[sync] dashboard JWT client disabled, skipping property sync-delete')
+      }
+    } catch (e: any) {
+      this.logger.error(
+        `[sync] dashboard property sync-delete failed: ${e?.response?.data ? JSON.stringify(e.response.data) : (e?.message ?? e)}`
+      )
+    }
     return { message: 'Property deleted successfully' }
   }
 
@@ -3118,5 +3165,53 @@ export class PropertyService implements IPropertyService {
     const updated = await this.repo.update(ids[0], patch as UpdatePropertyDto)
     await Promise.all([this.redisService.del(CACHE_KEY(updated.id)), this.redisService.deleteByPattern(ALL_PATTERN)])
     return { status: 'updated', id: updated.id }
+  }
+
+  private async syncUpsertPropertyToDashboard(
+    property: PropertyWithRelations
+  ): Promise<void> {
+    if (!this.dashboardJwtClient) {
+      this.logger.warn('[sync] dashboard JWT client disabled, skipping property upsert sync')
+      return
+    }
+
+    const credentials = await this.credentialsService.findByPropertyId(property.id)
+
+    const payload = {
+      name: property.name,
+      address: property.hotel_address ?? '',
+      is_active: property.is_active,
+      currency: {
+        code: property.currency?.code ?? '',
+        name: property.currency?.name ?? '',
+        symbol: property.currency?.symbol ?? null
+      },
+      card_descriptor: property.card_descriptor ?? '',
+      portfolio_parent_id: property.portfolio_id,
+      credentials: {
+        expedia_id: property.expedia_id?.toString() ?? '',
+        expedia_username: credentials?.expediaUsername ?? '',
+        expedia_password: credentials?.expediaPassword ?? '',
+        agoda_id: property.agoda_id?.toString() ?? '',
+        agoda_username: credentials?.agodaUsername ?? '',
+        agoda_password: credentials?.agodaPassword ?? '',
+        booking_id: property.booking_id?.toString() ?? '',
+        booking_username: credentials?.bookingUsername ?? '',
+        booking_password: credentials?.bookingPassword ?? ''
+      }
+    }
+
+    try {
+      const r = await this.dashboardJwtClient.post(
+        `/api/property/sync-upsert/${property.id}`,
+        payload,
+        { headers: this.syncCommunication.createAuthHeaders() }
+      )
+      this.logger.log(`[sync] dashboard property upsert: ${JSON.stringify(r.data)}`)
+    } catch (e: any) {
+      this.logger.error(
+        `[sync] dashboard property upsert failed: ${e?.response?.data ? JSON.stringify(e.response.data) : (e?.message ?? e)}`
+      )
+    }
   }
 }

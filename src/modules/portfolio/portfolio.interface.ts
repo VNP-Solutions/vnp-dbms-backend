@@ -78,6 +78,8 @@ export interface IPortfolioService {
   ): Promise<ImportPortfoliosResult>
   getContractUrls(id: string, user: IUserWithPermissions): Promise<File[]>
   getContact(id: string, user: IUserWithPermissions): Promise<PortfolioContact>
+  getContactExternal(id: string): Promise<PortfolioContact>
+  getContractUrlsExternal(id: string): Promise<File[]>
   uploadContractUrls(
     id: string,
     files: Express.Multer.File[],

@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common'
 import { JwtModule } from '@nestjs/jwt'
+import { ExternalJwtGuard } from '../../common/guards/external-jwt.guard'
+import { ExternalRawSecretGuard } from '../../common/guards/external-raw-secret.guard'
 import { SyncCommunicationService } from '../../common/services/sync-communication.service'
 import { RedisService } from '../redis/redis.service'
 import { PrismaService } from '../prisma/prisma.service'
@@ -16,7 +18,9 @@ import { FileUploadModule } from '../file-upload/file-upload.module'
     { provide: 'IPortfolioRepository', useClass: PortfolioRepository },
     SyncCommunicationService,
     PrismaService,
-    RedisService
+    RedisService,
+    ExternalJwtGuard,
+    ExternalRawSecretGuard
   ],
   exports: [{ provide: 'IPortfolioService', useClass: PortfolioService }]
 })

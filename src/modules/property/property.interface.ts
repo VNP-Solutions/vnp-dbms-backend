@@ -325,6 +325,7 @@ export interface IPropertyService {
   importFromExcelAndSync(file: Express.Multer.File, user: IUserWithPermissions): Promise<ImportPropertiesResult>
   removeAndSync(id: string, user: IUserWithPermissions): Promise<{ message: string }>
   getContact(id: string, user: IUserWithPermissions): Promise<PropertyContact>
+  getContactExternal(id: string): Promise<PropertyContact>
 }
 
 export interface BulkTransferResult {

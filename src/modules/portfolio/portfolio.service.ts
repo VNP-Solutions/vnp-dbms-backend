@@ -7,13 +7,19 @@ import {
   NotFoundException,
   OnModuleInit
 } from '@nestjs/common'
+import { ConfigService } from '@nestjs/config'
+import axios, { AxiosInstance } from 'axios'
 import { createHash } from 'crypto'
 import * as XLSX from 'xlsx'
-import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
-import { QueryBuilder } from '../../common/utils/query-builder.util'
-import { RedisService } from '../redis/redis.service'
-import { PrismaService } from '../prisma/prisma.service'
 import type { PaginatedResult } from '../../common/dto/query.dto'
+import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
+import { SyncCommunicationService } from '../../common/services/sync-communication.service'
+import { QueryBuilder } from '../../common/utils/query-builder.util'
+import type { Configuration } from '../../config/configuration'
+import type { UploadAndCreateFileDto } from '../file-upload/file-upload.dto'
+import type { IFileUploadService } from '../file-upload/file-upload.interface'
+import { PrismaService } from '../prisma/prisma.service'
+import { RedisService } from '../redis/redis.service'
 import {
   CreatePortfolioDto,
   PortfolioQueryDto,
@@ -26,12 +32,6 @@ import type {
   PortfolioContact,
   PortfolioWithCounts
 } from './portfolio.interface'
-import type { IFileUploadService } from '../file-upload/file-upload.interface'
-import type { UploadAndCreateFileDto } from '../file-upload/file-upload.dto'
-import axios, { AxiosInstance } from 'axios'
-import { ConfigService } from '@nestjs/config'
-import type { Configuration } from '../../config/configuration'
-import { SyncCommunicationService } from '../../common/services/sync-communication.service'
 
 const CACHE_TTL_ITEM = 5 * 60 * 1000 // 5 minutes for individual records
 const CACHE_KEY = (id: string) => `portfolio:${id}`
@@ -290,6 +290,25 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
     }
   }
 
+  async getContactExternal(id: string): Promise<PortfolioContact> {
+    const portfolio = await this.portfolioRepository.findById(id)
+    if (!portfolio) throw new NotFoundException('Portfolio not found')
+
+    return {
+      contact_email: portfolio.contact_email,
+      portfolio_contact_email: portfolio.portfolio_contact_email,
+      portfolio_contact_name: portfolio.portfolio_contact_name,
+      portfolio_contact_phone: portfolio.portfolio_contact_phone
+    }
+  }
+
+  async getContractUrlsExternal(id: string) {
+    const portfolio = await this.portfolioRepository.findById(id)
+    if (!portfolio) throw new NotFoundException('Portfolio not found')
+
+    return this.portfolioRepository.findContractUrls(id)
+  }
+
   async uploadContractUrls(
     id: string,
     files: Express.Multer.File[],
@@ -497,6 +516,21 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
       this.redisService.deleteByPattern(ALL_PATTERN),
       this.redisService.deleteByPattern('property:all:*')
     ])
+    try {
+      if (this.dashboardClient) {
+        await this.postSync(
+          this.dashboardClient,
+          `/api/portfolio/sync-delete/${id}`,
+          {},
+          'dashboard',
+          'sync-delete'
+        )
+      } else {
+        this.logger.warn('[sync] dashboard disabled, skipping portfolio sync-delete')
+      }
+    } catch (e: any) {
+      this.logger.error(`[sync] unexpected on portfolio sync-delete: ${e?.message ?? e}`)
+    }
     return {
       message: `Portfolio deleted successfully. ${movedProperties} properties were moved to "${INTERNAL_PORTFOLIO_NAME}".`
     }
