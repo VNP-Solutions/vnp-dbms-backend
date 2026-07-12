@@ -9,7 +9,6 @@ import {
   Param,
   Patch,
   Post,
-  Res,
   UploadedFile,
   UseGuards,
   UseInterceptors

@@ -29,6 +29,7 @@ import {
   SyncByOtaDto,
   UpdatePropertyDto
 } from './property.dto'
+import type { SyncBulkUpsertRowResult } from './property.dto'
 import {
   collectPropertyUniqueConflicts,
   normalizePropertyIdentifier,
@@ -154,13 +155,7 @@ export class PropertyService implements IPropertyService {
     }
 
     await this.redisService.deleteByPattern(ALL_PATTERN)
-    const created = await this.repo.findById(property.id) as PropertyWithRelations
-    try {
-      await this.syncUpsertPropertyToDashboard(created)
-    } catch (e: any) {
-      this.logger.error(`[sync] unexpected on property upsert sync (create): ${e?.message ?? e}`)
-    }
-    return created
+    return this.repo.findById(property.id) as Promise<PropertyWithRelations>
   }
 
   async createAndSync(
@@ -168,8 +163,13 @@ export class PropertyService implements IPropertyService {
     user: IUserWithPermissions
   ): Promise<PropertyWithRelations> {
     const property = await this.create(data, user)
-    try {
-      await this.fanOutPropertyCreate({
+
+    const [dashboardResult, parserResult] = await Promise.all([
+      this.syncUpsertPropertyToDashboard(property).catch(e => ({
+        success: false,
+        reason: e?.message ?? String(e)
+      })),
+      this.fanOutPropertyCreate({
         name:               property.name,
         portfolio_name:     property.portfolio?.name ?? null,
         sub_portfolio_name: property.subportfolio?.name ?? null,
@@ -179,10 +179,24 @@ export class PropertyService implements IPropertyService {
         booking_status:     property.booking_status ?? null,
         agoda_id:           property.agoda_id ?? null,
         agoda_status:       property.agoda_status ?? null,
-      })
-    } catch (e: any) {
-      this.logger.error(`[sync] unexpected on create: ${e?.message ?? e}`)
-    }
+      }).catch(e => ({ success: false, reason: e?.message ?? String(e) }))
+    ])
+
+    const identifier =
+      property.expedia_id?.toString() ??
+      property.booking_id?.toString() ??
+      property.agoda_id?.toString() ??
+      property.id
+
+    this.emailUtil
+      .sendPropertySyncResultEmail(
+        user.email,
+        { name: property.name, identifier },
+        { dbms: true, dashboard: dashboardResult, parser: parserResult },
+        'create'
+      )
+      .catch(e => this.logger.error(`[email] sync result email failed: ${e?.message ?? e}`))
+
     return property
   }
 
@@ -1045,31 +1059,44 @@ export class PropertyService implements IPropertyService {
       this.redisService.del(CACHE_KEY(id)),
       this.redisService.deleteByPattern(ALL_PATTERN)
     ])
-    const updated = await this.repo.findById(id) as PropertyWithRelations
-    try {
-      await this.syncUpsertPropertyToDashboard(updated)
-    } catch (e: any) {
-      this.logger.error(`[sync] unexpected on property upsert sync (update): ${e?.message ?? e}`)
-    }
-    return updated
+    return this.repo.findById(id) as Promise<PropertyWithRelations>
   }
 
   async updateAndSync(id: string, data: UpdatePropertyDto, user: IUserWithPermissions) {
     const before = await this.repo.findById(id)
     if (!before) throw new NotFoundException('Property not found')
     const updated = await this.update(id, data, user)
-    try {
-      await this.fanOutPropertyUpdate(
+
+    const [dashboardResult, parserResult] = await Promise.all([
+      this.syncUpsertPropertyToDashboard(updated).catch(e => ({
+        success: false,
+        reason: e?.message ?? String(e)
+      })),
+      this.fanOutPropertyUpdate(
         {
           expedia_id: before.expedia_id ?? null,
           booking_id: before.booking_id ?? null,
-          agoda_id: before.agoda_id ?? null
+          agoda_id:   before.agoda_id ?? null
         },
         data
+      ).catch(e => ({ success: false, reason: e?.message ?? String(e) }))
+    ])
+
+    const identifier =
+      updated.expedia_id?.toString() ??
+      updated.booking_id?.toString() ??
+      updated.agoda_id?.toString() ??
+      updated.id
+
+    this.emailUtil
+      .sendPropertySyncResultEmail(
+        user.email,
+        { name: updated.name, identifier },
+        { dbms: true, dashboard: dashboardResult, parser: parserResult },
+        'update'
       )
-    } catch (e: any) {
-      this.logger.error(`[sync] unexpected: ${e?.message ?? e}`)
-    }
+      .catch(e => this.logger.error(`[email] sync result email failed: ${e?.message ?? e}`))
+
     return updated
   }
   
@@ -1678,14 +1705,84 @@ export class PropertyService implements IPropertyService {
   
   async importFromExcelAndSync(file: Express.Multer.File, user: IUserWithPermissions): Promise<ImportPropertiesResult> {
     const result = await this.importFromExcel(file, user)
-    try {
-      await this.fanOutPropertyBulkCreate([
-        ...(result.properties ?? []),
-        ...(result.existingProperties ?? [])
-      ])
-    } catch (e: any) {
-      this.logger.error(`[sync] unexpected on bulk import: ${e?.message ?? e}`)
-    }
+
+    const allProperties: any[] = [
+      ...(result.properties ?? []),
+      ...(result.existingProperties ?? [])
+    ]
+
+    if (!allProperties.length) return result
+
+    // Run per-property dashboard + scraper sync and collect row-level results
+    // Row numbers: start at 2 (row 1 = header), incrementing per property
+    // Skipped rows from import are interleaved so exact row number is approximate
+    let rowIndex = 2
+    // Build offset for skipped rows so row numbers roughly match the original Excel
+    const skippedNames = new Set((result.skippedProperties ?? []).map((s: { name: string }) => s.name))
+
+    const rowResults: SyncBulkUpsertRowResult[] = await Promise.all(
+      allProperties.map(async (p) => {
+        const row = rowIndex++
+        const identifier = String(p.expedia_id ?? p.booking_id ?? p.agoda_id ?? p.id)
+        const baseResult: SyncBulkUpsertRowResult = {
+          row,
+          parent_id: p.id,
+          name: p.name,
+          identifier,
+          action: skippedNames.has(p.name) ? 'updated' : 'created',
+          dbms: true,
+          dashboard: { success: false, reason: 'Not attempted' },
+          parser: { success: false, reason: 'Not attempted' }
+        }
+
+        const [dashboardResult, parserResult] = await Promise.all([
+          this.syncUpsertPropertyToDashboard(p as PropertyWithRelations).catch(e => ({
+            success: false, reason: e?.message ?? String(e)
+          })),
+          this.fanOutPropertyCreate({
+            name:               p.name,
+            portfolio_name:     p.portfolio?.name ?? null,
+            sub_portfolio_name: p.subportfolio?.name ?? null,
+            expedia_id:         p.expedia_id ?? null,
+            expedia_status:     p.expedia_status ?? null,
+            booking_id:         p.booking_id ?? null,
+            booking_status:     p.booking_status ?? null,
+            agoda_id:           p.agoda_id ?? null,
+            agoda_status:       p.agoda_status ?? null
+          }).catch(e => ({ success: false, reason: e?.message ?? String(e) }))
+        ])
+
+        return { ...baseResult, dashboard: dashboardResult, parser: parserResult }
+      })
+    )
+
+    // Fire email asynchronously — don't block the response
+    const failedRows = rowResults.filter(r => !r.dashboard.success || !r.parser.success)
+    const defectiveRows = failedRows.map(r => {
+      const reasons: string[] = []
+      if (!r.dashboard.success && r.dashboard.reason) reasons.push(`Dashboard: ${r.dashboard.reason}`)
+      if (!r.parser.success && r.parser.reason) reasons.push(`Parser: ${r.parser.reason}`)
+      return {
+        Row: r.row, name: r.name, identifier: r.identifier,
+        Portfolio: allProperties.find(p => p.id === r.parent_id)?.portfolio?.name ?? '',
+        'Expedia ID': allProperties.find(p => p.id === r.parent_id)?.expedia_id ?? '',
+        'Booking ID': allProperties.find(p => p.id === r.parent_id)?.booking_id ?? '',
+        'Agoda ID': allProperties.find(p => p.id === r.parent_id)?.agoda_id ?? '',
+        DBMS: 'YES', Dashboard: r.dashboard.success ? 'YES' : 'NO',
+        Parser: r.parser.success ? 'YES' : 'NO',
+        Reason: reasons.join(' | ') || 'N/A'
+      }
+    })
+
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(defectiveRows.length ? defectiveRows : [{ note: 'All rows synced successfully' }]), 'Sync Results')
+    const excelBuffer = Buffer.from(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }))
+    const filename = `import-sync-report-${new Date().toISOString().slice(0, 10)}.xlsx`
+
+    this.emailUtil
+      .sendBulkSyncResultEmail(user.email, rowResults, excelBuffer, filename)
+      .catch(e => this.logger.error(`[email] import sync report failed: ${e?.message ?? e}`))
+
     return result
   }
   
@@ -1747,6 +1844,9 @@ export class PropertyService implements IPropertyService {
       errors: [],
       successfulUpdates: []
     }
+
+    // Tracks successfully updated properties for post-loop sync
+    const syncQueue: Array<{ rowNumber: number; propertyId: string }> = []
 
     // Helper to find a column value with flexible header matching (case-insensitive, strips asterisks)
     const findValue = (row: Record<string, any>, names: string[]): string | undefined => {
@@ -2416,6 +2516,7 @@ export class PropertyService implements IPropertyService {
 
           result.successCount++
           result.successfulUpdates.push(existingProperty.name)
+          syncQueue.push({ rowNumber, propertyId: existingProperty.id })
         } catch (error) {
           const nameFromRow =
             findValue(row, ['Property Identifier', 'Property identifier', 'Identifier']) ||
@@ -2428,6 +2529,65 @@ export class PropertyService implements IPropertyService {
           })
           result.failureCount++
         }
+      }
+
+      // ── Post-loop: run dashboard + scraper sync per updated property, then email ──
+      if (syncQueue.length > 0) {
+        const rowResults: SyncBulkUpsertRowResult[] = await Promise.all(
+          syncQueue.map(async ({ rowNumber, propertyId }) => {
+            const p = (await this.repo.findById(propertyId)) as PropertyWithRelations
+            const identifier = String(p?.expedia_id ?? p?.booking_id ?? p?.agoda_id ?? propertyId)
+
+            const [dashboardResult, parserResult] = await Promise.all([
+              p
+                ? this.syncUpsertPropertyToDashboard(p).catch(e => ({ success: false, reason: e?.message ?? String(e) }))
+                : Promise.resolve({ success: false, reason: 'Property not found after update' }),
+              p
+                ? this.fanOutPropertyUpdate(
+                    { expedia_id: p.expedia_id ?? null, booking_id: p.booking_id ?? null, agoda_id: p.agoda_id ?? null },
+                    { name: p.name, hotel_address: p.hotel_address, card_descriptor: p.card_descriptor, is_active: p.is_active, expedia_id: p.expedia_id, booking_id: p.booking_id, agoda_id: p.agoda_id }
+                  ).catch(e => ({ success: false, reason: e?.message ?? String(e) }))
+                : Promise.resolve({ success: false, reason: 'Property not found after update' })
+            ])
+
+            return {
+              row: rowNumber,
+              parent_id: propertyId,
+              name: p?.name ?? propertyId,
+              identifier,
+              action: 'updated' as const,
+              dbms: true,
+              dashboard: dashboardResult,
+              parser: parserResult
+            }
+          })
+        )
+
+        const failedRows = rowResults.filter(r => !r.dashboard.success || !r.parser.success)
+        const defectRows = failedRows.map(r => {
+          const reasons: string[] = []
+          if (!r.dashboard.success && r.dashboard.reason) reasons.push(`Dashboard: ${r.dashboard.reason}`)
+          if (!r.parser.success && r.parser.reason) reasons.push(`Parser: ${r.parser.reason}`)
+          return {
+            Row: r.row, 'Property Name': r.name, Identifier: r.identifier,
+            DBMS: 'YES', Dashboard: r.dashboard.success ? 'YES' : 'NO',
+            Parser: r.parser.success ? 'YES' : 'NO',
+            Reason: reasons.join(' | ') || 'N/A'
+          }
+        })
+
+        const wb = XLSX.utils.book_new()
+        XLSX.utils.book_append_sheet(
+          wb,
+          XLSX.utils.json_to_sheet(defectRows.length ? defectRows : [{ note: 'All rows synced successfully' }]),
+          'Sync Results'
+        )
+        const excelBuffer = Buffer.from(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }))
+        const filename = `bulk-update-sync-report-${new Date().toISOString().slice(0, 10)}.xlsx`
+
+        this.emailUtil
+          .sendBulkSyncResultEmail(user.email, rowResults, excelBuffer, filename)
+          .catch(e => this.logger.error(`[email] bulk-update sync report failed: ${e?.message ?? e}`))
       }
 
       return result
@@ -3092,21 +3252,36 @@ export class PropertyService implements IPropertyService {
   private async fanOutPropertyUpdate(
     otaIds: { expedia_id: number | null; booking_id: number | null; agoda_id: number | null },
     data: Record<string, any>
-  ) {
+  ): Promise<{ success: boolean; reason?: string }> {
     const jobs: Promise<any>[] = []
     if (this.dashboardClient) {
       jobs.push(this.dashboardClient.patch('/api/property/sync-by-ota', { ...otaIds, data })
         .then(r => ['dashboard', r.data]).catch(e => ['dashboard', { error: e?.message }]))
     }
+    let scraperSuccess = true
+    let scraperReason: string | undefined
     if (this.scraperClient) {
       jobs.push(this.scraperClient.patch('/properties/sync-by-ota', { ...otaIds, data })
         .then(r => ['scraper', r.data]).catch(e => ['scraper', { error: e?.message }]))
+    } else {
+      scraperSuccess = false
+      scraperReason = 'Scraper client disabled — URL or token missing'
     }
     const results = await Promise.allSettled(jobs)
     for (const r of results) {
-      if (r.status === 'fulfilled') this.logger.log(`[sync] ${r.value[0]}: ${JSON.stringify(r.value[1])}`)
-      else this.logger.error(`[sync] failed: ${r.reason}`)
+      if (r.status === 'fulfilled') {
+        this.logger.log(`[sync] ${r.value[0]}: ${JSON.stringify(r.value[1])}`)
+        if (r.value[0] === 'scraper' && r.value[1]?.error) {
+          scraperSuccess = false
+          scraperReason = r.value[1].error
+        }
+      } else {
+        this.logger.error(`[sync] failed: ${r.reason}`)
+        scraperSuccess = false
+        scraperReason = String(r.reason)
+      }
     }
+    return { success: scraperSuccess, reason: scraperReason }
   }
 
   private async fanOutPropertyCreate(property: {
@@ -3119,16 +3294,20 @@ export class PropertyService implements IPropertyService {
     booking_status?: string | null
     agoda_id?: number | null
     agoda_status?: string | null
-  }) {
+  }): Promise<{ success: boolean; reason?: string }> {
     if (!this.scraperClient) {
-      this.logger.warn('[sync] scraper disabled, skipping create sync')
-      return
+      const reason = 'Scraper client disabled — URL or token missing'
+      this.logger.warn(`[sync] ${reason}`)
+      return { success: false, reason }
     }
     try {
       const r = await this.scraperClient.post('/properties/sync-create', property)
       this.logger.log(`[sync] scraper create: ${JSON.stringify(r.data)}`)
+      return { success: true }
     } catch (e: any) {
-      this.logger.error(`[sync] scraper create failed: ${e?.message ?? e}`)
+      const reason = e?.response?.data ? JSON.stringify(e.response.data) : (e?.message ?? String(e))
+      this.logger.error(`[sync] scraper create failed: ${reason}`)
+      return { success: false, reason }
     }
   }
 
@@ -3169,10 +3348,11 @@ export class PropertyService implements IPropertyService {
 
   private async syncUpsertPropertyToDashboard(
     property: PropertyWithRelations
-  ): Promise<void> {
+  ): Promise<{ success: boolean; reason?: string }> {
     if (!this.dashboardJwtClient) {
-      this.logger.warn('[sync] dashboard JWT client disabled, skipping property upsert sync')
-      return
+      const reason = 'Dashboard JWT client disabled — URL or JWT_COMMUNICATION_SECRET missing'
+      this.logger.warn(`[sync] ${reason}`)
+      return { success: false, reason }
     }
 
     const credentials = await this.credentialsService.findByPropertyId(property.id)
@@ -3208,10 +3388,11 @@ export class PropertyService implements IPropertyService {
         { headers: this.syncCommunication.createAuthHeaders() }
       )
       this.logger.log(`[sync] dashboard property upsert: ${JSON.stringify(r.data)}`)
+      return { success: true }
     } catch (e: any) {
-      this.logger.error(
-        `[sync] dashboard property upsert failed: ${e?.response?.data ? JSON.stringify(e.response.data) : (e?.message ?? e)}`
-      )
+      const reason = e?.response?.data ? JSON.stringify(e.response.data) : (e?.message ?? String(e))
+      this.logger.error(`[sync] dashboard property upsert failed: ${reason}`)
+      return { success: false, reason }
     }
   }
 }
