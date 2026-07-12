@@ -1433,7 +1433,9 @@ export class PropertyService implements IPropertyService {
       throw new BadRequestException('Excel file is empty or invalid')
     }
 
-    const headers = Object.keys(rawRows[0])
+    // Strip trailing asterisks/spaces from header keys before validation
+    // so "Property Name *" is treated the same as "Property Name"
+    const headers = Object.keys(rawRows[0]).map(h => h.replace(/\s*\*+\s*$/, '').trim())
 
     // Required columns
     if (
@@ -3357,14 +3359,17 @@ export class PropertyService implements IPropertyService {
 
     const credentials = await this.credentialsService.findByPropertyId(property.id)
 
+    const currencyCode = property.currency?.code ?? 'USD'
+    const currencyName = property.currency?.name ?? 'USD'
+
     const payload = {
       name: property.name,
       address: property.hotel_address ?? '',
       is_active: property.is_active,
       currency: {
-        code: property.currency?.code ?? '',
-        name: property.currency?.name ?? '',
-        symbol: property.currency?.symbol ?? null
+        code: currencyCode,
+        name: currencyName,
+        symbol: ''
       },
       card_descriptor: property.card_descriptor ?? '',
       portfolio_parent_id: property.portfolio_id,
