@@ -68,6 +68,7 @@ export class PortfolioRepository implements IPortfolioRepository {
       include: {
         service_type: true,
         currency: true,
+        contract_urls: true,
         _count: {
           select: { properties: true, subportfolios: true }
         }
@@ -91,6 +92,7 @@ export class PortfolioRepository implements IPortfolioRepository {
       include: {
         service_type: true,
         currency: true,
+        contract_urls: true,
         _count: { select: { properties: true, subportfolios: true } }
       }
     })

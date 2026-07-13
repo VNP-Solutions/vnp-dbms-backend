@@ -29,6 +29,7 @@ export type PortfolioWithCounts = Portfolio & {
   total_subportfolios: number
   service_type: ServiceType | null
   currency: Currency | null
+  contract_urls: File[]
 }
 
 export interface IPortfolioRepository {
