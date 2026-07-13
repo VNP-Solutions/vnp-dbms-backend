@@ -2,6 +2,7 @@ import { PartialType } from '@nestjs/mapped-types'
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import { Type } from 'class-transformer'
 import {
+  IsArray,
   IsBoolean,
   IsEnum,
   IsNotEmpty,
@@ -10,7 +11,10 @@ import {
   IsString,
   ValidateNested
 } from 'class-validator'
-import { AccessLevel, PermissionLevel } from '../../common/interfaces/permission.interface'
+import {
+  AccessLevel,
+  PermissionLevel
+} from '../../common/interfaces/permission.interface'
 
 export class PermissionDto {
   @ApiProperty({ enum: PermissionLevel, example: PermissionLevel.all })
@@ -22,6 +26,18 @@ export class PermissionDto {
   @IsEnum(AccessLevel)
   @IsNotEmpty()
   access_level: AccessLevel
+}
+
+export class PropertyPermissionDto extends PermissionDto {
+  @ApiPropertyOptional({
+    type: [String],
+    example: ['Portfolio', 'Sub-Portfolio'],
+    description: 'Columns available for this role on the property module'
+  })
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  available_dbms_columns?: string[]
 }
 
 export class CreateUserRoleDto {
@@ -64,19 +80,25 @@ export class CreateUserRoleDto {
   @IsOptional()
   is_active?: boolean
 
-  @ApiPropertyOptional({ type: PermissionDto, description: 'Portfolio permission' })
+  @ApiPropertyOptional({
+    type: PermissionDto,
+    description: 'Portfolio permission'
+  })
   @IsObject()
   @ValidateNested()
   @Type(() => PermissionDto)
   @IsOptional()
   portfolio_permission?: PermissionDto
 
-  @ApiPropertyOptional({ type: PermissionDto, description: 'Property permission' })
+  @ApiPropertyOptional({
+    type: PropertyPermissionDto,
+    description: 'Property permission'
+  })
   @IsObject()
   @ValidateNested()
-  @Type(() => PermissionDto)
+  @Type(() => PropertyPermissionDto)
   @IsOptional()
-  property_permission?: PermissionDto
+  property_permission?: PropertyPermissionDto
 
   @ApiPropertyOptional({ type: PermissionDto, description: 'Audit permission' })
   @IsObject()
@@ -92,28 +114,40 @@ export class CreateUserRoleDto {
   @IsOptional()
   user_permission?: PermissionDto
 
-  @ApiPropertyOptional({ type: PermissionDto, description: 'System settings permission' })
+  @ApiPropertyOptional({
+    type: PermissionDto,
+    description: 'System settings permission'
+  })
   @IsObject()
   @ValidateNested()
   @Type(() => PermissionDto)
   @IsOptional()
   system_settings_permission?: PermissionDto
 
-  @ApiPropertyOptional({ type: PermissionDto, description: 'Bank details permission' })
+  @ApiPropertyOptional({
+    type: PermissionDto,
+    description: 'Bank details permission'
+  })
   @IsObject()
   @ValidateNested()
   @Type(() => PermissionDto)
   @IsOptional()
   bank_details_permission?: PermissionDto
 
-  @ApiPropertyOptional({ type: PermissionDto, description: 'User roles (role templates) permission' })
+  @ApiPropertyOptional({
+    type: PermissionDto,
+    description: 'User roles (role templates) permission'
+  })
   @IsObject()
   @ValidateNested()
   @Type(() => PermissionDto)
   @IsOptional()
   roles_permission?: PermissionDto
 
-  @ApiPropertyOptional({ type: PermissionDto, description: 'Access logs permission' })
+  @ApiPropertyOptional({
+    type: PermissionDto,
+    description: 'Access logs permission'
+  })
   @IsObject()
   @ValidateNested()
   @Type(() => PermissionDto)

@@ -22,10 +22,10 @@ import {
   VerifyLoginOtpDto
 } from './auth.dto'
 import type {
-  IAuthRepository,
-  IAuthService,
   AuthSessionResult,
   AuthTokens,
+  IAuthRepository,
+  IAuthService,
   JwtPayload
 } from './auth.interface'
 
@@ -48,6 +48,7 @@ interface UserWithRole {
     property_permission: {
       permission_level: string
       access_level: string
+      available_dbms_columns: string[]
     } | null
     audit_permission: { permission_level: string; access_level: string } | null
     user_permission: { permission_level: string; access_level: string } | null
@@ -86,6 +87,7 @@ interface UserWithRole {
       property_permission: {
         permission_level: string
         access_level: string
+        available_dbms_columns: string[]
       } | null
       audit_permission: {
         permission_level: string
@@ -361,7 +363,9 @@ export class AuthService implements IAuthService {
     }
   }
 
-  async verifyInvitation(data: VerifyInvitationDto): Promise<AuthSessionResult> {
+  async verifyInvitation(
+    data: VerifyInvitationDto
+  ): Promise<AuthSessionResult> {
     const user = await this.authRepository.findUserByEmail(data.email)
 
     if (!user) {
@@ -457,10 +461,7 @@ export class AuthService implements IAuthService {
     }
   }
 
-  private signAuthTokens(
-    payload: JwtPayload,
-    keepSignIn = true
-  ): AuthTokens {
+  private signAuthTokens(payload: JwtPayload, keepSignIn = true): AuthTokens {
     const accessExpiresIn = keepSignIn
       ? this.configService.get('jwt.accessExpiresIn', { infer: true })!
       : this.configService.get('cookies.sessionAccessExpiresIn', {
@@ -524,7 +525,9 @@ export class AuthService implements IAuthService {
     }
   }
 
-  async createSuperAdmin(data: CreateSuperAdminDto): Promise<AuthSessionResult> {
+  async createSuperAdmin(
+    data: CreateSuperAdminDto
+  ): Promise<AuthSessionResult> {
     // 1. Prevent duplicate super admin account by email
     const existingUser = await this.authRepository.findUserByEmail(data.email)
     if (existingUser) {

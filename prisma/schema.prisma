@@ -179,8 +179,9 @@ type PortfolioPermission {
 }
 
 type PropertyPermission {
-  permission_level PermissionLevel
-  access_level     AccessLevel
+  permission_level   PermissionLevel
+  access_level       AccessLevel
+  available_dbms_columns  String[]          @default([])
 }
 
 type AuditPermission {

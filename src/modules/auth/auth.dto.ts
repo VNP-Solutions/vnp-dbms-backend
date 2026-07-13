@@ -1,18 +1,21 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import { Transform } from 'class-transformer'
 import {
-    IsArray,
-    IsBoolean,
-    IsEmail,
-    IsNotEmpty,
-    IsOptional,
-    IsString,
-    Matches,
-    ValidateIf
+  IsArray,
+  IsBoolean,
+  IsEmail,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Matches,
+  ValidateIf
 } from 'class-validator'
 
 export class CreateSuperAdminDto {
-  @ApiProperty({ example: 'admin@vnpsolutions.com', description: 'Super admin email address' })
+  @ApiProperty({
+    example: 'admin@vnpsolutions.com',
+    description: 'Super admin email address'
+  })
   @IsEmail()
   @IsNotEmpty()
   email: string
@@ -34,7 +37,8 @@ export class CreateSuperAdminDto {
 
   @ApiProperty({
     example: 'Admin@1234!',
-    description: 'Password (8-32 chars, must contain letter, number, special char)'
+    description:
+      'Password (8-32 chars, must contain letter, number, special char)'
   })
   @IsString()
   @IsNotEmpty()
@@ -47,8 +51,6 @@ export class CreateSuperAdminDto {
   )
   password: string
 }
-
-
 
 export class LoginRequestOtpDto {
   @ApiProperty({
@@ -316,14 +318,30 @@ export interface AuthResponseUserDto {
     name: string
     description: string
     is_external: boolean
-    portfolio_permission?: { permission_level: string; access_level: string } | null
-    property_permission?: { permission_level: string; access_level: string } | null
+    portfolio_permission?: {
+      permission_level: string
+      access_level: string
+    } | null
+    property_permission?: {
+      permission_level: string
+      access_level: string
+      available_dbms_columns: string[]
+    } | null
     audit_permission?: { permission_level: string; access_level: string } | null
     user_permission?: { permission_level: string; access_level: string } | null
-    system_settings_permission?: { permission_level: string; access_level: string } | null
-    bank_details_permission?: { permission_level: string; access_level: string } | null
+    system_settings_permission?: {
+      permission_level: string
+      access_level: string
+    } | null
+    bank_details_permission?: {
+      permission_level: string
+      access_level: string
+    } | null
     roles_permission?: { permission_level: string; access_level: string } | null
-    access_logs_permission?: { permission_level: string; access_level: string } | null
+    access_logs_permission?: {
+      permission_level: string
+      access_level: string
+    } | null
   }
   projectRoles?: Array<{
     project_type: string
@@ -351,7 +369,8 @@ export class AuthResponseDto {
         user_permission: { permission_level: 'all', access_level: 'all' }
       }
     },
-    description: 'Authenticated user information (tokens are set as HTTP-only cookies)'
+    description:
+      'Authenticated user information (tokens are set as HTTP-only cookies)'
   })
   user: AuthResponseUserDto
 }

@@ -45,6 +45,10 @@ export interface IPermission {
   access_level: AccessLevel
 }
 
+export interface IPropertyPermission extends IPermission {
+  available_dbms_columns?: string[]
+}
+
 /** Role shape matching Prisma UserRole (typed permissions per module) */
 export interface IUserRoleWithPermissions {
   id: string
@@ -52,7 +56,7 @@ export interface IUserRoleWithPermissions {
   is_external: boolean
   can_access_mis?: boolean
   portfolio_permission: IPermission | null
-  property_permission: IPermission | null
+  property_permission: IPropertyPermission | null
   audit_permission: IPermission | null
   user_permission: IPermission | null
   system_settings_permission: IPermission | null
