@@ -415,15 +415,9 @@ export class PropertyRepository implements IPropertyRepository {
         }
 
         existingProperties.push({
-          name: existingProp.name,
-          portfolio: { name: portfolio.name },
+          ...existingProp,
+          portfolio: { id: portfolio.id, name: portfolio.name },
           subportfolio: null,
-          expedia_id: existingProp.expedia_id ?? null,
-          expedia_status: existingProp.expedia_status ?? null,
-          booking_id: existingProp.booking_id ?? null,
-          booking_status: existingProp.booking_status ?? null,
-          agoda_id: existingProp.agoda_id ?? null,
-          agoda_status: existingProp.agoda_status ?? null,
         })
         
         skippedProperties.push({

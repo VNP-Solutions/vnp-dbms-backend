@@ -51,6 +51,7 @@ import {
   PROPERTY_FILTER_OPERATION_DESCRIPTION,
   PROPERTY_FILTER_SWAGGER_EXAMPLE_FILTERS,
   PropertyFilterDto,
+  SyncBulkDeleteBodyDto,
   TransferPropertyDto,
   SyncByOtaDto,
   UpdatePropertyDto,
@@ -667,7 +668,7 @@ export class PropertyController {
     @Body() dto: UpdatePropertyDto,
     @CurrentUser() user: IUserWithPermissions
   ) {
-    return this.propertyService.update(id, dto, user)
+    return this.propertyService.updateAndSync(id, dto, user)
   }
 
   @Patch(':id/sync')
@@ -701,6 +702,51 @@ export class PropertyController {
   @ApiResponse({ status: 404, description: 'Property not found' })
   remove(@Param('id') id: string, @CurrentUser() user: IUserWithPermissions) {
     return this.propertyService.removeAndSync(id, user)
+  }
+
+  @Post('sync-bulk-delete')
+  @Public()
+  @UseGuards(ExternalJwtGuard)
+  @HttpCode(200)
+  @ApiBearerAuth('external-jwt')
+  @ApiOperation({
+    summary: 'Bulk delete properties from dashboard (external JWT)',
+    description:
+      'Deletes multiple properties by DBMS ID. Processes each item independently — ' +
+      'a single failure does not abort the batch. ' +
+      'Dashboard and scraper sync-delete calls are fired asynchronously per deleted property.'
+  })
+  @ApiBody({
+    type: SyncBulkDeleteBodyDto,
+    examples: {
+      sample: {
+        summary: 'Two items',
+        value: {
+          items: [
+            { parent_id: 'dbms-property-id-1' },
+            { parent_id: 'dbms-property-id-2' }
+          ]
+        }
+      }
+    }
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Batch processed — partial success possible',
+    schema: {
+      example: {
+        totalCount: 2,
+        deletedCount: 1,
+        failureCount: 1,
+        errors: [{ parent_id: 'dbms-property-id-2', error: 'Property not found with parent_id: dbms-property-id-2' }],
+        successfulDeletes: [{ parent_id: 'dbms-property-id-1' }]
+      }
+    }
+  })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
+  @ApiResponse({ status: 401, description: 'Missing or invalid communication JWT' })
+  syncBulkDelete(@Body() body: SyncBulkDeleteBodyDto) {
+    return this.propertyService.syncBulkDelete(body)
   }
 
   @Post('bulk-delete')

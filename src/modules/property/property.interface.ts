@@ -1,7 +1,8 @@
 import { BillingType, Currency, Frequency, Priority, Processor, Property, ServiceType } from '@prisma/client'
 import { PaginatedResult } from '../../common/dto/query.dto'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
-import { BulkUpdateResultDto, CreatePropertyDto, ExportPropertyExcelDto, PropertyFilterDto, SyncByOtaDto, UpdatePropertyDto } from './property.dto'
+import { BulkUpdateResultDto, CreatePropertyDto, ExportPropertyExcelDto, PropertyFilterDto, SyncBulkDeleteBodyDto, SyncByOtaDto, UpdatePropertyDto } from './property.dto'
+import type { SyncBulkDeleteResponseDto } from './property.dto'
 
 export type PropertyWithRelations = Property & {
   portfolio: { id: string; name: string }
@@ -295,6 +296,7 @@ export interface IPropertyService {
   findOne(id: string, user: IUserWithPermissions): Promise<PropertyWithRelations>
   update(id: string, data: UpdatePropertyDto, user: IUserWithPermissions): Promise<PropertyWithRelations>
   updateAndSync(id: string, data: UpdatePropertyDto, user: IUserWithPermissions): Promise<PropertyWithRelations>
+  syncBulkDelete(body: SyncBulkDeleteBodyDto): Promise<SyncBulkDeleteResponseDto>
   remove(id: string, user: IUserWithPermissions): Promise<{ message: string }>
   bulkDelete(ids: string[], user: IUserWithPermissions): Promise<BulkDeleteResult>
   findByPortfolioId(portfolioId: string, user: IUserWithPermissions): Promise<PropertyWithRelations[]>

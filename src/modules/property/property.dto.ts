@@ -1888,6 +1888,31 @@ export interface SyncBulkUpsertResponseDto {
   successfulUpserts: Array<{ parent_id: string; action: 'created' | 'updated' }>
 }
 
+// ─── Sync Bulk Delete (external JWT endpoint) ────────────────────────────────
+
+export class SyncBulkDeleteItemDto {
+  @ApiProperty({ example: 'dbms-property-id-1', description: 'DBMS property ID to delete' })
+  @IsString()
+  @IsNotEmpty()
+  parent_id: string
+}
+
+export class SyncBulkDeleteBodyDto {
+  @ApiProperty({ type: [SyncBulkDeleteItemDto] })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SyncBulkDeleteItemDto)
+  items: SyncBulkDeleteItemDto[]
+}
+
+export interface SyncBulkDeleteResponseDto {
+  totalCount: number
+  deletedCount: number
+  failureCount: number
+  errors: Array<{ parent_id: string; error: string }>
+  successfulDeletes: Array<{ parent_id: string }>
+}
+
 export interface AgodaCheckerUpstreamItem {
   _id: string
   agoda_id: number

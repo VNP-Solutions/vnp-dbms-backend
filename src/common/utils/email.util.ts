@@ -906,9 +906,21 @@ VNP Solutions Team`
     operation: 'create' | 'update'
   ): Promise<void> {
     const fmt = (ok: boolean) => ok ? 'YES' : 'NO'
+    const cleanReason = (raw: string | undefined): string => {
+      if (!raw) return ''
+      try {
+        const parsed = JSON.parse(raw)
+        const msgs: string[] = Array.isArray(parsed?.message)
+          ? parsed.message
+          : typeof parsed?.message === 'string' ? [parsed.message] : []
+        if (msgs.length) return msgs.join(', ')
+        if (typeof parsed?.error === 'string') return parsed.error
+      } catch { /* not JSON */ }
+      return raw
+    }
     const reasons: string[] = []
-    if (!results.dashboard.success && results.dashboard.reason) reasons.push(`Dashboard: ${results.dashboard.reason}`)
-    if (!results.parser.success && results.parser.reason) reasons.push(`Parser: ${results.parser.reason}`)
+    if (!results.dashboard.success && results.dashboard.reason) reasons.push(`Dashboard: ${cleanReason(results.dashboard.reason)}`)
+    if (!results.parser.success && results.parser.reason) reasons.push(`Parser: ${cleanReason(results.parser.reason)}`)
     const reasonStr = reasons.length ? reasons.join(' | ') : 'N/A'
 
     const summaryLine = `${property.name} | ${property.identifier} | DBMS - ${fmt(results.dbms)} | DASHBOARD - ${fmt(results.dashboard.success)} | PARSER - ${fmt(results.parser.success)} | REASON: ${reasonStr}`
@@ -975,6 +987,24 @@ VNP Solutions Team`
     excelFilename: string
   ): Promise<void> {
     const fmt = (ok: boolean) => ok ? 'YES' : 'NO'
+
+    // Parse NestJS/axios error strings into readable text.
+    // Handles both plain strings and JSON like {"message":["field must not be empty"],...}
+    const cleanReason = (raw: string | undefined): string => {
+      if (!raw) return ''
+      try {
+        const parsed = JSON.parse(raw)
+        const msgs: string[] = Array.isArray(parsed?.message)
+          ? parsed.message
+          : typeof parsed?.message === 'string'
+            ? [parsed.message]
+            : []
+        if (msgs.length) return msgs.join(', ')
+        if (typeof parsed?.error === 'string') return parsed.error
+      } catch { /* not JSON, use as-is */ }
+      return raw
+    }
+
     const totalRows = rows.length
     const failedRows = rows.filter(r => !r.dbms || !r.dashboard.success || !r.parser.success)
     const createdCount = rows.filter(r => r.action === 'created').length
@@ -982,18 +1012,18 @@ VNP Solutions Team`
 
     const textLines = rows.map(r => {
       const reasons: string[] = []
-      if (r.error) reasons.push(`DBMS: ${r.error}`)
-      if (!r.dashboard.success && r.dashboard.reason) reasons.push(`Dashboard: ${r.dashboard.reason}`)
-      if (!r.parser.success && r.parser.reason) reasons.push(`Parser: ${r.parser.reason}`)
+      if (r.error) reasons.push(`DBMS: ${cleanReason(r.error)}`)
+      if (!r.dashboard.success && r.dashboard.reason) reasons.push(`Dashboard: ${cleanReason(r.dashboard.reason)}`)
+      if (!r.parser.success && r.parser.reason) reasons.push(`Parser: ${cleanReason(r.parser.reason)}`)
       const reasonStr = reasons.length ? reasons.join(' | ') : 'N/A'
       return `Row ${r.row} | ${r.name} | ${r.identifier} | DBMS - ${fmt(r.dbms)} | DASHBOARD - ${fmt(r.dashboard.success)} | PARSER - ${fmt(r.parser.success)} | REASON: ${reasonStr}`
     }).join('\n')
 
     const tableRows = rows.map(r => {
       const reasons: string[] = []
-      if (r.error) reasons.push(`DBMS: ${r.error}`)
-      if (!r.dashboard.success && r.dashboard.reason) reasons.push(`Dashboard: ${r.dashboard.reason}`)
-      if (!r.parser.success && r.parser.reason) reasons.push(`Parser: ${r.parser.reason}`)
+      if (r.error) reasons.push(`DBMS: ${cleanReason(r.error)}`)
+      if (!r.dashboard.success && r.dashboard.reason) reasons.push(`Dashboard: ${cleanReason(r.dashboard.reason)}`)
+      if (!r.parser.success && r.parser.reason) reasons.push(`Parser: ${cleanReason(r.parser.reason)}`)
       const reasonStr = reasons.length ? reasons.join('; ') : '-'
       const allOk = r.dbms && r.dashboard.success && r.parser.success
       return `

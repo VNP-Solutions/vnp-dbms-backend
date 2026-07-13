@@ -26,10 +26,11 @@ import {
   GetPropertyCredentialDto,
   PropertyFilterDto,
   RequiredFieldType,
+  SyncBulkDeleteBodyDto,
   SyncByOtaDto,
   UpdatePropertyDto
 } from './property.dto'
-import type { SyncBulkUpsertRowResult } from './property.dto'
+import type { SyncBulkDeleteResponseDto, SyncBulkUpsertRowResult } from './property.dto'
 import {
   collectPropertyUniqueConflicts,
   normalizePropertyIdentifier,
@@ -1100,6 +1101,68 @@ export class PropertyService implements IPropertyService {
     return updated
   }
   
+  // ──────────────────────────────────────────────────────────────────────────
+  // External bulk delete — called by dashboard via ExternalJwtGuard
+  // ──────────────────────────────────────────────────────────────────────────
+
+  async syncBulkDelete(body: SyncBulkDeleteBodyDto): Promise<SyncBulkDeleteResponseDto> {
+    const { items } = body
+
+    const errors: Array<{ parent_id: string; error: string }> = []
+    const successfulDeletes: Array<{ parent_id: string }> = []
+
+    for (const item of items) {
+      const { parent_id } = item
+      try {
+        // 1 ── Verify property exists
+        const property = await this.prisma.property.findUnique({
+          where: { id: parent_id },
+          select: { id: true, expedia_id: true, booking_id: true, agoda_id: true }
+        })
+        if (!property) {
+          errors.push({ parent_id, error: `Property not found with parent_id: ${parent_id}` })
+          continue
+        }
+
+        // 2 ── Delete from DBMS
+        await this.repo.delete(parent_id)
+        await Promise.all([
+          this.redisService.del(CACHE_KEY(parent_id)),
+          this.redisService.deleteByPattern(ALL_PATTERN)
+        ]).catch(() => undefined)
+
+        successfulDeletes.push({ parent_id })
+
+        // 3 ── Dashboard sync-delete (non-blocking)
+        if (this.dashboardJwtClient) {
+          this.dashboardJwtClient
+            .post(`/api/property/sync-delete/${parent_id}`, {}, { headers: this.syncCommunication.createAuthHeaders() })
+            .then(r => this.logger.log(`[sync] bulk-delete dashboard ${parent_id}: ${JSON.stringify(r.data)}`))
+            .catch(e => this.logger.error(`[sync] bulk-delete dashboard ${parent_id} failed: ${e?.response?.data ? JSON.stringify(e.response.data) : (e?.message ?? e)}`))
+        }
+
+        // 4 ── Scraper sync-delete (non-blocking)
+        this.fanOutPropertyDelete({
+          expedia_id: property.expedia_id ?? null,
+          booking_id: property.booking_id ?? null,
+          agoda_id:   property.agoda_id   ?? null
+        }).catch(e => this.logger.error(`[sync] bulk-delete scraper ${parent_id} failed: ${e?.message ?? e}`))
+
+      } catch (err: any) {
+        errors.push({ parent_id, error: err?.message ?? String(err) })
+        this.logger.error(`[sync-bulk-delete] ${parent_id} failed: ${err?.message ?? err}`)
+      }
+    }
+
+    return {
+      totalCount:       items.length,
+      deletedCount:     successfulDeletes.length,
+      failureCount:     errors.length,
+      errors,
+      successfulDeletes
+    }
+  }
+
   async remove(id: string, user: IUserWithPermissions) {
     await this.findOne(id, user)
     await this.repo.delete(id)
@@ -1758,21 +1821,42 @@ export class PropertyService implements IPropertyService {
       })
     )
 
+    // Add rows that were skipped entirely during DBMS import (DBMS = NO)
+    let skipIndex = rowIndex + allProperties.length
+    const skippedResults: SyncBulkUpsertRowResult[] = (result.skippedProperties ?? []).map(
+      (s: { name: string; reason: string }) => ({
+        row: skipIndex++,
+        parent_id: s.name,
+        name: s.name,
+        identifier: s.name,
+        action: 'failed' as const,
+        dbms: false,
+        dashboard: { success: false, reason: 'Skipped — DBMS error' },
+        parser:    { success: false, reason: 'Skipped — DBMS error' },
+        error: s.reason
+      })
+    )
+
+    const allRowResults = [...rowResults, ...skippedResults].sort((a, b) => a.row - b.row)
+
     // Fire email asynchronously — don't block the response
-    const failedRows = rowResults.filter(r => !r.dashboard.success || !r.parser.success)
+    const failedRows = allRowResults.filter(r => !r.dbms || !r.dashboard.success || !r.parser.success)
     const defectiveRows = failedRows.map(r => {
       const reasons: string[] = []
-      if (!r.dashboard.success && r.dashboard.reason) reasons.push(`Dashboard: ${r.dashboard.reason}`)
-      if (!r.parser.success && r.parser.reason) reasons.push(`Parser: ${r.parser.reason}`)
+      if (r.error) reasons.push(r.error)
+      if (!r.dashboard.success && r.dashboard.reason && r.dashboard.reason !== 'Skipped — DBMS error') reasons.push(`Dashboard: ${r.dashboard.reason}`)
+      if (!r.parser.success && r.parser.reason && r.parser.reason !== 'Skipped — DBMS error') reasons.push(`Parser: ${r.parser.reason}`)
+      const prop = allProperties.find(p => p.id === r.parent_id)
       return {
-        Row: r.row, name: r.name, identifier: r.identifier,
-        Portfolio: allProperties.find(p => p.id === r.parent_id)?.portfolio?.name ?? '',
-        'Expedia ID': allProperties.find(p => p.id === r.parent_id)?.expedia_id ?? '',
-        'Booking ID': allProperties.find(p => p.id === r.parent_id)?.booking_id ?? '',
-        'Agoda ID': allProperties.find(p => p.id === r.parent_id)?.agoda_id ?? '',
-        DBMS: 'YES', Dashboard: r.dashboard.success ? 'YES' : 'NO',
+        Row: r.row, 'Property Name': r.name, Identifier: r.identifier,
+        Portfolio: prop?.portfolio?.name ?? '',
+        'Expedia ID': prop?.expedia_id ?? '',
+        'Booking ID': prop?.booking_id ?? '',
+        'Agoda ID': prop?.agoda_id ?? '',
+        DBMS: r.dbms ? 'YES' : 'NO',
+        Dashboard: r.dashboard.success ? 'YES' : 'NO',
         Parser: r.parser.success ? 'YES' : 'NO',
-        Reason: reasons.join(' | ') || 'N/A'
+        Reason: reasons.join('; ') || 'N/A'
       }
     })
 
@@ -1782,7 +1866,7 @@ export class PropertyService implements IPropertyService {
     const filename = `import-sync-report-${new Date().toISOString().slice(0, 10)}.xlsx`
 
     this.emailUtil
-      .sendBulkSyncResultEmail(user.email, rowResults, excelBuffer, filename)
+      .sendBulkSyncResultEmail(user.email, allRowResults, excelBuffer, filename)
       .catch(e => this.logger.error(`[email] import sync report failed: ${e?.message ?? e}`))
 
     return result
@@ -2565,16 +2649,36 @@ export class PropertyService implements IPropertyService {
           })
         )
 
-        const failedRows = rowResults.filter(r => !r.dashboard.success || !r.parser.success)
+        // Add rows that failed at DBMS level (not found, no access, etc.)
+        const dbmsFailedResults: SyncBulkUpsertRowResult[] = result.errors.map(e => ({
+          row: e.row,
+          parent_id: e.propertyName,
+          name: e.propertyName,
+          identifier: e.propertyName,
+          action: 'failed' as const,
+          dbms: false,
+          dashboard: { success: false, reason: 'Skipped — DBMS error' },
+          parser:    { success: false, reason: 'Skipped — DBMS error' },
+          error: e.error
+        }))
+
+        const allRowResults = [
+          ...dbmsFailedResults,
+          ...rowResults
+        ].sort((a, b) => a.row - b.row)
+
+        const failedRows = allRowResults.filter(r => !r.dbms || !r.dashboard.success || !r.parser.success)
         const defectRows = failedRows.map(r => {
           const reasons: string[] = []
-          if (!r.dashboard.success && r.dashboard.reason) reasons.push(`Dashboard: ${r.dashboard.reason}`)
-          if (!r.parser.success && r.parser.reason) reasons.push(`Parser: ${r.parser.reason}`)
+          if (r.error) reasons.push(r.error)
+          if (!r.dashboard.success && r.dashboard.reason && r.dashboard.reason !== 'Skipped — DBMS error') reasons.push(`Dashboard: ${r.dashboard.reason}`)
+          if (!r.parser.success && r.parser.reason && r.parser.reason !== 'Skipped — DBMS error') reasons.push(`Parser: ${r.parser.reason}`)
           return {
             Row: r.row, 'Property Name': r.name, Identifier: r.identifier,
-            DBMS: 'YES', Dashboard: r.dashboard.success ? 'YES' : 'NO',
+            DBMS: r.dbms ? 'YES' : 'NO',
+            Dashboard: r.dashboard.success ? 'YES' : 'NO',
             Parser: r.parser.success ? 'YES' : 'NO',
-            Reason: reasons.join(' | ') || 'N/A'
+            Reason: reasons.join('; ') || 'N/A'
           }
         })
 
@@ -2588,7 +2692,7 @@ export class PropertyService implements IPropertyService {
         const filename = `bulk-update-sync-report-${new Date().toISOString().slice(0, 10)}.xlsx`
 
         this.emailUtil
-          .sendBulkSyncResultEmail(user.email, rowResults, excelBuffer, filename)
+          .sendBulkSyncResultEmail(user.email, allRowResults, excelBuffer, filename)
           .catch(e => this.logger.error(`[email] bulk-update sync report failed: ${e?.message ?? e}`))
       }
 
@@ -2634,6 +2738,22 @@ export class PropertyService implements IPropertyService {
 
         await this.repo.delete(id)
         success.push({ id: property.id, name: property.name })
+
+        // Dashboard sync-delete (non-blocking)
+        if (this.dashboardJwtClient) {
+          this.dashboardJwtClient
+            .post(`/api/property/sync-delete/${id}`, {}, { headers: this.syncCommunication.createAuthHeaders() })
+            .then(r => this.logger.log(`[sync] bulk-delete dashboard ${id}: ${JSON.stringify(r.data)}`))
+            .catch(e => this.logger.error(`[sync] bulk-delete dashboard ${id} failed: ${e?.response?.data ? JSON.stringify(e.response.data) : (e?.message ?? e)}`))
+        }
+
+        // Scraper sync-delete (non-blocking)
+        this.fanOutPropertyDelete({
+          expedia_id: property.expedia_id ?? null,
+          booking_id: property.booking_id ?? null,
+          agoda_id:   property.agoda_id   ?? null
+        }).catch(e => this.logger.error(`[sync] bulk-delete scraper ${id} failed: ${e?.message ?? e}`))
+
       } catch (err: any) {
         this.logger.error(`Error deleting property ${id}: ${err.message}`)
         skipped.push({
@@ -3307,7 +3427,7 @@ export class PropertyService implements IPropertyService {
       this.logger.log(`[sync] scraper create: ${JSON.stringify(r.data)}`)
       return { success: true }
     } catch (e: any) {
-      const reason = e?.response?.data ? JSON.stringify(e.response.data) : (e?.message ?? String(e))
+      const reason = this.extractSyncErrorReason(e)
       this.logger.error(`[sync] scraper create failed: ${reason}`)
       return { success: false, reason }
     }
@@ -3328,6 +3448,24 @@ export class PropertyService implements IPropertyService {
     } catch (e: any) {
       this.logger.error(`[sync] scraper delete failed: ${e?.message ?? e}`)
     }
+  }
+
+  /** Extracts a concise, human-readable reason from an axios error.
+   *  NestJS validation errors come back as { message: string[] }.
+   *  Falls back to the plain error message string. */
+  private extractSyncErrorReason(e: any): string {
+    const data = e?.response?.data
+    if (data) {
+      const msgs: string[] = Array.isArray(data.message)
+        ? data.message
+        : typeof data.message === 'string'
+          ? [data.message]
+          : []
+      if (msgs.length) return msgs.join(', ')
+      if (typeof data.error === 'string') return data.error
+      if (typeof data === 'string') return data
+    }
+    return e?.message ?? String(e)
   }
 
   private readonly inboundSyncFields = ['name', 'card_descriptor', 'is_active', 'next_due_date',
@@ -3359,12 +3497,17 @@ export class PropertyService implements IPropertyService {
 
     const credentials = await this.credentialsService.findByPropertyId(property.id)
 
+    const safeDecrypt = (val: string | null | undefined): string => {
+      if (!val) return ''
+      try { return this.encryptionUtil.decrypt(val) } catch { return '' }
+    }
+
     const currencyCode = property.currency?.code ?? 'USD'
     const currencyName = property.currency?.name ?? 'USD'
 
     const payload = {
       name: property.name,
-      address: property.hotel_address ?? '',
+      address: property.hotel_address || 'N/A',
       is_active: property.is_active,
       currency: {
         code: currencyCode,
@@ -3376,13 +3519,13 @@ export class PropertyService implements IPropertyService {
       credentials: {
         expedia_id: property.expedia_id?.toString() ?? '',
         expedia_username: credentials?.expediaUsername ?? '',
-        expedia_password: credentials?.expediaPassword ?? '',
+        expedia_password: safeDecrypt(credentials?.expediaPassword),
         agoda_id: property.agoda_id?.toString() ?? '',
         agoda_username: credentials?.agodaUsername ?? '',
-        agoda_password: credentials?.agodaPassword ?? '',
+        agoda_password: safeDecrypt(credentials?.agodaPassword),
         booking_id: property.booking_id?.toString() ?? '',
         booking_username: credentials?.bookingUsername ?? '',
-        booking_password: credentials?.bookingPassword ?? ''
+        booking_password: safeDecrypt(credentials?.bookingPassword)
       }
     }
 
@@ -3395,7 +3538,7 @@ export class PropertyService implements IPropertyService {
       this.logger.log(`[sync] dashboard property upsert: ${JSON.stringify(r.data)}`)
       return { success: true }
     } catch (e: any) {
-      const reason = e?.response?.data ? JSON.stringify(e.response.data) : (e?.message ?? String(e))
+      const reason = this.extractSyncErrorReason(e)
       this.logger.error(`[sync] dashboard property upsert failed: ${reason}`)
       return { success: false, reason }
     }
