@@ -253,10 +253,7 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
     return portfolio
   }
 
-  async getContractUrls(
-    id: string,
-    user: IUserWithPermissions
-  ) {
+  async getContractUrls(id: string, user: IUserWithPermissions) {
     const accessibleIds =
       await this.portfolioRepository.getAccessiblePortfolioIds(user.id)
     if (Array.isArray(accessibleIds) && !accessibleIds.includes(id)) {
@@ -370,7 +367,8 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
     if (!portfolio) throw new NotFoundException('Portfolio not found')
 
     const file = await this.fileUploadService.findOneFile(fileId, user)
-    if (file.portfolio_id !== id) throw new NotFoundException('Contract URL not found')
+    if (file.portfolio_id !== id)
+      throw new NotFoundException('Contract URL not found')
 
     const result = await this.fileUploadService.removeFile(fileId, user)
     await this.syncFileCount(id, 1, 'decrement')
@@ -412,16 +410,51 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
     user: IUserWithPermissions
   ) {
     const before = await this.findOne(id, user)
+    const beforeAttachmentCount = this.getAttachmentCount(before)
     const updated = await this.update(id, data, user)
     const full = await this.portfolioRepository.findById(updated.id)
     try {
-      if (full) await this.fanOutPortfolioUpdate(full, before.name)
+      if (full) {
+        const attachmentDelta =
+          this.getAttachmentCount(full) - beforeAttachmentCount
+
+        if (attachmentDelta > 0) {
+          await this.syncFileCount(id, attachmentDelta, 'increment')
+        } else if (attachmentDelta < 0) {
+          await this.syncFileCount(id, Math.abs(attachmentDelta), 'decrement')
+        }
+
+        if (!this.isAttachmentsOnlyUpdate(data)) {
+          await this.fanOutPortfolioUpdate(full, before.name)
+        }
+      }
     } catch (e: any) {
       this.logger.error(
         `[sync] unexpected on portfolio update: ${e?.message ?? e}`
       )
     }
     return full ?? updated
+  }
+
+  private getAttachmentCount(portfolio: {
+    attachments?: string[]
+    attachment?: string | null
+  }): number {
+    if (portfolio.attachments?.length) {
+      return portfolio.attachments.length
+    }
+    if (portfolio.attachment?.trim()) {
+      return 1
+    }
+    return 0
+  }
+
+  private isAttachmentsOnlyUpdate(data: UpdatePortfolioDto): boolean {
+    const keys = Object.keys(data).filter(
+      key => (data as Record<string, unknown>)[key] !== undefined
+    )
+    if (!keys.length) return false
+    return keys.every(key => key === 'attachments' || key === 'attachment')
   }
 
   private async fanOutPortfolioUpdate(
@@ -526,10 +559,14 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
           'sync-delete'
         )
       } else {
-        this.logger.warn('[sync] dashboard disabled, skipping portfolio sync-delete')
+        this.logger.warn(
+          '[sync] dashboard disabled, skipping portfolio sync-delete'
+        )
       }
     } catch (e: any) {
-      this.logger.error(`[sync] unexpected on portfolio sync-delete: ${e?.message ?? e}`)
+      this.logger.error(
+        `[sync] unexpected on portfolio sync-delete: ${e?.message ?? e}`
+      )
     }
     return {
       message: `Portfolio deleted successfully. ${movedProperties} properties were moved to "${INTERNAL_PORTFOLIO_NAME}".`
@@ -924,11 +961,7 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
         {
           name: portfolio.name,
           service_type: portfolio.service_type?.type ?? '',
-          currency: {
-            code: portfolio.currency?.code ?? 'USD',
-            name: portfolio.currency?.name ?? 'USD',
-            symbol: portfolio.currency?.symbol ?? null
-          },
+          currency: portfolio.currency?.code ?? 'USD',
           is_active: portfolio.is_active,
           is_commissionable: portfolio.is_commissionable
         },
