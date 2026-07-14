@@ -19,6 +19,8 @@ import { ExcelFileInterceptor } from '../../common/interceptors/excel-file.inter
 import { ParseQuery } from '../../common/decorators/parse-query.decorator'
 import { RequirePermission } from '../../common/decorators/require-permission.decorator'
 import { PermissionGuard } from '../../common/guards/permission.guard'
+import { ExternalJwtGuard } from '../../common/guards/external-jwt.guard'
+import { Public } from '../auth/decorators/public.decorator'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
 import { ModuleType, PermissionAction } from '../../common/interfaces/permission.interface'
 import { CurrentUser } from '../auth/decorators/current-user.decorator'
@@ -142,17 +144,49 @@ export class PortfolioController {
   }
 
   @Get(':id/contract-urls')
-  @RequirePermission(ModuleType.PORTFOLIO, PermissionAction.READ, true)
+  @Public()
+  @UseGuards(ExternalJwtGuard)
+  @ApiBearerAuth('external-jwt')
   @ApiOperation({ summary: 'Get all contract URLs for a portfolio' })
   @ApiResponse({ status: 200, description: 'List of contract URLs' })
+  @ApiResponse({ status: 401, description: 'Invalid or missing communication JWT' })
   @ApiResponse({ status: 404, description: 'Portfolio not found' })
-  getContractUrls(@Param('id') id: string, @CurrentUser() user: IUserWithPermissions) {
-    return this.portfolioService.getContractUrls(id, user)
+  getContractUrls(@Param('id') id: string) {
+    return this.portfolioService.getContractUrlsExternal(id)
+  }
+
+  @Delete(':id/contract-urls')
+  @RequirePermission(ModuleType.PORTFOLIO, PermissionAction.UPDATE, true)
+  @ApiOperation({ summary: 'Bulk delete contract URL files from a portfolio' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['fileIds'],
+      properties: {
+        fileIds: {
+          type: 'array',
+          items: { type: 'string' },
+          example: ['fileId1', 'fileId2']
+        }
+      }
+    }
+  })
+  @ApiResponse({ status: 200, description: 'Bulk delete result with deleted and failed file IDs' })
+  @ApiResponse({ status: 404, description: 'Portfolio not found' })
+  bulkDeleteContractUrls(
+    @Param('id') id: string,
+    @Body('fileIds') fileIds: string[],
+    @CurrentUser() user: IUserWithPermissions
+  ) {
+    if (!Array.isArray(fileIds) || fileIds.length === 0) {
+      throw new BadRequestException('fileIds must be a non-empty array')
+    }
+    return this.portfolioService.bulkDeleteContractUrls(id, fileIds, user)
   }
 
   @Delete(':id/contract-urls/:fileId')
   @RequirePermission(ModuleType.PORTFOLIO, PermissionAction.UPDATE, true)
-  @ApiOperation({ summary: 'Delete a contract URL file from a portfolio' })
+  @ApiOperation({ summary: 'Delete a single contract URL file from a portfolio' })
   @ApiResponse({ status: 200, description: 'Contract URL deleted' })
   @ApiResponse({ status: 404, description: 'Portfolio or contract URL not found' })
   deleteContractUrl(
@@ -164,12 +198,15 @@ export class PortfolioController {
   }
 
   @Get(':id/contact')
-  @RequirePermission(ModuleType.PORTFOLIO, PermissionAction.READ, true)
+  @Public()
+  @UseGuards(ExternalJwtGuard)
+  @ApiBearerAuth('external-jwt')
   @ApiOperation({ summary: 'Get contact information for a portfolio' })
   @ApiResponse({ status: 200, description: 'Portfolio contact information' })
+  @ApiResponse({ status: 401, description: 'Invalid or missing communication JWT' })
   @ApiResponse({ status: 404, description: 'Portfolio not found' })
-  getContact(@Param('id') id: string, @CurrentUser() user: IUserWithPermissions) {
-    return this.portfolioService.getContact(id, user)
+  getContact(@Param('id') id: string) {
+    return this.portfolioService.getContactExternal(id)
   }
 
   @Patch(':id')
@@ -194,3 +231,4 @@ export class PortfolioController {
     return this.portfolioService.removeAndSync(id, user)
   }
 }
+

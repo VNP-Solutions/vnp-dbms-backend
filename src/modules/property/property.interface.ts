@@ -1,7 +1,8 @@
 import { BillingType, Currency, Frequency, Priority, Processor, Property, ServiceType } from '@prisma/client'
 import { PaginatedResult } from '../../common/dto/query.dto'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
-import { BulkUpdateResultDto, CreatePropertyDto, ExportPropertyExcelDto, PropertyFilterDto, SyncByOtaDto, UpdatePropertyDto } from './property.dto'
+import type { SyncBulkDeleteResponseDto } from './property.dto'
+import { BulkUpdateResultDto, CreatePropertyDto, ExportPropertyExcelDto, PropertyFilterDto, SyncBulkDeleteBodyDto, SyncByOtaDto, UpdatePropertyDto } from './property.dto'
 
 export type PropertyWithRelations = Property & {
   portfolio: { id: string; name: string }
@@ -279,11 +280,25 @@ export interface IPropertyRepository {
 }
 
 export type PropertyContact = {
+  // Property-level contacts
+  portfolio_contact: string | null
+  portfolio_contact_email: string | null
   case_management_contact: string | null
   access_contact: string | null
   reporting_contact: string | null
-  portfolio_contact_email: string | null
-  portfolio_contact: string | null
+  primary_case_email: string | null
+  others_case_emails: string[]
+  new_domain_email: string | null
+  // Credential-level contacts
+  property_contact_email: string | null
+  portfolio_contact_email_cred: string | null
+  multiple_portfolio_emails: string[]
+  case_contact_email: string | null
+  case_contact_name: string | null
+  case_contact_phone: string | null
+  reporting_contact_name: string | null
+  reporting_contact_email: string | null
+  reporting_contact_phone: string | null
 }
 
 export interface IPropertyService {
@@ -295,6 +310,7 @@ export interface IPropertyService {
   findOne(id: string, user: IUserWithPermissions): Promise<PropertyWithRelations>
   update(id: string, data: UpdatePropertyDto, user: IUserWithPermissions): Promise<PropertyWithRelations>
   updateAndSync(id: string, data: UpdatePropertyDto, user: IUserWithPermissions): Promise<PropertyWithRelations>
+  syncBulkDelete(body: SyncBulkDeleteBodyDto): Promise<SyncBulkDeleteResponseDto>
   remove(id: string, user: IUserWithPermissions): Promise<{ message: string }>
   bulkDelete(ids: string[], user: IUserWithPermissions): Promise<BulkDeleteResult>
   findByPortfolioId(portfolioId: string, user: IUserWithPermissions): Promise<PropertyWithRelations[]>
@@ -325,6 +341,7 @@ export interface IPropertyService {
   importFromExcelAndSync(file: Express.Multer.File, user: IUserWithPermissions): Promise<ImportPropertiesResult>
   removeAndSync(id: string, user: IUserWithPermissions): Promise<{ message: string }>
   getContact(id: string, user: IUserWithPermissions): Promise<PropertyContact>
+  getContactExternal(id: string): Promise<PropertyContact>
 }
 
 export interface BulkTransferResult {

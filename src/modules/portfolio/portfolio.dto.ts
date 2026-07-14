@@ -25,6 +25,11 @@ export class CreatePortfolioDto {
   @IsNotEmpty()
   service_type_id: string
 
+  @ApiPropertyOptional({ example: '507f1f77bcf86cd799439100', description: 'Currency ID (MongoDB ObjectId)' })
+  @IsMongoId()
+  @IsOptional()
+  currency_id?: string
+
   @ApiProperty({ example: true, description: 'Whether portfolio is active' })
   @IsBoolean()
   @IsNotEmpty()

@@ -1779,6 +1779,140 @@ export class AgodaCheckPropertiesDto {
   items: AgodaCheckPropertyItemDto[]
 }
 
+// ─── Sync Bulk Upsert (external JWT endpoint) ────────────────────────────────
+
+export class SyncBulkUpsertItemDto {
+  @ApiProperty({ example: 2, description: 'Excel row number for error reporting' })
+  @IsInt()
+  row: number
+
+  @ApiProperty({ example: 'property-parent-123', description: 'DBMS property ID — used to find/create the property' })
+  @IsString()
+  @IsNotEmpty()
+  parent_id: string
+
+  @ApiProperty({ example: 'Grand Hotel' })
+  @IsString()
+  @IsNotEmpty()
+  name: string
+
+  @ApiProperty({ example: 'portfolio-parent-123', description: 'DBMS portfolio ID' })
+  @IsString()
+  @IsNotEmpty()
+  portfolio_parent_id: string
+
+  @ApiPropertyOptional({ example: '123 Main Street, New York, NY 10001' })
+  @IsString()
+  @IsOptional()
+  address?: string
+
+  @ApiPropertyOptional({ example: 'USD', description: 'ISO currency code' })
+  @IsString()
+  @IsOptional()
+  currency?: string
+
+  @ApiPropertyOptional({ example: 'GRAND HOTEL NY' })
+  @IsString()
+  @IsOptional()
+  card_descriptor?: string
+
+  @ApiPropertyOptional({ example: true })
+  @IsBoolean()
+  @IsOptional()
+  is_active?: boolean
+
+  @ApiPropertyOptional({ example: 'EXP123456' })
+  @IsString()
+  @IsOptional()
+  expedia_id?: string
+
+  @ApiPropertyOptional({ example: 'hotel@expedia.com' })
+  @IsString()
+  @IsOptional()
+  expedia_username?: string
+
+  @ApiPropertyOptional({ example: 'secret' })
+  @IsString()
+  @IsOptional()
+  expedia_password?: string
+
+  @ApiPropertyOptional({ example: 'AGD123456' })
+  @IsString()
+  @IsOptional()
+  agoda_id?: string
+
+  @ApiPropertyOptional({ example: 'hotel@agoda.com' })
+  @IsString()
+  @IsOptional()
+  agoda_username?: string
+
+  @ApiPropertyOptional({ example: 'secret' })
+  @IsString()
+  @IsOptional()
+  agoda_password?: string
+
+  @ApiPropertyOptional({ example: 'BKG123456' })
+  @IsString()
+  @IsOptional()
+  booking_id?: string
+
+  @ApiPropertyOptional({ example: 'hotel@booking.com' })
+  @IsString()
+  @IsOptional()
+  booking_username?: string
+
+  @ApiPropertyOptional({ example: 'secret' })
+  @IsString()
+  @IsOptional()
+  booking_password?: string
+}
+
+export interface SyncBulkUpsertRowResult {
+  row: number
+  parent_id: string
+  name: string
+  identifier: string
+  action: 'created' | 'updated' | 'failed'
+  dbms: boolean
+  dashboard: { success: boolean; reason?: string }
+  parser: { success: boolean; reason?: string }
+  error?: string
+}
+
+export interface SyncBulkUpsertResponseDto {
+  totalRows: number
+  createdCount: number
+  updatedCount: number
+  failureCount: number
+  errors: Array<{ row: number; parent_id: string; error: string }>
+  successfulUpserts: Array<{ parent_id: string; action: 'created' | 'updated' }>
+}
+
+// ─── Sync Bulk Delete (external JWT endpoint) ────────────────────────────────
+
+export class SyncBulkDeleteItemDto {
+  @ApiProperty({ example: 'dbms-property-id-1', description: 'DBMS property ID to delete' })
+  @IsString()
+  @IsNotEmpty()
+  parent_id: string
+}
+
+export class SyncBulkDeleteBodyDto {
+  @ApiProperty({ type: [SyncBulkDeleteItemDto] })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SyncBulkDeleteItemDto)
+  items: SyncBulkDeleteItemDto[]
+}
+
+export interface SyncBulkDeleteResponseDto {
+  totalCount: number
+  deletedCount: number
+  failureCount: number
+  errors: Array<{ parent_id: string; error: string }>
+  successfulDeletes: Array<{ parent_id: string }>
+}
+
 export interface AgodaCheckerUpstreamItem {
   _id: string
   agoda_id: number

@@ -1,4 +1,4 @@
-import { File, Portfolio, ServiceType } from '@prisma/client'
+import { Currency, File, Portfolio, ServiceType } from '@prisma/client'
 import { PaginatedResult } from '../../common/dto/query.dto'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
 import { CreatePortfolioDto, PortfolioQueryDto, UpdatePortfolioDto } from './portfolio.dto'
@@ -28,6 +28,8 @@ export type PortfolioWithCounts = Portfolio & {
   total_properties: number
   total_subportfolios: number
   service_type: ServiceType | null
+  currency: Currency | null
+  contract_urls: File[]
 }
 
 export interface IPortfolioRepository {
@@ -77,6 +79,8 @@ export interface IPortfolioService {
   ): Promise<ImportPortfoliosResult>
   getContractUrls(id: string, user: IUserWithPermissions): Promise<File[]>
   getContact(id: string, user: IUserWithPermissions): Promise<PortfolioContact>
+  getContactExternal(id: string): Promise<PortfolioContact>
+  getContractUrlsExternal(id: string): Promise<File[]>
   uploadContractUrls(
     id: string,
     files: Express.Multer.File[],
@@ -88,6 +92,11 @@ export interface IPortfolioService {
     fileId: string,
     user: IUserWithPermissions
   ): Promise<{ message: string }>
+  bulkDeleteContractUrls(
+    id: string,
+    fileIds: string[],
+    user: IUserWithPermissions
+  ): Promise<{ deleted: string[]; failed: Array<{ fileId: string; reason: string }> }>
   createAndSync(data: CreatePortfolioDto, user: IUserWithPermissions): Promise<Portfolio>
   updateAndSync(id: string, data: UpdatePortfolioDto, user: IUserWithPermissions): Promise<Portfolio>
   removeAndSync(id: string, user: IUserWithPermissions): Promise<{ message: string }>

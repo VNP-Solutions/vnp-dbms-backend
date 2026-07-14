@@ -892,6 +892,204 @@ VNP Solutions Team`
     }
   }
 
+  async sendPropertySyncResultEmail(
+    recipientEmail: string,
+    property: {
+      name: string
+      identifier: string
+    },
+    results: {
+      dbms: boolean
+      dashboard: { success: boolean; reason?: string }
+      parser: { success: boolean; reason?: string }
+    },
+    operation: 'create' | 'update'
+  ): Promise<void> {
+    const fmt = (ok: boolean) => ok ? 'YES' : 'NO'
+    const cleanReason = (raw: string | undefined): string => {
+      if (!raw) return ''
+      try {
+        const parsed = JSON.parse(raw)
+        const msgs: string[] = Array.isArray(parsed?.message)
+          ? parsed.message
+          : typeof parsed?.message === 'string' ? [parsed.message] : []
+        if (msgs.length) return msgs.join(', ')
+        if (typeof parsed?.error === 'string') return parsed.error
+      } catch { /* not JSON */ }
+      return raw
+    }
+    const reasons: string[] = []
+    if (!results.dashboard.success && results.dashboard.reason) reasons.push(`Dashboard: ${cleanReason(results.dashboard.reason)}`)
+    if (!results.parser.success && results.parser.reason) reasons.push(`Parser: ${cleanReason(results.parser.reason)}`)
+    const reasonStr = reasons.length ? reasons.join(' | ') : 'N/A'
+
+    const summaryLine = `${property.name} | ${property.identifier} | DBMS - ${fmt(results.dbms)} | DASHBOARD - ${fmt(results.dashboard.success)} | PARSER - ${fmt(results.parser.success)} | REASON: ${reasonStr}`
+
+    const overallOk = results.dbms && results.dashboard.success && results.parser.success
+    const statusLabel = overallOk ? 'Successful' : 'Partially Failed'
+    const opLabel = operation === 'create' ? 'Created' : 'Updated'
+
+    const mailOptions = {
+      from: this.configService.get('smtp.email', { infer: true }),
+      to: recipientEmail,
+      subject: `Property Sync ${statusLabel} – ${property.name} (${opLabel})`,
+      html: `
+        <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 640px; margin: 0 auto;">
+          <h3 style="margin-bottom: 4px;">Property Sync Report</h3>
+          <p style="color: #555; margin-top: 0;">Operation: <strong>${opLabel}</strong></p>
+          <table style="width:100%; border-collapse:collapse; font-size:14px; margin-top:16px;">
+            <tr style="background:#f4f4f4;">
+              <th style="text-align:left; padding:8px 12px; border:1px solid #ddd;">Property</th>
+              <th style="text-align:left; padding:8px 12px; border:1px solid #ddd;">Identifier</th>
+              <th style="text-align:center; padding:8px 12px; border:1px solid #ddd;">DBMS</th>
+              <th style="text-align:center; padding:8px 12px; border:1px solid #ddd;">Dashboard</th>
+              <th style="text-align:center; padding:8px 12px; border:1px solid #ddd;">Parser</th>
+            </tr>
+            <tr>
+              <td style="padding:8px 12px; border:1px solid #ddd;">${property.name}</td>
+              <td style="padding:8px 12px; border:1px solid #ddd;">${property.identifier}</td>
+              <td style="padding:8px 12px; border:1px solid #ddd; text-align:center; color:${results.dbms ? '#28a745' : '#dc3545'}"><strong>${fmt(results.dbms)}</strong></td>
+              <td style="padding:8px 12px; border:1px solid #ddd; text-align:center; color:${results.dashboard.success ? '#28a745' : '#dc3545'}"><strong>${fmt(results.dashboard.success)}</strong></td>
+              <td style="padding:8px 12px; border:1px solid #ddd; text-align:center; color:${results.parser.success ? '#28a745' : '#dc3545'}"><strong>${fmt(results.parser.success)}</strong></td>
+            </tr>
+          </table>
+          ${reasons.length ? `
+          <div style="margin-top:16px; background:#fff3cd; border-left:4px solid #ffc107; padding:12px 16px; border-radius:4px;">
+            <strong>Reason(s):</strong> ${reasonStr}
+          </div>` : ''}
+          <p style="margin-top:20px; font-size:12px; color:#888;">VNP Solutions DBMS</p>
+        </div>
+      `,
+      text: summaryLine
+    }
+
+    try {
+      const info = await this.transporter.sendMail(mailOptions)
+      console.log('✓ Property sync result email sent:', { to: recipientEmail, messageId: info.messageId })
+    } catch (error) {
+      console.error('✗ Failed to send property sync result email:', error)
+    }
+  }
+
+  async sendBulkSyncResultEmail(
+    recipientEmail: string,
+    rows: Array<{
+      row: number
+      name: string
+      identifier: string
+      action: 'created' | 'updated' | 'failed'
+      dbms: boolean
+      dashboard: { success: boolean; reason?: string }
+      parser: { success: boolean; reason?: string }
+      error?: string
+    }>,
+    excelBuffer: Buffer,
+    excelFilename: string
+  ): Promise<void> {
+    const fmt = (ok: boolean) => ok ? 'YES' : 'NO'
+
+    // Parse NestJS/axios error strings into readable text.
+    // Handles both plain strings and JSON like {"message":["field must not be empty"],...}
+    const cleanReason = (raw: string | undefined): string => {
+      if (!raw) return ''
+      try {
+        const parsed = JSON.parse(raw)
+        const msgs: string[] = Array.isArray(parsed?.message)
+          ? parsed.message
+          : typeof parsed?.message === 'string'
+            ? [parsed.message]
+            : []
+        if (msgs.length) return msgs.join(', ')
+        if (typeof parsed?.error === 'string') return parsed.error
+      } catch { /* not JSON, use as-is */ }
+      return raw
+    }
+
+    const totalRows = rows.length
+    const failedRows = rows.filter(r => !r.dbms || !r.dashboard.success || !r.parser.success)
+    const createdCount = rows.filter(r => r.action === 'created').length
+    const updatedCount = rows.filter(r => r.action === 'updated').length
+
+    const textLines = rows.map(r => {
+      const reasons: string[] = []
+      if (r.error) reasons.push(`DBMS: ${cleanReason(r.error)}`)
+      if (!r.dashboard.success && r.dashboard.reason) reasons.push(`Dashboard: ${cleanReason(r.dashboard.reason)}`)
+      if (!r.parser.success && r.parser.reason) reasons.push(`Parser: ${cleanReason(r.parser.reason)}`)
+      const reasonStr = reasons.length ? reasons.join(' | ') : 'N/A'
+      return `Row ${r.row} | ${r.name} | ${r.identifier} | DBMS - ${fmt(r.dbms)} | DASHBOARD - ${fmt(r.dashboard.success)} | PARSER - ${fmt(r.parser.success)} | REASON: ${reasonStr}`
+    }).join('\n')
+
+    const tableRows = rows.map(r => {
+      const reasons: string[] = []
+      if (r.error) reasons.push(`DBMS: ${cleanReason(r.error)}`)
+      if (!r.dashboard.success && r.dashboard.reason) reasons.push(`Dashboard: ${cleanReason(r.dashboard.reason)}`)
+      if (!r.parser.success && r.parser.reason) reasons.push(`Parser: ${cleanReason(r.parser.reason)}`)
+      const reasonStr = reasons.length ? reasons.join('; ') : '-'
+      const allOk = r.dbms && r.dashboard.success && r.parser.success
+      return `
+        <tr>
+          <td style="padding:6px 10px;border:1px solid #ddd;">${r.row}</td>
+          <td style="padding:6px 10px;border:1px solid #ddd;">${r.name}</td>
+          <td style="padding:6px 10px;border:1px solid #ddd;">${r.identifier}</td>
+          <td style="padding:6px 10px;border:1px solid #ddd;text-align:center;">${r.action}</td>
+          <td style="padding:6px 10px;border:1px solid #ddd;text-align:center;color:${r.dbms ? '#28a745' : '#dc3545'}"><strong>${fmt(r.dbms)}</strong></td>
+          <td style="padding:6px 10px;border:1px solid #ddd;text-align:center;color:${r.dashboard.success ? '#28a745' : '#dc3545'}"><strong>${fmt(r.dashboard.success)}</strong></td>
+          <td style="padding:6px 10px;border:1px solid #ddd;text-align:center;color:${r.parser.success ? '#28a745' : '#dc3545'}"><strong>${fmt(r.parser.success)}</strong></td>
+          <td style="padding:6px 10px;border:1px solid #ddd;font-size:12px;color:${allOk ? '#666' : '#c0392b'};">${reasonStr}</td>
+        </tr>`
+    }).join('')
+
+    const attachments: any[] = []
+    if (failedRows.length > 0) {
+      attachments.push({
+        filename: excelFilename,
+        content: excelBuffer,
+        contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      })
+    }
+
+    const mailOptions: any = {
+      from: this.configService.get('smtp.email', { infer: true }),
+      to: recipientEmail,
+      subject: `Bulk Property Sync Report — ${totalRows} rows (${createdCount} created, ${updatedCount} updated, ${failedRows.length} issues)`,
+      text: `Bulk Property Sync Report\n\nTotal: ${totalRows} | Created: ${createdCount} | Updated: ${updatedCount} | Issues: ${failedRows.length}\n\n${textLines}${failedRows.length ? '\n\nDefective rows are attached as an Excel file for correction.' : ''}`,
+      html: `
+        <div style="font-family:Arial,sans-serif;padding:20px;max-width:900px;margin:0 auto;">
+          <h3 style="margin-bottom:4px;">Bulk Property Sync Report</h3>
+          <p style="margin-top:0;color:#555;">
+            Total: <strong>${totalRows}</strong> &nbsp;|&nbsp;
+            Created: <strong style="color:#28a745">${createdCount}</strong> &nbsp;|&nbsp;
+            Updated: <strong style="color:#007bff">${updatedCount}</strong> &nbsp;|&nbsp;
+            Issues: <strong style="color:${failedRows.length ? '#dc3545' : '#28a745'}">${failedRows.length}</strong>
+          </p>
+          <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:16px;">
+            <tr style="background:#f4f4f4;">
+              <th style="padding:8px 10px;border:1px solid #ddd;text-align:left;">Row</th>
+              <th style="padding:8px 10px;border:1px solid #ddd;text-align:left;">Property</th>
+              <th style="padding:8px 10px;border:1px solid #ddd;text-align:left;">Identifier</th>
+              <th style="padding:8px 10px;border:1px solid #ddd;text-align:center;">Action</th>
+              <th style="padding:8px 10px;border:1px solid #ddd;text-align:center;">DBMS</th>
+              <th style="padding:8px 10px;border:1px solid #ddd;text-align:center;">Dashboard</th>
+              <th style="padding:8px 10px;border:1px solid #ddd;text-align:center;">Parser</th>
+              <th style="padding:8px 10px;border:1px solid #ddd;text-align:left;">Reason</th>
+            </tr>
+            ${tableRows}
+          </table>
+          ${failedRows.length ? '<p style="margin-top:16px;color:#888;font-size:12px;">The Excel attachment contains the defective rows for correction.</p>' : ''}
+          <p style="margin-top:20px;font-size:12px;color:#888;">VNP Solutions DBMS</p>
+        </div>
+      `,
+      ...(attachments.length && { attachments })
+    }
+
+    try {
+      const info = await this.transporter.sendMail(mailOptions)
+      console.log('✓ Bulk sync result email sent:', { to: recipientEmail, messageId: info.messageId })
+    } catch (error) {
+      console.error('✗ Failed to send bulk sync result email:', error)
+    }
+  }
+
   async sendPropertyActivateRejectionEmail(
     recipientEmails: string[],
     propertyName: string,
