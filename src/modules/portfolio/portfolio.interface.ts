@@ -92,6 +92,11 @@ export interface IPortfolioService {
     fileId: string,
     user: IUserWithPermissions
   ): Promise<{ message: string }>
+  bulkDeleteContractUrls(
+    id: string,
+    fileIds: string[],
+    user: IUserWithPermissions
+  ): Promise<{ deleted: string[]; failed: Array<{ fileId: string; reason: string }> }>
   createAndSync(data: CreatePortfolioDto, user: IUserWithPermissions): Promise<Portfolio>
   updateAndSync(id: string, data: UpdatePortfolioDto, user: IUserWithPermissions): Promise<Portfolio>
   removeAndSync(id: string, user: IUserWithPermissions): Promise<{ message: string }>

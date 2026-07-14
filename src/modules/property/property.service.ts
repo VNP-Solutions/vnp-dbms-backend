@@ -7,18 +7,30 @@ import {
   Logger,
   NotFoundException
 } from '@nestjs/common'
+import { ConfigService } from '@nestjs/config'
+import type { Priority } from '@prisma/client'
+import axios, { AxiosInstance } from 'axios'
 import { createHash } from 'crypto'
 import * as XLSX from 'xlsx'
 import type { PaginatedResult } from '../../common/dto/query.dto'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
+import { SyncCommunicationService } from '../../common/services/sync-communication.service'
 import { EmailUtil } from '../../common/utils/email.util'
 import { EncryptionUtil } from '../../common/utils/encryption.util'
+import { mapPropertyToExcelRow, writePropertyExportBuffer } from '../../common/utils/property-excel.util'
+import type { Configuration } from '../../config/configuration'
 import type { IAuthRepository } from '../auth/auth.interface'
 import type { IPortfolioService } from '../portfolio/portfolio.interface'
-import type { ISubportfolioService } from '../subportfolio/subportfolio.interface'
 import { PrismaService } from '../prisma/prisma.service'
 import type { IPropertyCredentialsService } from '../property-credentials/property-credentials.interface'
 import { RedisService } from '../redis/redis.service'
+import type { ISubportfolioService } from '../subportfolio/subportfolio.interface'
+import {
+  collectPropertyUniqueConflicts,
+  normalizePropertyIdentifier,
+  propertyIdentifierKey
+} from './property-uniqueness.util'
+import type { SyncBulkDeleteResponseDto, SyncBulkUpsertRowResult } from './property.dto'
 import {
   BulkUpdateResultDto,
   CreatePropertyDto,
@@ -30,14 +42,6 @@ import {
   SyncByOtaDto,
   UpdatePropertyDto
 } from './property.dto'
-import type { SyncBulkDeleteResponseDto, SyncBulkUpsertRowResult } from './property.dto'
-import {
-  collectPropertyUniqueConflicts,
-  normalizePropertyIdentifier,
-  propertyIdentifierKey
-} from './property-uniqueness.util'
-import { mapPropertyToExcelRow, writePropertyExportBuffer } from '../../common/utils/property-excel.util'
-import type { Priority } from '@prisma/client'
 import type {
   ImportPropertiesResult,
   ImportPropertyRow,
@@ -46,10 +50,6 @@ import type {
   PropertyContact,
   PropertyWithRelations
 } from './property.interface'
-import axios, { AxiosInstance } from 'axios'
-import { ConfigService } from '@nestjs/config'
-import type { Configuration } from '../../config/configuration'
-import { SyncCommunicationService } from '../../common/services/sync-communication.service'
 
 const CACHE_TTL_ITEM = 5 * 60 * 1000 // 5 minutes for individual records
 const CACHE_TTL_ALL = 60 * 60 * 1000 // 1 hour for all properties cache
@@ -954,25 +954,38 @@ export class PropertyService implements IPropertyService {
     const property = await this.repo.findById(id)
     if (!property) throw new NotFoundException('Property not found')
 
-    return {
-      case_management_contact: property.case_management_contact,
-      access_contact: property.access_contact,
-      reporting_contact: property.reporting_contact,
-      portfolio_contact_email: property.portfolio_contact_email,
-      portfolio_contact: property.portfolio_contact
-    }
+    return this.buildPropertyContact(property)
   }
 
   async getContactExternal(id: string): Promise<PropertyContact> {
     const property = await this.repo.findById(id)
     if (!property) throw new NotFoundException('Property not found')
 
+    return this.buildPropertyContact(property)
+  }
+
+  private buildPropertyContact(property: PropertyWithRelations): PropertyContact {
+    const creds = (property as any).credentials
     return {
-      case_management_contact: property.case_management_contact,
-      access_contact: property.access_contact,
-      reporting_contact: property.reporting_contact,
-      portfolio_contact_email: property.portfolio_contact_email,
-      portfolio_contact: property.portfolio_contact
+      // Property-level
+      portfolio_contact:            property.portfolio_contact            ?? null,
+      portfolio_contact_email:      property.portfolio_contact_email      ?? null,
+      case_management_contact:      property.case_management_contact      ?? null,
+      access_contact:               property.access_contact               ?? null,
+      reporting_contact:            property.reporting_contact            ?? null,
+      primary_case_email:           property.primary_case_email           ?? null,
+      others_case_emails:           property.others_case_emails           ?? [],
+      new_domain_email:             property.new_domain_email             ?? null,
+      // Credential-level
+      property_contact_email:       creds?.propertyContactEmail           ?? null,
+      portfolio_contact_email_cred: creds?.portfolioContactEmail          ?? null,
+      multiple_portfolio_emails:    creds?.multiplePortfolioEmails        ?? [],
+      case_contact_email:           creds?.case_contact_email             ?? null,
+      case_contact_name:            creds?.case_contact_name              ?? null,
+      case_contact_phone:           creds?.case_contact_phone             ?? null,
+      reporting_contact_name:       creds?.reporting_contact_name         ?? null,
+      reporting_contact_email:      creds?.reporting_contact_email        ?? null,
+      reporting_contact_phone:      creds?.reporting_contact_phone        ?? null,
     }
   }
 

@@ -155,9 +155,38 @@ export class PortfolioController {
     return this.portfolioService.getContractUrlsExternal(id)
   }
 
+  @Delete(':id/contract-urls')
+  @RequirePermission(ModuleType.PORTFOLIO, PermissionAction.UPDATE, true)
+  @ApiOperation({ summary: 'Bulk delete contract URL files from a portfolio' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['fileIds'],
+      properties: {
+        fileIds: {
+          type: 'array',
+          items: { type: 'string' },
+          example: ['fileId1', 'fileId2']
+        }
+      }
+    }
+  })
+  @ApiResponse({ status: 200, description: 'Bulk delete result with deleted and failed file IDs' })
+  @ApiResponse({ status: 404, description: 'Portfolio not found' })
+  bulkDeleteContractUrls(
+    @Param('id') id: string,
+    @Body('fileIds') fileIds: string[],
+    @CurrentUser() user: IUserWithPermissions
+  ) {
+    if (!Array.isArray(fileIds) || fileIds.length === 0) {
+      throw new BadRequestException('fileIds must be a non-empty array')
+    }
+    return this.portfolioService.bulkDeleteContractUrls(id, fileIds, user)
+  }
+
   @Delete(':id/contract-urls/:fileId')
   @RequirePermission(ModuleType.PORTFOLIO, PermissionAction.UPDATE, true)
-  @ApiOperation({ summary: 'Delete a contract URL file from a portfolio' })
+  @ApiOperation({ summary: 'Delete a single contract URL file from a portfolio' })
   @ApiResponse({ status: 200, description: 'Contract URL deleted' })
   @ApiResponse({ status: 404, description: 'Portfolio or contract URL not found' })
   deleteContractUrl(

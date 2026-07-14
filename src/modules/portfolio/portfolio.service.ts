@@ -375,6 +375,44 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
     return result
   }
 
+  async bulkDeleteContractUrls(
+    id: string,
+    fileIds: string[],
+    user: IUserWithPermissions
+  ): Promise<{ deleted: string[]; failed: Array<{ fileId: string; reason: string }> }> {
+    const accessibleIds =
+      await this.portfolioRepository.getAccessiblePortfolioIds(user.id)
+    if (Array.isArray(accessibleIds) && !accessibleIds.includes(id)) {
+      throw new NotFoundException('Portfolio not found')
+    }
+
+    const portfolio = await this.portfolioRepository.findById(id)
+    if (!portfolio) throw new NotFoundException('Portfolio not found')
+
+    const deleted: string[] = []
+    const failed: Array<{ fileId: string; reason: string }> = []
+
+    for (const fileId of fileIds) {
+      try {
+        const file = await this.fileUploadService.findOneFile(fileId, user)
+        if (file.portfolio_id !== id) {
+          failed.push({ fileId, reason: 'Contract URL not found in this portfolio' })
+          continue
+        }
+        await this.fileUploadService.removeFile(fileId, user)
+        deleted.push(fileId)
+      } catch (e: any) {
+        failed.push({ fileId, reason: e?.message ?? String(e) })
+      }
+    }
+
+    if (deleted.length > 0) {
+      await this.syncFileCount(id, deleted.length, 'decrement')
+    }
+
+    return { deleted, failed }
+  }
+
   async update(
     id: string,
     data: UpdatePortfolioDto,
