@@ -1265,39 +1265,26 @@ export class PropertyService implements IPropertyService {
         ]).catch(() => undefined)
 
         successfulDeletes.push({ parent_id })
-
-        // 3 ── Dashboard sync-delete (non-blocking)
-        if (this.dashboardJwtClient) {
-          this.dashboardJwtClient
-            .post(
-              `/api/property/sync-delete/${parent_id}`,
-              {},
-              { headers: this.syncCommunication.createAuthHeaders() }
-            )
-            .then(r =>
-              this.logger.log(
-                `[sync] bulk-delete dashboard ${parent_id}: ${JSON.stringify(r.data)}`
-              )
-            )
-            .catch(e =>
-              this.logger.error(
-                `[sync] bulk-delete dashboard ${parent_id} failed: ${e?.response?.data ? JSON.stringify(e.response.data) : (e?.message ?? e)}`
-              )
-            )
-        }
-
-        // 4 ── Scraper sync-delete (non-blocking)
-        this.syncDeletePropertyToScraper(parent_id).catch(e =>
-          this.logger.error(
-            `[sync] bulk-delete scraper ${parent_id} failed: ${e?.message ?? e}`
-          )
-        )
       } catch (err: any) {
         errors.push({ parent_id, error: err?.message ?? String(err) })
         this.logger.error(
           `[sync-bulk-delete] ${parent_id} failed: ${err?.message ?? err}`
         )
       }
+    }
+
+    if (successfulDeletes.length) {
+      const deletedIds = successfulDeletes.map(({ parent_id }) => parent_id)
+      this.syncBulkDeleteToDashboard(deletedIds).catch(e =>
+        this.logger.error(
+          `[sync] bulk-delete dashboard failed: ${e?.message ?? e}`
+        )
+      )
+      this.syncBulkDeleteToScraper(deletedIds).catch(e =>
+        this.logger.error(
+          `[sync] bulk-delete scraper failed: ${e?.message ?? e}`
+        )
+      )
     }
 
     return {
@@ -2077,43 +2064,49 @@ export class PropertyService implements IPropertyService {
       (result.skippedProperties ?? []).map((s: { name: string }) => s.name)
     )
 
+    const importRows = allProperties.map(p => {
+      const row = rowIndex++
+      return { property: p as PropertyWithRelations, row }
+    })
+
+    const scraperBulkItems = (
+      await Promise.all(
+        importRows.map(async ({ property, row }) =>
+          this.buildScraperBulkUpsertItem(property, row)
+        )
+      )
+    ).filter((item): item is Record<string, unknown> => item !== null)
+
+    const parserBulkResult =
+      await this.syncBulkUpsertToScraper(scraperBulkItems)
+
     const rowResults: SyncBulkUpsertRowResult[] = await Promise.all(
-      allProperties.map(async p => {
-        const row = rowIndex++
+      importRows.map(async ({ property: p, row }) => {
         const identifier = String(
           p.expedia_id ?? p.booking_id ?? p.agoda_id ?? p.id
         )
-        const baseResult: SyncBulkUpsertRowResult = {
+        const dashboardResult = await this.syncUpsertPropertyToDashboard(
+          p
+        ).catch(e => ({
+          success: false,
+          reason: e?.message ?? String(e)
+        }))
+        const parserResult = this.resolveParserBulkUpsertResult(
+          p.id,
+          parserBulkResult,
+          !!p.portfolio_id
+        )
+
+        return {
           row,
           parent_id: p.id,
           name: p.name,
           identifier,
           action: skippedNames.has(p.name) ? 'updated' : 'created',
           dbms: true,
-          dashboard: { success: false, reason: 'Not attempted' },
-          parser: { success: false, reason: 'Not attempted' }
-        }
-
-        const [dashboardResult, parserResult] = await Promise.all([
-          this.syncUpsertPropertyToDashboard(p as PropertyWithRelations).catch(
-            e => ({
-              success: false,
-              reason: e?.message ?? String(e)
-            })
-          ),
-          this.syncUpsertPropertyToScraper(p as PropertyWithRelations).catch(
-            e => ({
-              success: false,
-              reason: e?.message ?? String(e)
-            })
-          )
-        ])
-
-        return {
-          ...baseResult,
           dashboard: dashboardResult,
           parser: parserResult
-        }
+        } as SyncBulkUpsertRowResult
       })
     )
 
@@ -2196,37 +2189,6 @@ export class PropertyService implements IPropertyService {
       )
 
     return result
-  }
-
-  private async fanOutPropertyBulkCreate(properties: any[]) {
-    if (!this.scraperClient) {
-      this.logger.warn('[sync] scraper disabled, skipping bulk import sync')
-      return
-    }
-    if (!properties.length) return
-
-    const items = properties.map(p => ({
-      name: p.name,
-      portfolio_name: p.portfolio?.name ?? null,
-      sub_portfolio_name: p.subportfolio?.name ?? null,
-      expedia_id: p.expedia_id ?? null,
-      expedia_status: p.expedia_status ?? null,
-      booking_id: p.booking_id ?? null,
-      booking_status: p.booking_status ?? null,
-      agoda_id: p.agoda_id ?? null,
-      agoda_status: p.agoda_status ?? null
-    }))
-
-    try {
-      const r = await this.scraperClient.post('/properties/sync-bulk-create', {
-        items
-      })
-      this.logger.log(
-        `[sync] scraper bulk create: ${JSON.stringify(r.data?.data ?? r.data)}`
-      )
-    } catch (e: any) {
-      this.logger.error(`[sync] scraper bulk create failed: ${e?.message ?? e}`)
-    }
   }
 
   async bulkUpdate(
@@ -3513,37 +3475,54 @@ export class PropertyService implements IPropertyService {
         }
       }
 
-      // ── Post-loop: run dashboard + scraper sync per updated property, then email ──
+      // ── Post-loop: dashboard sync per property + parser bulk upsert ──
       if (syncQueue.length > 0) {
-        const rowResults: SyncBulkUpsertRowResult[] = await Promise.all(
+        const updateRows = await Promise.all(
           syncQueue.map(async ({ rowNumber, propertyId }) => {
             const p = (await this.repo.findById(
               propertyId
-            )) as PropertyWithRelations
+            )) as PropertyWithRelations | null
+            return { rowNumber, propertyId, property: p }
+          })
+        )
+
+        const scraperBulkItems = (
+          await Promise.all(
+            updateRows.map(async ({ property, rowNumber }) =>
+              property
+                ? this.buildScraperBulkUpsertItem(property, rowNumber)
+                : null
+            )
+          )
+        ).filter((item): item is Record<string, unknown> => item !== null)
+
+        const parserBulkResult =
+          await this.syncBulkUpsertToScraper(scraperBulkItems)
+
+        const rowResults: SyncBulkUpsertRowResult[] = await Promise.all(
+          updateRows.map(async ({ rowNumber, propertyId, property: p }) => {
             const identifier = String(
               p?.expedia_id ?? p?.booking_id ?? p?.agoda_id ?? propertyId
             )
-
-            const [dashboardResult, parserResult] = await Promise.all([
-              p
-                ? this.syncUpsertPropertyToDashboard(p).catch(e => ({
-                    success: false,
-                    reason: e?.message ?? String(e)
-                  }))
-                : Promise.resolve({
-                    success: false,
-                    reason: 'Property not found after update'
-                  }),
-              p
-                ? this.syncUpsertPropertyToScraper(p).catch(e => ({
-                    success: false,
-                    reason: e?.message ?? String(e)
-                  }))
-                : Promise.resolve({
-                    success: false,
-                    reason: 'Property not found after update'
-                  })
-            ])
+            const dashboardResult = p
+              ? await this.syncUpsertPropertyToDashboard(p).catch(e => ({
+                  success: false,
+                  reason: e?.message ?? String(e)
+                }))
+              : {
+                  success: false,
+                  reason: 'Property not found after update'
+                }
+            const parserResult = p
+              ? this.resolveParserBulkUpsertResult(
+                  propertyId,
+                  parserBulkResult,
+                  !!p.portfolio_id
+                )
+              : {
+                  success: false,
+                  reason: 'Property not found after update'
+                }
 
             return {
               row: rowNumber,
@@ -4415,6 +4394,155 @@ export class PropertyService implements IPropertyService {
     for (const f of fields) if (src?.[f] !== undefined) out[f] = src[f]
     return out
   }
+
+  private decryptCredentialValue(val: string | null | undefined): string {
+    if (!val) return ''
+    try {
+      return this.encryptionUtil.decrypt(val)
+    } catch {
+      return ''
+    }
+  }
+
+  private async buildScraperBulkUpsertItem(
+    property: PropertyWithRelations,
+    row: number
+  ): Promise<Record<string, unknown> | null> {
+    if (!property.portfolio_id) return null
+
+    const credentials = await this.credentialsService.findByPropertyId(
+      property.id
+    )
+
+    return {
+      row,
+      parent_id: property.id,
+      portfolio_parent_id: property.portfolio_id,
+      name: property.name,
+      ...(property.expedia_id != null
+        ? { expedia_id: property.expedia_id }
+        : {}),
+      ...(property.booking_id != null
+        ? { booking_id: property.booking_id }
+        : {}),
+      ...(property.agoda_id != null ? { agoda_id: property.agoda_id } : {}),
+      ...(credentials?.expediaUsername
+        ? { expedia_username: credentials.expediaUsername }
+        : {}),
+      ...(credentials?.expediaPassword
+        ? {
+            expedia_password: this.decryptCredentialValue(
+              credentials.expediaPassword
+            )
+          }
+        : {}),
+      ...(credentials?.agodaUsername
+        ? { agoda_username: credentials.agodaUsername }
+        : {}),
+      ...(credentials?.agodaPassword
+        ? {
+            agoda_password: this.decryptCredentialValue(
+              credentials.agodaPassword
+            )
+          }
+        : {}),
+      ...(credentials?.bookingUsername
+        ? { booking_username: credentials.bookingUsername }
+        : {}),
+      ...(credentials?.bookingPassword
+        ? {
+            booking_password: this.decryptCredentialValue(
+              credentials.bookingPassword
+            )
+          }
+        : {})
+    }
+  }
+
+  private resolveParserBulkUpsertResult(
+    parentId: string,
+    bulkResult: {
+      errors?: Array<{ parent_id: string; error: string }>
+      successfulUpserts?: Array<{ parent_id: string; action: string }>
+    } | null,
+    hasPortfolio: boolean
+  ): { success: boolean; reason?: string } {
+    if (!hasPortfolio) {
+      return {
+        success: false,
+        reason: 'Property has no portfolio_id — cannot sync to scraper'
+      }
+    }
+    if (!this.scraperJwtClient) {
+      return {
+        success: false,
+        reason:
+          'Scraper JWT client disabled — URL or JWT_COMMUNICATION_SECRET missing'
+      }
+    }
+    if (!bulkResult) {
+      return {
+        success: false,
+        reason: 'Scraper bulk upsert was not attempted or failed entirely'
+      }
+    }
+
+    const rowError = bulkResult.errors?.find(e => e.parent_id === parentId)
+    if (rowError) {
+      return { success: false, reason: rowError.error }
+    }
+
+    if (bulkResult.successfulUpserts?.some(u => u.parent_id === parentId)) {
+      return { success: true }
+    }
+
+    return {
+      success: false,
+      reason: 'Property was not reported in scraper bulk upsert response'
+    }
+  }
+
+  private async syncBulkUpsertToScraper(
+    items: Record<string, unknown>[]
+  ): Promise<{
+    totalRows: number
+    createdCount: number
+    updatedCount: number
+    failureCount: number
+    errors: Array<{ row: number; parent_id: string; error: string }>
+    successfulUpserts: Array<{
+      parent_id: string
+      action: 'created' | 'updated'
+    }>
+  } | null> {
+    if (!items.length) return null
+
+    if (!this.scraperJwtClient) {
+      this.logger.warn(
+        '[sync] scraper JWT client disabled, skipping property sync-bulk-upsert'
+      )
+      return null
+    }
+
+    try {
+      const r = await this.scraperJwtClient.post(
+        '/properties/sync-bulk-upsert',
+        items,
+        { headers: this.syncCommunication.createAuthHeaders() }
+      )
+      const data = r.data?.data ?? r.data
+      this.logger.log(
+        `[sync] scraper property sync-bulk-upsert: ${JSON.stringify(data)}`
+      )
+      return data
+    } catch (e: any) {
+      this.logger.error(
+        `[sync] scraper property sync-bulk-upsert failed: ${e?.response?.data ? JSON.stringify(e.response.data) : (e?.message ?? e)}`
+      )
+      return null
+    }
+  }
+
   private async syncUpsertPropertyToScraper(
     property: PropertyWithRelations
   ): Promise<{ success: boolean; reason?: string }> {
