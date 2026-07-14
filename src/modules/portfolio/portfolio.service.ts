@@ -62,11 +62,11 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
 
     this.dashboardClient =
       dashUrl && syncAuthReady
-        ? axios.create({ baseURL: dashUrl, timeout })
+        ? this.createExternalJwtSyncClient(dashUrl, timeout)
         : null
     this.scraperClient =
       scrUrl && syncAuthReady
-        ? axios.create({ baseURL: scrUrl, timeout })
+        ? this.createExternalJwtSyncClient(scrUrl, timeout)
         : null
 
     if (!syncAuthReady) {
@@ -84,6 +84,22 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
         '[sync] scraper portfolio sync disabled — URL missing or auth not configured'
       )
     }
+  }
+
+  /** Axios client that signs a fresh external-communication JWT on every request. */
+  private createExternalJwtSyncClient(
+    baseURL: string,
+    timeout: number
+  ): AxiosInstance {
+    const client = axios.create({ baseURL, timeout })
+    client.interceptors.request.use(config => {
+      Object.assign(
+        config.headers,
+        this.syncCommunication.createAuthHeaders()
+      )
+      return config
+    })
+    return client
   }
 
   async onModuleInit() {
@@ -499,11 +515,6 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
     portfolio: PortfolioWithCounts,
     oldName: string
   ) {
-    const scraperPayload = {
-      _id: portfolio.id,
-      oldName,
-      name: portfolio.name
-    }
     const dashboardPayload = {
       _id: portfolio.id,
       oldName,
@@ -521,21 +532,7 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
 
     const jobs: Array<Promise<void>> = []
 
-    if (this.scraperClient) {
-      jobs.push(
-        this.postSync(
-          this.scraperClient,
-          '/portfolios/sync-update',
-          scraperPayload,
-          'scraper',
-          'update'
-        )
-      )
-    } else {
-      this.logger.warn(
-        '[sync] scraper disabled, skipping portfolio update sync'
-      )
-    }
+    this.queueUpsertSync(jobs, portfolio, 'update')
 
     if (this.dashboardClient) {
       jobs.push(
@@ -552,8 +549,6 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
         '[sync] dashboard disabled, skipping portfolio update sync'
       )
     }
-
-    this.queueUpsertSync(jobs, portfolio, 'update')
 
     const results = await Promise.allSettled(jobs)
     for (const result of results) {
@@ -624,16 +619,16 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
     return result
   }
 
-  private async fanOutPortfolioDelete(_id: string, name: string) {
-    const payload = { _id, name }
+  private async fanOutPortfolioDelete(id: string, name: string) {
+    const payload = { _id: id, name }
     const jobs: Array<Promise<void>> = []
 
     if (this.scraperClient) {
       jobs.push(
         this.postSync(
           this.scraperClient,
-          '/portfolios/sync-delete',
-          payload,
+          `/portfolios/sync-delete/${id}`,
+          {},
           'scraper',
           'delete'
         )
@@ -988,10 +983,6 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
   }
 
   private async fanOutPortfolioCreate(portfolio: PortfolioWithCounts) {
-    const scraperPayload = {
-      _id: portfolio.id,
-      name: portfolio.name
-    }
     const dashboardPayload = {
       _id: portfolio.id,
       name: portfolio.name,
@@ -1007,20 +998,7 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
 
     const jobs: Array<Promise<void>> = []
 
-    if (this.scraperClient) {
-      jobs.push(
-        this.postSync(
-          this.scraperClient,
-          '/portfolios/sync-create',
-          scraperPayload,
-          'scraper'
-        )
-      )
-    } else {
-      this.logger.warn(
-        '[sync] scraper disabled, skipping portfolio create sync'
-      )
-    }
+    this.queueUpsertSync(jobs, portfolio, 'create')
 
     if (this.dashboardClient) {
       jobs.push(
@@ -1037,8 +1015,6 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
       )
     }
 
-    this.queueUpsertSync(jobs, portfolio, 'create')
-
     const results = await Promise.allSettled(jobs)
     for (const result of results) {
       if (result.status === 'rejected') {
@@ -1054,6 +1030,24 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
     portfolio: PortfolioWithCounts,
     operation: 'create' | 'update'
   ) {
+    const scraperUpsertBody = { name: portfolio.name }
+
+    if (this.scraperClient) {
+      jobs.push(
+        this.postSync(
+          this.scraperClient,
+          `/portfolios/sync-upsert/${portfolio.id}`,
+          scraperUpsertBody,
+          'scraper',
+          `upsert-${operation}`
+        )
+      )
+    } else {
+      this.logger.warn(
+        `[sync] scraper disabled, skipping portfolio upsert ${operation} sync`
+      )
+    }
+
     if (!this.dashboardClient) {
       this.logger.warn(
         `[sync] dashboard disabled, skipping portfolio upsert ${operation} sync`
@@ -1085,9 +1079,7 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
     operation = 'create'
   ): Promise<void> {
     try {
-      const r = await client.post(path, body, {
-        headers: this.syncCommunication.createAuthHeaders()
-      })
+      const r = await client.post(path, body)
       this.logger.log(
         `[sync] ${target} portfolio ${operation}: ${JSON.stringify(r.data)}`
       )
