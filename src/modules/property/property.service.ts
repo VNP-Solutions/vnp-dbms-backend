@@ -17,7 +17,10 @@ import type { IUserWithPermissions } from '../../common/interfaces/permission.in
 import { SyncCommunicationService } from '../../common/services/sync-communication.service'
 import { EmailUtil } from '../../common/utils/email.util'
 import { EncryptionUtil } from '../../common/utils/encryption.util'
-import { mapPropertyToExcelRow, writePropertyExportBuffer } from '../../common/utils/property-excel.util'
+import {
+  mapPropertyToExcelRow,
+  writePropertyExportBuffer
+} from '../../common/utils/property-excel.util'
 import type { Configuration } from '../../config/configuration'
 import type { IAuthRepository } from '../auth/auth.interface'
 import type { IPortfolioService } from '../portfolio/portfolio.interface'
@@ -30,7 +33,10 @@ import {
   normalizePropertyIdentifier,
   propertyIdentifierKey
 } from './property-uniqueness.util'
-import type { SyncBulkDeleteResponseDto, SyncBulkUpsertRowResult } from './property.dto'
+import type {
+  SyncBulkDeleteResponseDto,
+  SyncBulkUpsertRowResult
+} from './property.dto'
 import {
   BulkUpdateResultDto,
   CreatePropertyDto,
@@ -82,29 +88,49 @@ export class PropertyService implements IPropertyService {
     private readonly syncCommunication: SyncCommunicationService
   ) {
     const timeout = this.config.get('syncTimeoutMs', { infer: true }) ?? 15000
-    const dashUrl = this.config.get('dashboardBackendUrl', { infer: true }) ?? ''
-    const dashTok = this.config.get('dashboardServiceToken', { infer: true }) ?? ''
-    const scrUrl  = this.config.get('scraperBackendUrl', { infer: true }) ?? ''
-    const scrTok  = this.config.get('scraperServiceToken', { infer: true }) ?? ''
-    this.dashboardClient = dashUrl && dashTok
-      ? axios.create({ baseURL: dashUrl, timeout, headers: { 'X-Service-Token': dashTok } })
-      : null
-    this.dashboardJwtClient = dashUrl && this.syncCommunication.isConfigured()
-      ? axios.create({ baseURL: dashUrl, timeout })
-      : null
-    this.scraperClient = scrUrl && scrTok
-      ? axios.create({ baseURL: scrUrl, timeout, headers: { 'X-Service-Token': scrTok } })
-      : null
-    if (!this.dashboardClient) this.logger.warn('[sync] dashboard disabled — URL/token missing')
-    if (!this.dashboardJwtClient) this.logger.warn('[sync] dashboard JWT client disabled — URL or JWT_COMMUNICATION_SECRET missing')
-    if (!this.scraperClient)  this.logger.warn('[sync] scraper disabled — URL/token missing')
+    const dashUrl =
+      this.config.get('dashboardBackendUrl', { infer: true }) ?? ''
+    const dashTok =
+      this.config.get('dashboardServiceToken', { infer: true }) ?? ''
+    const scrUrl = this.config.get('scraperBackendUrl', { infer: true }) ?? ''
+    const scrTok = this.config.get('scraperServiceToken', { infer: true }) ?? ''
+    this.dashboardClient =
+      dashUrl && dashTok
+        ? axios.create({
+            baseURL: dashUrl,
+            timeout,
+            headers: { 'X-Service-Token': dashTok }
+          })
+        : null
+    this.dashboardJwtClient =
+      dashUrl && this.syncCommunication.isConfigured()
+        ? axios.create({ baseURL: dashUrl, timeout })
+        : null
+    this.scraperClient =
+      scrUrl && scrTok
+        ? axios.create({
+            baseURL: scrUrl,
+            timeout,
+            headers: { 'X-Service-Token': scrTok }
+          })
+        : null
+    if (!this.dashboardClient)
+      this.logger.warn('[sync] dashboard disabled — URL/token missing')
+    if (!this.dashboardJwtClient)
+      this.logger.warn(
+        '[sync] dashboard JWT client disabled — URL or JWT_COMMUNICATION_SECRET missing'
+      )
+    if (!this.scraperClient)
+      this.logger.warn('[sync] scraper disabled — URL/token missing')
   }
 
   async create(
     data: CreatePropertyDto,
     _user: IUserWithPermissions
   ): Promise<PropertyWithRelations> {
-    const normalizedIdentifier = normalizePropertyIdentifier(data.property_identifier)
+    const normalizedIdentifier = normalizePropertyIdentifier(
+      data.property_identifier
+    )
     const conflicts = await collectPropertyUniqueConflicts(this.prisma, {
       property_identifier: normalizedIdentifier,
       name: data.name,
@@ -171,15 +197,15 @@ export class PropertyService implements IPropertyService {
         reason: e?.message ?? String(e)
       })),
       this.fanOutPropertyCreate({
-        name:               property.name,
-        portfolio_name:     property.portfolio?.name ?? null,
+        name: property.name,
+        portfolio_name: property.portfolio?.name ?? null,
         sub_portfolio_name: property.subportfolio?.name ?? null,
-        expedia_id:         property.expedia_id ?? null,
-        expedia_status:     property.expedia_status ?? null,
-        booking_id:         property.booking_id ?? null,
-        booking_status:     property.booking_status ?? null,
-        agoda_id:           property.agoda_id ?? null,
-        agoda_status:       property.agoda_status ?? null,
+        expedia_id: property.expedia_id ?? null,
+        expedia_status: property.expedia_status ?? null,
+        booking_id: property.booking_id ?? null,
+        booking_status: property.booking_status ?? null,
+        agoda_id: property.agoda_id ?? null,
+        agoda_status: property.agoda_status ?? null
       }).catch(e => ({ success: false, reason: e?.message ?? String(e) }))
     ])
 
@@ -196,7 +222,11 @@ export class PropertyService implements IPropertyService {
         { dbms: true, dashboard: dashboardResult, parser: parserResult },
         'create'
       )
-      .catch(e => this.logger.error(`[email] sync result email failed: ${e?.message ?? e}`))
+      .catch(e =>
+        this.logger.error(
+          `[email] sync result email failed: ${e?.message ?? e}`
+        )
+      )
 
     return property
   }
@@ -231,7 +261,7 @@ export class PropertyService implements IPropertyService {
     // Pre-process filters to detect date range pairs
     const processedFilters = new Set<string>()
     const filterMap = new Map<string, any>()
-    
+
     if (filterDto.filters && Array.isArray(filterDto.filters)) {
       // Build a map of all filters for easy lookup
       for (const filter of filterDto.filters) {
@@ -352,10 +382,7 @@ export class PropertyService implements IPropertyService {
             const fromDate = String(values[0])
             const toDate = String(toFilter.in[0])
             whereConditions.push({
-              AND: [
-                { from_db: { lte: toDate } },
-                { to_db:   { gte: fromDate } }
-              ]
+              AND: [{ from_db: { lte: toDate } }, { to_db: { gte: fromDate } }]
             })
             processedFilters.add('from_db')
             processedFilters.add('to_db')
@@ -376,52 +403,83 @@ export class PropertyService implements IPropertyService {
           toName: string
         ) => {
           const fromF = filterMap.get(fromName)
-          const toF   = filterMap.get(toName)
-          const fromVal = fromF?.in?.[0] != null ? String(fromF.in[0]) : undefined
-          const toVal   = toF?.in?.[0]   != null ? String(toF.in[0])   : undefined
+          const toF = filterMap.get(toName)
+          const fromVal =
+            fromF?.in?.[0] != null ? String(fromF.in[0]) : undefined
+          const toVal = toF?.in?.[0] != null ? String(toF.in[0]) : undefined
           if (fromVal === undefined && toVal === undefined) return false
-        
+
           const range: Record<string, string> = {}
           if (fromVal !== undefined) range.gte = fromVal
-          if (toVal   !== undefined) range.lte = toVal
+          if (toVal !== undefined) range.lte = toVal
           whereConditions.push({ [columnName]: range })
           processedFilters.add(fromName)
           processedFilters.add(toName)
           return true
         }
 
-        if (name === 'expedia_scheduler_review_from' || name === 'expedia_scheduler_review_to') {
+        if (
+          name === 'expedia_scheduler_review_from' ||
+          name === 'expedia_scheduler_review_to'
+        ) {
           if (!processedFilters.has(name)) {
-            applySingleFieldRange('expedia_scheduler_review',
-              'expedia_scheduler_review_from', 'expedia_scheduler_review_to')
+            applySingleFieldRange(
+              'expedia_scheduler_review',
+              'expedia_scheduler_review_from',
+              'expedia_scheduler_review_to'
+            )
           }
           continue
         }
-        if (name === 'expedia_scheduler_review_db_from' || name === 'expedia_scheduler_review_db_to') {
+        if (
+          name === 'expedia_scheduler_review_db_from' ||
+          name === 'expedia_scheduler_review_db_to'
+        ) {
           if (!processedFilters.has(name)) {
-            applySingleFieldRange('expedia_scheduler_review_db',
-              'expedia_scheduler_review_db_from', 'expedia_scheduler_review_db_to')
+            applySingleFieldRange(
+              'expedia_scheduler_review_db',
+              'expedia_scheduler_review_db_from',
+              'expedia_scheduler_review_db_to'
+            )
           }
           continue
         }
-        if (name === 'expedia_run_date_from' || name === 'expedia_run_date_to') {
+        if (
+          name === 'expedia_run_date_from' ||
+          name === 'expedia_run_date_to'
+        ) {
           if (!processedFilters.has(name)) {
-            applySingleFieldRange('expedia_run_date',
-              'expedia_run_date_from', 'expedia_run_date_to')
+            applySingleFieldRange(
+              'expedia_run_date',
+              'expedia_run_date_from',
+              'expedia_run_date_to'
+            )
           }
           continue
         }
-        if (name === 'expedia_run_date_db_from' || name === 'expedia_run_date_db_to') {
+        if (
+          name === 'expedia_run_date_db_from' ||
+          name === 'expedia_run_date_db_to'
+        ) {
           if (!processedFilters.has(name)) {
-            applySingleFieldRange('expedia_run_date_db',
-              'expedia_run_date_db_from', 'expedia_run_date_db_to')
+            applySingleFieldRange(
+              'expedia_run_date_db',
+              'expedia_run_date_db_from',
+              'expedia_run_date_db_to'
+            )
           }
           continue
         }
-        if (name === 'expedia_revised_date_from' || name === 'expedia_revised_date_to') {
+        if (
+          name === 'expedia_revised_date_from' ||
+          name === 'expedia_revised_date_to'
+        ) {
           if (!processedFilters.has(name)) {
-            applySingleFieldRange('expedia_revised_date',
-              'expedia_revised_date_from', 'expedia_revised_date_to')
+            applySingleFieldRange(
+              'expedia_revised_date',
+              'expedia_revised_date_from',
+              'expedia_revised_date_to'
+            )
           }
           continue
         }
@@ -443,10 +501,12 @@ export class PropertyService implements IPropertyService {
             break
           case 'expedia_id': {
             // Convert to numbers as expedia_id is Int in Prisma schema
-            const numericValues = values.map(v => {
-              const num = Number(v)
-              return isNaN(num) ? null : num
-            }).filter(v => v !== null)
+            const numericValues = values
+              .map(v => {
+                const num = Number(v)
+                return isNaN(num) ? null : num
+              })
+              .filter(v => v !== null)
             if (numericValues.length > 0) {
               whereConditions.push({ expedia_id: { in: numericValues } })
             }
@@ -454,10 +514,12 @@ export class PropertyService implements IPropertyService {
           }
           case 'booking_id': {
             // Convert to numbers as booking_id is Int in Prisma schema
-            const numericValues = values.map(v => {
-              const num = Number(v)
-              return isNaN(num) ? null : num
-            }).filter(v => v !== null)
+            const numericValues = values
+              .map(v => {
+                const num = Number(v)
+                return isNaN(num) ? null : num
+              })
+              .filter(v => v !== null)
             if (numericValues.length > 0) {
               whereConditions.push({ booking_id: { in: numericValues } })
             }
@@ -465,10 +527,12 @@ export class PropertyService implements IPropertyService {
           }
           case 'agoda_id': {
             // Convert to numbers as agoda_id is Int in Prisma schema
-            const numericValues = values.map(v => {
-              const num = Number(v)
-              return isNaN(num) ? null : num
-            }).filter(v => v !== null)
+            const numericValues = values
+              .map(v => {
+                const num = Number(v)
+                return isNaN(num) ? null : num
+              })
+              .filter(v => v !== null)
             if (numericValues.length > 0) {
               whereConditions.push({ agoda_id: { in: numericValues } })
             }
@@ -553,12 +617,18 @@ export class PropertyService implements IPropertyService {
             whereConditions.push({ expedia_frequency_id: { in: values } })
             break
           case 'expedia_access_level': {
-            const condition = this.booleanFilterCondition('expedia_access_level', values)
+            const condition = this.booleanFilterCondition(
+              'expedia_access_level',
+              values
+            )
             if (condition) whereConditions.push(condition)
             break
           }
           case 'expedia_scheduler': {
-            const condition = this.booleanFilterCondition('expedia_scheduler', values)
+            const condition = this.booleanFilterCondition(
+              'expedia_scheduler',
+              values
+            )
             if (condition) whereConditions.push(condition)
             break
           }
@@ -578,12 +648,18 @@ export class PropertyService implements IPropertyService {
             whereConditions.push({ booking_frequency_id: { in: values } })
             break
           case 'booking_access_level': {
-            const condition = this.booleanFilterCondition('booking_access_level', values)
+            const condition = this.booleanFilterCondition(
+              'booking_access_level',
+              values
+            )
             if (condition) whereConditions.push(condition)
             break
           }
           case 'booking_scheduler': {
-            const condition = this.booleanFilterCondition('booking_scheduler', values)
+            const condition = this.booleanFilterCondition(
+              'booking_scheduler',
+              values
+            )
             if (condition) whereConditions.push(condition)
             break
           }
@@ -603,12 +679,18 @@ export class PropertyService implements IPropertyService {
             whereConditions.push({ agoda_frequency_id: { in: values } })
             break
           case 'agoda_access_level': {
-            const condition = this.booleanFilterCondition('agoda_access_level', values)
+            const condition = this.booleanFilterCondition(
+              'agoda_access_level',
+              values
+            )
             if (condition) whereConditions.push(condition)
             break
           }
           case 'agoda_scheduler': {
-            const condition = this.booleanFilterCondition('agoda_scheduler', values)
+            const condition = this.booleanFilterCondition(
+              'agoda_scheduler',
+              values
+            )
             if (condition) whereConditions.push(condition)
             break
           }
@@ -619,7 +701,10 @@ export class PropertyService implements IPropertyService {
             break
           }
           case 'need_another_domain': {
-            const condition = this.booleanFilterCondition('need_another_domain', values)
+            const condition = this.booleanFilterCondition(
+              'need_another_domain',
+              values
+            )
             if (condition) whereConditions.push(condition)
             break
           }
@@ -643,11 +728,15 @@ export class PropertyService implements IPropertyService {
             break
           case 'expedia_db_duration': {
             const nums = this.intValuesForInClause(values)
-            if (nums.length) whereConditions.push({ expedia_db_duration: { in: nums } })
+            if (nums.length)
+              whereConditions.push({ expedia_db_duration: { in: nums } })
             break
           }
           case 'expedia_credential_verified': {
-            const condition = this.booleanFilterCondition('expedia_credential_verified', values)
+            const condition = this.booleanFilterCondition(
+              'expedia_credential_verified',
+              values
+            )
             if (condition) whereConditions.push(condition)
             break
           }
@@ -658,7 +747,10 @@ export class PropertyService implements IPropertyService {
             whereConditions.push({ booking_service_fee: { in: values } })
             break
           case 'booking_credential_verified': {
-            const condition = this.booleanFilterCondition('booking_credential_verified', values)
+            const condition = this.booleanFilterCondition(
+              'booking_credential_verified',
+              values
+            )
             if (condition) whereConditions.push(condition)
             break
           }
@@ -666,7 +758,10 @@ export class PropertyService implements IPropertyService {
             whereConditions.push({ agoda_service_fee: { in: values } })
             break
           case 'agoda_credential_verified': {
-            const condition = this.booleanFilterCondition('agoda_credential_verified', values)
+            const condition = this.booleanFilterCondition(
+              'agoda_credential_verified',
+              values
+            )
             if (condition) whereConditions.push(condition)
             break
           }
@@ -703,7 +798,9 @@ export class PropertyService implements IPropertyService {
         OR: [
           { name: { contains: filterDto.search, mode: 'insensitive' } },
           { description: { contains: filterDto.search, mode: 'insensitive' } },
-          { hotel_address: { contains: filterDto.search, mode: 'insensitive' } },
+          {
+            hotel_address: { contains: filterDto.search, mode: 'insensitive' }
+          },
           {
             property_identifier: {
               contains: filterDto.search,
@@ -771,7 +868,9 @@ export class PropertyService implements IPropertyService {
 
       if (!isValidCredentials) {
         // Return masked data with error message
-        this.logger.warn(`Failed credential verification for user: ${user.email}`)
+        this.logger.warn(
+          `Failed credential verification for user: ${user.email}`
+        )
         const dataWithMaskedCredentials = data.map(p =>
           this.maskCredentialsForResponse(p)
         )
@@ -787,7 +886,9 @@ export class PropertyService implements IPropertyService {
         } as PaginatedResult<PropertyWithRelations>
       }
 
-      this.logger.debug('Credentials verified successfully, returning decrypted data')
+      this.logger.debug(
+        'Credentials verified successfully, returning decrypted data'
+      )
       const dataWithDecryptedCredentials = data.map(p =>
         this.decryptCredentialsForResponse(p)
       )
@@ -906,8 +1007,7 @@ export class PropertyService implements IPropertyService {
           masked.expediaSecondaryPassword = MASK
         if (cred.bookingSecondaryPassword)
           masked.bookingSecondaryPassword = MASK
-        if (cred.agodaSecondaryPassword)
-          masked.agodaSecondaryPassword = MASK
+        if (cred.agodaSecondaryPassword) masked.agodaSecondaryPassword = MASK
         return masked
       })
     }
@@ -964,28 +1064,30 @@ export class PropertyService implements IPropertyService {
     return this.buildPropertyContact(property)
   }
 
-  private buildPropertyContact(property: PropertyWithRelations): PropertyContact {
+  private buildPropertyContact(
+    property: PropertyWithRelations
+  ): PropertyContact {
     const creds = (property as any).credentials
     return {
       // Property-level
-      portfolio_contact:            property.portfolio_contact            ?? null,
-      portfolio_contact_email:      property.portfolio_contact_email      ?? null,
-      case_management_contact:      property.case_management_contact      ?? null,
-      access_contact:               property.access_contact               ?? null,
-      reporting_contact:            property.reporting_contact            ?? null,
-      primary_case_email:           property.primary_case_email           ?? null,
-      others_case_emails:           property.others_case_emails           ?? [],
-      new_domain_email:             property.new_domain_email             ?? null,
+      portfolio_contact: property.portfolio_contact ?? null,
+      portfolio_contact_email: property.portfolio_contact_email ?? null,
+      case_management_contact: property.case_management_contact ?? null,
+      access_contact: property.access_contact ?? null,
+      reporting_contact: property.reporting_contact ?? null,
+      primary_case_email: property.primary_case_email ?? null,
+      others_case_emails: property.others_case_emails ?? [],
+      new_domain_email: property.new_domain_email ?? null,
       // Credential-level
-      property_contact_email:       creds?.propertyContactEmail           ?? null,
-      portfolio_contact_email_cred: creds?.portfolioContactEmail          ?? null,
-      multiple_portfolio_emails:    creds?.multiplePortfolioEmails        ?? [],
-      case_contact_email:           creds?.case_contact_email             ?? null,
-      case_contact_name:            creds?.case_contact_name              ?? null,
-      case_contact_phone:           creds?.case_contact_phone             ?? null,
-      reporting_contact_name:       creds?.reporting_contact_name         ?? null,
-      reporting_contact_email:      creds?.reporting_contact_email        ?? null,
-      reporting_contact_phone:      creds?.reporting_contact_phone        ?? null,
+      property_contact_email: creds?.propertyContactEmail ?? null,
+      portfolio_contact_email_cred: creds?.portfolioContactEmail ?? null,
+      multiple_portfolio_emails: creds?.multiplePortfolioEmails ?? [],
+      case_contact_email: creds?.case_contact_email ?? null,
+      case_contact_name: creds?.case_contact_name ?? null,
+      case_contact_phone: creds?.case_contact_phone ?? null,
+      reporting_contact_name: creds?.reporting_contact_name ?? null,
+      reporting_contact_email: creds?.reporting_contact_email ?? null,
+      reporting_contact_phone: creds?.reporting_contact_phone ?? null
     }
   }
 
@@ -998,7 +1100,7 @@ export class PropertyService implements IPropertyService {
 
     const normalizedIdentifier =
       data.property_identifier !== undefined
-        ? normalizePropertyIdentifier(data.property_identifier) ?? null
+        ? (normalizePropertyIdentifier(data.property_identifier) ?? null)
         : undefined
 
     const fieldsToCheck: {
@@ -1012,8 +1114,10 @@ export class PropertyService implements IPropertyService {
       fieldsToCheck.property_identifier = normalizedIdentifier
     }
     if (data.name !== undefined) fieldsToCheck.name = data.name
-    if (data.expedia_id !== undefined) fieldsToCheck.expedia_id = data.expedia_id
-    if (data.booking_id !== undefined) fieldsToCheck.booking_id = data.booking_id
+    if (data.expedia_id !== undefined)
+      fieldsToCheck.expedia_id = data.expedia_id
+    if (data.booking_id !== undefined)
+      fieldsToCheck.booking_id = data.booking_id
     if (data.agoda_id !== undefined) fieldsToCheck.agoda_id = data.agoda_id
 
     const conflicts = await collectPropertyUniqueConflicts(
@@ -1076,7 +1180,11 @@ export class PropertyService implements IPropertyService {
     return this.repo.findById(id) as Promise<PropertyWithRelations>
   }
 
-  async updateAndSync(id: string, data: UpdatePropertyDto, user: IUserWithPermissions) {
+  async updateAndSync(
+    id: string,
+    data: UpdatePropertyDto,
+    user: IUserWithPermissions
+  ) {
     const before = await this.repo.findById(id)
     if (!before) throw new NotFoundException('Property not found')
     const updated = await this.update(id, data, user)
@@ -1090,7 +1198,7 @@ export class PropertyService implements IPropertyService {
         {
           expedia_id: before.expedia_id ?? null,
           booking_id: before.booking_id ?? null,
-          agoda_id:   before.agoda_id ?? null
+          agoda_id: before.agoda_id ?? null
         },
         data
       ).catch(e => ({ success: false, reason: e?.message ?? String(e) }))
@@ -1109,16 +1217,22 @@ export class PropertyService implements IPropertyService {
         { dbms: true, dashboard: dashboardResult, parser: parserResult },
         'update'
       )
-      .catch(e => this.logger.error(`[email] sync result email failed: ${e?.message ?? e}`))
+      .catch(e =>
+        this.logger.error(
+          `[email] sync result email failed: ${e?.message ?? e}`
+        )
+      )
 
     return updated
   }
-  
+
   // ──────────────────────────────────────────────────────────────────────────
   // External bulk delete — called by dashboard via ExternalJwtGuard
   // ──────────────────────────────────────────────────────────────────────────
 
-  async syncBulkDelete(body: SyncBulkDeleteBodyDto): Promise<SyncBulkDeleteResponseDto> {
+  async syncBulkDelete(
+    body: SyncBulkDeleteBodyDto
+  ): Promise<SyncBulkDeleteResponseDto> {
     const { items } = body
 
     const errors: Array<{ parent_id: string; error: string }> = []
@@ -1130,10 +1244,18 @@ export class PropertyService implements IPropertyService {
         // 1 ── Verify property exists
         const property = await this.prisma.property.findUnique({
           where: { id: parent_id },
-          select: { id: true, expedia_id: true, booking_id: true, agoda_id: true }
+          select: {
+            id: true,
+            expedia_id: true,
+            booking_id: true,
+            agoda_id: true
+          }
         })
         if (!property) {
-          errors.push({ parent_id, error: `Property not found with parent_id: ${parent_id}` })
+          errors.push({
+            parent_id,
+            error: `Property not found with parent_id: ${parent_id}`
+          })
           continue
         }
 
@@ -1149,28 +1271,45 @@ export class PropertyService implements IPropertyService {
         // 3 ── Dashboard sync-delete (non-blocking)
         if (this.dashboardJwtClient) {
           this.dashboardJwtClient
-            .post(`/api/property/sync-delete/${parent_id}`, {}, { headers: this.syncCommunication.createAuthHeaders() })
-            .then(r => this.logger.log(`[sync] bulk-delete dashboard ${parent_id}: ${JSON.stringify(r.data)}`))
-            .catch(e => this.logger.error(`[sync] bulk-delete dashboard ${parent_id} failed: ${e?.response?.data ? JSON.stringify(e.response.data) : (e?.message ?? e)}`))
+            .post(
+              `/api/property/sync-delete/${parent_id}`,
+              {},
+              { headers: this.syncCommunication.createAuthHeaders() }
+            )
+            .then(r =>
+              this.logger.log(
+                `[sync] bulk-delete dashboard ${parent_id}: ${JSON.stringify(r.data)}`
+              )
+            )
+            .catch(e =>
+              this.logger.error(
+                `[sync] bulk-delete dashboard ${parent_id} failed: ${e?.response?.data ? JSON.stringify(e.response.data) : (e?.message ?? e)}`
+              )
+            )
         }
 
         // 4 ── Scraper sync-delete (non-blocking)
         this.fanOutPropertyDelete({
           expedia_id: property.expedia_id ?? null,
           booking_id: property.booking_id ?? null,
-          agoda_id:   property.agoda_id   ?? null
-        }).catch(e => this.logger.error(`[sync] bulk-delete scraper ${parent_id} failed: ${e?.message ?? e}`))
-
+          agoda_id: property.agoda_id ?? null
+        }).catch(e =>
+          this.logger.error(
+            `[sync] bulk-delete scraper ${parent_id} failed: ${e?.message ?? e}`
+          )
+        )
       } catch (err: any) {
         errors.push({ parent_id, error: err?.message ?? String(err) })
-        this.logger.error(`[sync-bulk-delete] ${parent_id} failed: ${err?.message ?? err}`)
+        this.logger.error(
+          `[sync-bulk-delete] ${parent_id} failed: ${err?.message ?? err}`
+        )
       }
     }
 
     return {
-      totalCount:       items.length,
-      deletedCount:     successfulDeletes.length,
-      failureCount:     errors.length,
+      totalCount: items.length,
+      deletedCount: successfulDeletes.length,
+      failureCount: errors.length,
       errors,
       successfulDeletes
     }
@@ -1190,9 +1329,13 @@ export class PropertyService implements IPropertyService {
           {},
           { headers: this.syncCommunication.createAuthHeaders() }
         )
-        this.logger.log(`[sync] dashboard property sync-delete: ${JSON.stringify(r.data)}`)
+        this.logger.log(
+          `[sync] dashboard property sync-delete: ${JSON.stringify(r.data)}`
+        )
       } else {
-        this.logger.warn('[sync] dashboard JWT client disabled, skipping property sync-delete')
+        this.logger.warn(
+          '[sync] dashboard JWT client disabled, skipping property sync-delete'
+        )
       }
     } catch (e: any) {
       this.logger.error(
@@ -1202,7 +1345,6 @@ export class PropertyService implements IPropertyService {
     return { message: 'Property deleted successfully' }
   }
 
-
   async removeAndSync(id: string, user: IUserWithPermissions) {
     const before = await this.repo.findById(id)
     const result = await this.remove(id, user)
@@ -1211,7 +1353,7 @@ export class PropertyService implements IPropertyService {
         await this.fanOutPropertyDelete({
           expedia_id: before.expedia_id ?? null,
           booking_id: before.booking_id ?? null,
-          agoda_id:   before.agoda_id   ?? null,
+          agoda_id: before.agoda_id ?? null
         })
       } catch (e: any) {
         this.logger.error(`[sync] unexpected on delete: ${e?.message ?? e}`)
@@ -1229,11 +1371,17 @@ export class PropertyService implements IPropertyService {
     const userFromDb = await this.authRepository.findUserByEmail(user.email)
     if (!userFromDb) throw new BadRequestException('Invalid credentials')
 
-    const isPasswordValid = await EncryptionUtil.comparePassword(password, userFromDb.password)
+    const isPasswordValid = await EncryptionUtil.comparePassword(
+      password,
+      userFromDb.password
+    )
     if (!isPasswordValid) throw new BadRequestException('Invalid password')
 
     const property = await this.findOne(id, user)
-    if (property.portfolio_id === portfolioId) throw new BadRequestException('Property is already in the specified portfolio')
+    if (property.portfolio_id === portfolioId)
+      throw new BadRequestException(
+        'Property is already in the specified portfolio'
+      )
 
     await this.repo.update(id, { portfolio_id: portfolioId })
     await Promise.all([
@@ -1252,10 +1400,15 @@ export class PropertyService implements IPropertyService {
     const userFromDb = await this.authRepository.findUserByEmail(user.email)
     if (!userFromDb) throw new BadRequestException('Invalid credentials')
 
-    const isPasswordValid = await EncryptionUtil.comparePassword(password, userFromDb.password)
+    const isPasswordValid = await EncryptionUtil.comparePassword(
+      password,
+      userFromDb.password
+    )
     if (!isPasswordValid) throw new BadRequestException('Invalid password')
 
-    this.logger.log(`User ${user.email} attempting bulk transfer of ${ids.length} properties to portfolio ${portfolioId}`)
+    this.logger.log(
+      `User ${user.email} attempting bulk transfer of ${ids.length} properties to portfolio ${portfolioId}`
+    )
 
     const accessibleIds = await this.repo.getAccessiblePropertyIds(user.id)
 
@@ -1275,7 +1428,11 @@ export class PropertyService implements IPropertyService {
           continue
         }
         if (property.portfolio_id === portfolioId) {
-          skipped.push({ id, name: property.name, reason: 'Property is already in the specified portfolio' })
+          skipped.push({
+            id,
+            name: property.name,
+            reason: 'Property is already in the specified portfolio'
+          })
           continue
         }
 
@@ -1292,9 +1449,16 @@ export class PropertyService implements IPropertyService {
       await this.redisService.deleteByPattern(ALL_PATTERN)
     }
 
-    this.logger.log(`Bulk transfer completed: ${success.length} success, ${skipped.length} skipped`)
+    this.logger.log(
+      `Bulk transfer completed: ${success.length} success, ${skipped.length} skipped`
+    )
 
-    return { success, skipped, successCount: success.length, skippedCount: skipped.length }
+    return {
+      success,
+      skipped,
+      successCount: success.length,
+      skippedCount: skipped.length
+    }
   }
 
   async findByPortfolioId(
@@ -1445,18 +1609,27 @@ export class PropertyService implements IPropertyService {
     user: IUserWithPermissions
   ): Promise<{ message: string }> {
     // Step 1 — apply filters (masking doesn't matter here; we only need the IDs)
-    const filterDto: PropertyFilterDto = { ...dto, page: undefined, limit: undefined }
+    const filterDto: PropertyFilterDto = {
+      ...dto,
+      page: undefined,
+      limit: undefined
+    }
     const filtered = await this.findAllWithFilters(filterDto, user)
     const filteredData = filtered.data as any[]
 
     if (filteredData.length === 0) {
-      return { message: 'No properties matched the given filters. Email not sent.' }
+      return {
+        message: 'No properties matched the given filters. Email not sent.'
+      }
     }
 
     // Step 2 — re-fetch the same properties directly from the repo (bypassing the
     // masking layer), then decrypt every credential field explicitly.
     const ids = filteredData.map((p: any) => p.id)
-    const raw = await this.repo.findAll({ where: { id: { in: ids } }, orderBy: { created_at: 'desc' } })
+    const raw = await this.repo.findAll({
+      where: { id: { in: ids } },
+      orderBy: { created_at: 'desc' }
+    })
     const properties = raw.map(p => this.decryptCredentialsForResponse(p))
 
     const rows = properties.map(p => mapPropertyToExcelRow(p))
@@ -1472,12 +1645,15 @@ export class PropertyService implements IPropertyService {
         {
           filename,
           content: buffer,
-          contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+          contentType:
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         }
       ]
     )
 
-    return { message: `Excel report with ${properties.length} record(s) sent to ${user.email}` }
+    return {
+      message: `Excel report with ${properties.length} record(s) sent to ${user.email}`
+    }
   }
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -1511,7 +1687,9 @@ export class PropertyService implements IPropertyService {
 
     // Strip trailing asterisks/spaces from header keys before validation
     // so "Property Name *" is treated the same as "Property Name"
-    const headers = Object.keys(rawRows[0]).map(h => h.replace(/\s*\*+\s*$/, '').trim())
+    const headers = Object.keys(rawRows[0]).map(h =>
+      h.replace(/\s*\*+\s*$/, '').trim()
+    )
 
     // Required columns
     if (
@@ -1557,8 +1735,23 @@ export class PropertyService implements IPropertyService {
         const parseBool = (val: any) => {
           if (val === null || val === undefined || val === '') return undefined
           const str = String(val).trim().toLowerCase()
-          if (str === 'true' || str === '1' || str === 'yes' || str === 'y' || str === 'verified') return 'true'
-          if (str === 'false' || str === '0' || str === 'no' || str === 'n' || str === 'not verified' || str === 'access lost') return 'false'
+          if (
+            str === 'true' ||
+            str === '1' ||
+            str === 'yes' ||
+            str === 'y' ||
+            str === 'verified'
+          )
+            return 'true'
+          if (
+            str === 'false' ||
+            str === '0' ||
+            str === 'no' ||
+            str === 'n' ||
+            str === 'not verified' ||
+            str === 'access lost'
+          )
+            return 'false'
           return undefined
         }
 
@@ -1619,7 +1812,9 @@ export class PropertyService implements IPropertyService {
           agodaSecondaryUsername: r['Agoda Secondary Username']
             ? String(r['Agoda Secondary Username']).trim()
             : undefined,
-          agodaSecondaryPassword: encryptPassword(r['Agoda Secondary Password']),
+          agodaSecondaryPassword: encryptPassword(
+            r['Agoda Secondary Password']
+          ),
           portfolioContactEmail: r['Portfolio Contact Email']
             ? String(r['Portfolio Contact Email']).trim()
             : undefined,
@@ -1672,10 +1867,20 @@ export class PropertyService implements IPropertyService {
             : undefined,
           expediaBillingType: parseEnum(r['Expedia Billing Type']),
           expediaServiceType: r['Expedia Service Type']
-            ? String(r['Expedia Service Type']).trim().toUpperCase().replace(/[\s\-.]+/g, '_').replace(/_+/g, '_').replace(/^_|_$/, '')
+            ? String(r['Expedia Service Type'])
+                .trim()
+                .toUpperCase()
+                .replace(/[\s\-.]+/g, '_')
+                .replace(/_+/g, '_')
+                .replace(/^_|_$/, '')
             : undefined,
           expediaFrequency: r['Expedia Frequency']
-            ? String(r['Expedia Frequency']).trim().toUpperCase().replace(/[\s\-.]+/g, '_').replace(/_+/g, '_').replace(/^_|_$/, '')
+            ? String(r['Expedia Frequency'])
+                .trim()
+                .toUpperCase()
+                .replace(/[\s\-.]+/g, '_')
+                .replace(/_+/g, '_')
+                .replace(/^_|_$/, '')
             : undefined,
           expediaAccessLevel: parseBool(r['Expedia Access Level']),
           expediaFrom: r['Expedia From']
@@ -1690,10 +1895,20 @@ export class PropertyService implements IPropertyService {
             : undefined,
           bookingBillingType: parseEnum(r['Booking Billing Type']),
           bookingServiceType: r['Booking Service Type']
-            ? String(r['Booking Service Type']).trim().toUpperCase().replace(/[\s\-.]+/g, '_').replace(/_+/g, '_').replace(/^_|_$/, '')
+            ? String(r['Booking Service Type'])
+                .trim()
+                .toUpperCase()
+                .replace(/[\s\-.]+/g, '_')
+                .replace(/_+/g, '_')
+                .replace(/^_|_$/, '')
             : undefined,
           bookingFrequency: r['Booking Frequency']
-            ? String(r['Booking Frequency']).trim().toUpperCase().replace(/[\s\-.]+/g, '_').replace(/_+/g, '_').replace(/^_|_$/, '')
+            ? String(r['Booking Frequency'])
+                .trim()
+                .toUpperCase()
+                .replace(/[\s\-.]+/g, '_')
+                .replace(/_+/g, '_')
+                .replace(/^_|_$/, '')
             : undefined,
           bookingAccessLevel: parseBool(r['Booking Access Level']),
           bookingFrom: r['Booking From']
@@ -1708,18 +1923,26 @@ export class PropertyService implements IPropertyService {
             : undefined,
           agodaBillingType: parseEnum(r['Agoda Billing Type']),
           agodaServiceType: r['Agoda Service Type']
-            ? String(r['Agoda Service Type']).trim().toUpperCase().replace(/[\s\-.]+/g, '_').replace(/_+/g, '_').replace(/^_|_$/, '')
+            ? String(r['Agoda Service Type'])
+                .trim()
+                .toUpperCase()
+                .replace(/[\s\-.]+/g, '_')
+                .replace(/_+/g, '_')
+                .replace(/^_|_$/, '')
             : undefined,
           agodaFrequency: r['Agoda Frequency']
-            ? String(r['Agoda Frequency']).trim().toUpperCase().replace(/[\s\-.]+/g, '_').replace(/_+/g, '_').replace(/^_|_$/, '')
+            ? String(r['Agoda Frequency'])
+                .trim()
+                .toUpperCase()
+                .replace(/[\s\-.]+/g, '_')
+                .replace(/_+/g, '_')
+                .replace(/^_|_$/, '')
             : undefined,
           agodaAccessLevel: parseBool(r['Agoda Access Level']),
           agodaFrom: r['Agoda From']
             ? String(r['Agoda From']).trim()
             : undefined,
-          agodaTo: r['Agoda To']
-            ? String(r['Agoda To']).trim()
-            : undefined,
+          agodaTo: r['Agoda To'] ? String(r['Agoda To']).trim() : undefined,
           agodaScheduler: parseBool(r['Agoda Scheduler']),
           agodaDuration: r['Agoda Duration']
             ? String(r['Agoda Duration']).trim()
@@ -1729,47 +1952,108 @@ export class PropertyService implements IPropertyService {
             ? String(r['Booking OTP Phone']).trim()
             : undefined,
           serviceTypeName: r['Service Type']
-            ? String(r['Service Type']).trim().toUpperCase().replace(/[\s\-.]+/g, '_').replace(/_+/g, '_').replace(/^_|_$/, '')
+            ? String(r['Service Type'])
+                .trim()
+                .toUpperCase()
+                .replace(/[\s\-.]+/g, '_')
+                .replace(/_+/g, '_')
+                .replace(/^_|_$/, '')
             : undefined,
-          currency: r['Currency']
-            ? String(r['Currency']).trim()
-            : undefined,
+          currency: r['Currency'] ? String(r['Currency']).trim() : undefined,
           // New Expedia fields
-          expediaServiceFee: r['Expedia Service Fee'] ? String(r['Expedia Service Fee']).trim() : undefined,
-          expediaPriority: r['Expedia Priority'] ? String(r['Expedia Priority']).trim() : undefined,
-          expediaCrs: r['Expedia CRS'] ? String(r['Expedia CRS']).trim() : undefined,
-          expediaCrsDb: r['Expedia CRS DB'] ? String(r['Expedia CRS DB']).trim() : undefined,
-          expediaRunDateFrom: r['Expedia Run Date From'] ? String(r['Expedia Run Date From']).trim() : undefined,
-          expediaRunDateTo: r['Expedia Run Date To'] ? String(r['Expedia Run Date To']).trim() : undefined,
-          expediaRunDateDbFrom: r['Expedia Run Date DB From'] ? String(r['Expedia Run Date DB From']).trim() : undefined,
-          expediaRunDateDbTo: r['Expedia Run Date DB To'] ? String(r['Expedia Run Date DB To']).trim() : undefined,
-          expediaRevisedDate: r['Expedia Revised Date'] ? String(r['Expedia Revised Date']).trim() : undefined,
-          expediaSchedulerReviewFrom: r['Expedia Scheduler Review From'] ? String(r['Expedia Scheduler Review From']).trim() : undefined,
-          expediaSchedulerReviewTo: r['Expedia Scheduler Review To'] ? String(r['Expedia Scheduler Review To']).trim() : undefined,
-          expediaSchedulerDb: r['Expedia Scheduler DB'] ? String(r['Expedia Scheduler DB']).trim() : undefined,
-          expediaSchedulerReviewDbFrom: r['Expedia Scheduler Review DB From'] ? String(r['Expedia Scheduler Review DB From']).trim() : undefined,
-          expediaSchedulerReviewDbTo: r['Expedia Scheduler Review DB To'] ? String(r['Expedia Scheduler Review DB To']).trim() : undefined,
-          expediaDbDuration: r['Expedia DB Duration'] ? String(r['Expedia DB Duration']).trim() : undefined,
-          expediaCredentialVerified: parseBool(r['Expedia Credential Verified']),
-          expediaOtpNumber: r['Expedia OTP Number'] ? String(r['Expedia OTP Number']).trim() : undefined,
+          expediaServiceFee: r['Expedia Service Fee']
+            ? String(r['Expedia Service Fee']).trim()
+            : undefined,
+          expediaPriority: r['Expedia Priority']
+            ? String(r['Expedia Priority']).trim()
+            : undefined,
+          expediaCrs: r['Expedia CRS']
+            ? String(r['Expedia CRS']).trim()
+            : undefined,
+          expediaCrsDb: r['Expedia CRS DB']
+            ? String(r['Expedia CRS DB']).trim()
+            : undefined,
+          expediaRunDateFrom: r['Expedia Run Date From']
+            ? String(r['Expedia Run Date From']).trim()
+            : undefined,
+          expediaRunDateTo: r['Expedia Run Date To']
+            ? String(r['Expedia Run Date To']).trim()
+            : undefined,
+          expediaRunDateDbFrom: r['Expedia Run Date DB From']
+            ? String(r['Expedia Run Date DB From']).trim()
+            : undefined,
+          expediaRunDateDbTo: r['Expedia Run Date DB To']
+            ? String(r['Expedia Run Date DB To']).trim()
+            : undefined,
+          expediaRevisedDate: r['Expedia Revised Date']
+            ? String(r['Expedia Revised Date']).trim()
+            : undefined,
+          expediaSchedulerReviewFrom: r['Expedia Scheduler Review From']
+            ? String(r['Expedia Scheduler Review From']).trim()
+            : undefined,
+          expediaSchedulerReviewTo: r['Expedia Scheduler Review To']
+            ? String(r['Expedia Scheduler Review To']).trim()
+            : undefined,
+          expediaSchedulerDb: r['Expedia Scheduler DB']
+            ? String(r['Expedia Scheduler DB']).trim()
+            : undefined,
+          expediaSchedulerReviewDbFrom: r['Expedia Scheduler Review DB From']
+            ? String(r['Expedia Scheduler Review DB From']).trim()
+            : undefined,
+          expediaSchedulerReviewDbTo: r['Expedia Scheduler Review DB To']
+            ? String(r['Expedia Scheduler Review DB To']).trim()
+            : undefined,
+          expediaDbDuration: r['Expedia DB Duration']
+            ? String(r['Expedia DB Duration']).trim()
+            : undefined,
+          expediaCredentialVerified: parseBool(
+            r['Expedia Credential Verified']
+          ),
+          expediaOtpNumber: r['Expedia OTP Number']
+            ? String(r['Expedia OTP Number']).trim()
+            : undefined,
           fromDb: r['From DB'] ? String(r['From DB']).trim() : undefined,
           toDb: r['To DB'] ? String(r['To DB']).trim() : undefined,
           // New Booking fields
-          bookingServiceFee: r['Booking Service Fee'] ? String(r['Booking Service Fee']).trim() : undefined,
-          bookingPriority: r['Booking Priority'] ? String(r['Booking Priority']).trim() : undefined,
-          bookingCrs: r['Booking CRS'] ? String(r['Booking CRS']).trim() : undefined,
-          bookingRunDate: r['Booking Run Date'] ? String(r['Booking Run Date']).trim() : undefined,
-          bookingRevisedDate: r['Booking Revised Date'] ? String(r['Booking Revised Date']).trim() : undefined,
-          bookingCredentialVerified: parseBool(r['Booking Credential Verified']),
-          bookingOtpNumber: r['Booking OTP Number'] ? String(r['Booking OTP Number']).trim() : undefined,
+          bookingServiceFee: r['Booking Service Fee']
+            ? String(r['Booking Service Fee']).trim()
+            : undefined,
+          bookingPriority: r['Booking Priority']
+            ? String(r['Booking Priority']).trim()
+            : undefined,
+          bookingCrs: r['Booking CRS']
+            ? String(r['Booking CRS']).trim()
+            : undefined,
+          bookingRunDate: r['Booking Run Date']
+            ? String(r['Booking Run Date']).trim()
+            : undefined,
+          bookingRevisedDate: r['Booking Revised Date']
+            ? String(r['Booking Revised Date']).trim()
+            : undefined,
+          bookingCredentialVerified: parseBool(
+            r['Booking Credential Verified']
+          ),
+          bookingOtpNumber: r['Booking OTP Number']
+            ? String(r['Booking OTP Number']).trim()
+            : undefined,
           // New Agoda fields
-          agodaServiceFee: r['Agoda Service Fee'] ? String(r['Agoda Service Fee']).trim() : undefined,
-          agodaPriority: r['Agoda Priority'] ? String(r['Agoda Priority']).trim() : undefined,
+          agodaServiceFee: r['Agoda Service Fee']
+            ? String(r['Agoda Service Fee']).trim()
+            : undefined,
+          agodaPriority: r['Agoda Priority']
+            ? String(r['Agoda Priority']).trim()
+            : undefined,
           agodaCrs: r['Agoda CRS'] ? String(r['Agoda CRS']).trim() : undefined,
-          agodaRunDate: r['Agoda Run Date'] ? String(r['Agoda Run Date']).trim() : undefined,
-          agodaRevisedDate: r['Agoda Revised Date'] ? String(r['Agoda Revised Date']).trim() : undefined,
+          agodaRunDate: r['Agoda Run Date']
+            ? String(r['Agoda Run Date']).trim()
+            : undefined,
+          agodaRevisedDate: r['Agoda Revised Date']
+            ? String(r['Agoda Revised Date']).trim()
+            : undefined,
           agodaCredentialVerified: parseBool(r['Agoda Credential Verified']),
-          agodaOtpNumber: r['Agoda OTP Number'] ? String(r['Agoda OTP Number']).trim() : undefined,
+          agodaOtpNumber: r['Agoda OTP Number']
+            ? String(r['Agoda OTP Number']).trim()
+            : undefined,
           // Misc
           salesRep: r['Sales Rep'] ? String(r['Sales Rep']).trim() : undefined
         } satisfies ImportPropertyRow
@@ -1780,8 +2064,11 @@ export class PropertyService implements IPropertyService {
     await this.redisService.deleteByPattern(ALL_PATTERN)
     return result
   }
-  
-  async importFromExcelAndSync(file: Express.Multer.File, user: IUserWithPermissions): Promise<ImportPropertiesResult> {
+
+  async importFromExcelAndSync(
+    file: Express.Multer.File,
+    user: IUserWithPermissions
+  ): Promise<ImportPropertiesResult> {
     const result = await this.importFromExcel(file, user)
 
     const allProperties: any[] = [
@@ -1796,12 +2083,16 @@ export class PropertyService implements IPropertyService {
     // Skipped rows from import are interleaved so exact row number is approximate
     let rowIndex = 2
     // Build offset for skipped rows so row numbers roughly match the original Excel
-    const skippedNames = new Set((result.skippedProperties ?? []).map((s: { name: string }) => s.name))
+    const skippedNames = new Set(
+      (result.skippedProperties ?? []).map((s: { name: string }) => s.name)
+    )
 
     const rowResults: SyncBulkUpsertRowResult[] = await Promise.all(
-      allProperties.map(async (p) => {
+      allProperties.map(async p => {
         const row = rowIndex++
-        const identifier = String(p.expedia_id ?? p.booking_id ?? p.agoda_id ?? p.id)
+        const identifier = String(
+          p.expedia_id ?? p.booking_id ?? p.agoda_id ?? p.id
+        )
         const baseResult: SyncBulkUpsertRowResult = {
           row,
           parent_id: p.id,
@@ -1814,54 +2105,77 @@ export class PropertyService implements IPropertyService {
         }
 
         const [dashboardResult, parserResult] = await Promise.all([
-          this.syncUpsertPropertyToDashboard(p as PropertyWithRelations).catch(e => ({
-            success: false, reason: e?.message ?? String(e)
-          })),
+          this.syncUpsertPropertyToDashboard(p as PropertyWithRelations).catch(
+            e => ({
+              success: false,
+              reason: e?.message ?? String(e)
+            })
+          ),
           this.fanOutPropertyCreate({
-            name:               p.name,
-            portfolio_name:     p.portfolio?.name ?? null,
+            name: p.name,
+            portfolio_name: p.portfolio?.name ?? null,
             sub_portfolio_name: p.subportfolio?.name ?? null,
-            expedia_id:         p.expedia_id ?? null,
-            expedia_status:     p.expedia_status ?? null,
-            booking_id:         p.booking_id ?? null,
-            booking_status:     p.booking_status ?? null,
-            agoda_id:           p.agoda_id ?? null,
-            agoda_status:       p.agoda_status ?? null
+            expedia_id: p.expedia_id ?? null,
+            expedia_status: p.expedia_status ?? null,
+            booking_id: p.booking_id ?? null,
+            booking_status: p.booking_status ?? null,
+            agoda_id: p.agoda_id ?? null,
+            agoda_status: p.agoda_status ?? null
           }).catch(e => ({ success: false, reason: e?.message ?? String(e) }))
         ])
 
-        return { ...baseResult, dashboard: dashboardResult, parser: parserResult }
+        return {
+          ...baseResult,
+          dashboard: dashboardResult,
+          parser: parserResult
+        }
       })
     )
 
     // Add rows that were skipped entirely during DBMS import (DBMS = NO)
     let skipIndex = rowIndex + allProperties.length
-    const skippedResults: SyncBulkUpsertRowResult[] = (result.skippedProperties ?? []).map(
-      (s: { name: string; reason: string }) => ({
-        row: skipIndex++,
-        parent_id: s.name,
-        name: s.name,
-        identifier: s.name,
-        action: 'failed' as const,
-        dbms: false,
-        dashboard: { success: false, reason: 'Skipped — DBMS error' },
-        parser:    { success: false, reason: 'Skipped — DBMS error' },
-        error: s.reason
-      })
+    const skippedResults: SyncBulkUpsertRowResult[] = (
+      result.skippedProperties ?? []
+    ).map((s: { name: string; reason: string }) => ({
+      row: skipIndex++,
+      parent_id: s.name,
+      name: s.name,
+      identifier: s.name,
+      action: 'failed' as const,
+      dbms: false,
+      dashboard: { success: false, reason: 'Skipped — DBMS error' },
+      parser: { success: false, reason: 'Skipped — DBMS error' },
+      error: s.reason
+    }))
+
+    const allRowResults = [...rowResults, ...skippedResults].sort(
+      (a, b) => a.row - b.row
     )
 
-    const allRowResults = [...rowResults, ...skippedResults].sort((a, b) => a.row - b.row)
-
     // Fire email asynchronously — don't block the response
-    const failedRows = allRowResults.filter(r => !r.dbms || !r.dashboard.success || !r.parser.success)
+    const failedRows = allRowResults.filter(
+      r => !r.dbms || !r.dashboard.success || !r.parser.success
+    )
     const defectiveRows = failedRows.map(r => {
       const reasons: string[] = []
       if (r.error) reasons.push(r.error)
-      if (!r.dashboard.success && r.dashboard.reason && r.dashboard.reason !== 'Skipped — DBMS error') reasons.push(`Dashboard: ${r.dashboard.reason}`)
-      if (!r.parser.success && r.parser.reason && r.parser.reason !== 'Skipped — DBMS error') reasons.push(`Parser: ${r.parser.reason}`)
+      if (
+        !r.dashboard.success &&
+        r.dashboard.reason &&
+        r.dashboard.reason !== 'Skipped — DBMS error'
+      )
+        reasons.push(`Dashboard: ${r.dashboard.reason}`)
+      if (
+        !r.parser.success &&
+        r.parser.reason &&
+        r.parser.reason !== 'Skipped — DBMS error'
+      )
+        reasons.push(`Parser: ${r.parser.reason}`)
       const prop = allProperties.find(p => p.id === r.parent_id)
       return {
-        Row: r.row, 'Property Name': r.name, Identifier: r.identifier,
+        Row: r.row,
+        'Property Name': r.name,
+        Identifier: r.identifier,
         Portfolio: prop?.portfolio?.name ?? '',
         'Expedia ID': prop?.expedia_id ?? '',
         'Booking ID': prop?.booking_id ?? '',
@@ -1874,39 +2188,57 @@ export class PropertyService implements IPropertyService {
     })
 
     const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(defectiveRows.length ? defectiveRows : [{ note: 'All rows synced successfully' }]), 'Sync Results')
-    const excelBuffer = Buffer.from(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }))
+    XLSX.utils.book_append_sheet(
+      wb,
+      XLSX.utils.json_to_sheet(
+        defectiveRows.length
+          ? defectiveRows
+          : [{ note: 'All rows synced successfully' }]
+      ),
+      'Sync Results'
+    )
+    const excelBuffer = Buffer.from(
+      XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
+    )
     const filename = `import-sync-report-${new Date().toISOString().slice(0, 10)}.xlsx`
 
     this.emailUtil
       .sendBulkSyncResultEmail(user.email, allRowResults, excelBuffer, filename)
-      .catch(e => this.logger.error(`[email] import sync report failed: ${e?.message ?? e}`))
+      .catch(e =>
+        this.logger.error(
+          `[email] import sync report failed: ${e?.message ?? e}`
+        )
+      )
 
     return result
   }
-  
+
   private async fanOutPropertyBulkCreate(properties: any[]) {
     if (!this.scraperClient) {
       this.logger.warn('[sync] scraper disabled, skipping bulk import sync')
       return
     }
     if (!properties.length) return
-  
-    const items = properties.map((p) => ({
-      name:               p.name,
-      portfolio_name:     p.portfolio?.name ?? null,
+
+    const items = properties.map(p => ({
+      name: p.name,
+      portfolio_name: p.portfolio?.name ?? null,
       sub_portfolio_name: p.subportfolio?.name ?? null,
-      expedia_id:         p.expedia_id ?? null,
-      expedia_status:     p.expedia_status ?? null,
-      booking_id:         p.booking_id ?? null,
-      booking_status:     p.booking_status ?? null,
-      agoda_id:           p.agoda_id ?? null,
-      agoda_status:       p.agoda_status ?? null,
+      expedia_id: p.expedia_id ?? null,
+      expedia_status: p.expedia_status ?? null,
+      booking_id: p.booking_id ?? null,
+      booking_status: p.booking_status ?? null,
+      agoda_id: p.agoda_id ?? null,
+      agoda_status: p.agoda_status ?? null
     }))
-  
+
     try {
-      const r = await this.scraperClient.post('/properties/sync-bulk-create', { items })
-      this.logger.log(`[sync] scraper bulk create: ${JSON.stringify(r.data?.data ?? r.data)}`)
+      const r = await this.scraperClient.post('/properties/sync-bulk-create', {
+        items
+      })
+      this.logger.log(
+        `[sync] scraper bulk create: ${JSON.stringify(r.data?.data ?? r.data)}`
+      )
     } catch (e: any) {
       this.logger.error(`[sync] scraper bulk create failed: ${e?.message ?? e}`)
     }
@@ -1948,7 +2280,10 @@ export class PropertyService implements IPropertyService {
     const syncQueue: Array<{ rowNumber: number; propertyId: string }> = []
 
     // Helper to find a column value with flexible header matching (case-insensitive, strips asterisks)
-    const findValue = (row: Record<string, any>, names: string[]): string | undefined => {
+    const findValue = (
+      row: Record<string, any>,
+      names: string[]
+    ): string | undefined => {
       for (const name of names) {
         const val = row[name]
         if (val !== undefined && val !== null && val !== '') {
@@ -2000,8 +2335,12 @@ export class PropertyService implements IPropertyService {
         }
         if (typeof dateValue === 'number') {
           const excelEpoch = new Date(1899, 11, 30)
-          const date = new Date(excelEpoch.getTime() + dateValue * 24 * 60 * 60 * 1000)
-          return !isNaN(date.getTime()) && date.getFullYear() >= 1900 && date.getFullYear() <= 2100
+          const date = new Date(
+            excelEpoch.getTime() + dateValue * 24 * 60 * 60 * 1000
+          )
+          return !isNaN(date.getTime()) &&
+            date.getFullYear() >= 1900 &&
+            date.getFullYear() <= 2100
             ? date
             : null
         }
@@ -2011,12 +2350,20 @@ export class PropertyService implements IPropertyService {
           const month = parseInt(parts[0], 10)
           const day = parseInt(parts[1], 10)
           const year = parseInt(parts[2], 10)
-          if (!isNaN(month) && !isNaN(day) && !isNaN(year) && year >= 1900 && year <= 2100) {
+          if (
+            !isNaN(month) &&
+            !isNaN(day) &&
+            !isNaN(year) &&
+            year >= 1900 &&
+            year <= 2100
+          ) {
             return new Date(year, month - 1, day)
           }
         }
         const date = new Date(dateString)
-        return !isNaN(date.getTime()) && date.getFullYear() >= 1900 && date.getFullYear() <= 2100
+        return !isNaN(date.getTime()) &&
+          date.getFullYear() >= 1900 &&
+          date.getFullYear() <= 2100
           ? date
           : null
       } catch {
@@ -2065,14 +2412,26 @@ export class PropertyService implements IPropertyService {
 
         try {
           // Match by property_identifier first; fall back to name when not found
-          const propertyIdentifierRaw = findValue(row, ['Property Identifier', 'Property identifier', 'Identifier'])
+          const propertyIdentifierRaw = findValue(row, [
+            'Property Identifier',
+            'Property identifier',
+            'Identifier'
+          ])
           const normalizedRowIdentifier = propertyIdentifierRaw
             ? normalizePropertyIdentifier(propertyIdentifierRaw)
             : undefined
-          const propertyName = findValue(row, ['Property Name', 'Property name', 'Name'])
+          const propertyName = findValue(row, [
+            'Property Name',
+            'Property name',
+            'Name'
+          ])
 
           if (!normalizedRowIdentifier && !propertyName) {
-            result.errors.push({ row: rowNumber, propertyName: 'Unknown', error: 'Either Property Identifier or Property Name is required' })
+            result.errors.push({
+              row: rowNumber,
+              propertyName: 'Unknown',
+              error: 'Either Property Identifier or Property Name is required'
+            })
             result.failureCount++
             continue
           }
@@ -2112,8 +2471,15 @@ export class PropertyService implements IPropertyService {
           }
 
           // Check access permission
-          if (accessibleIds !== 'all' && !accessibleIds.includes(existingProperty.id)) {
-            result.errors.push({ row: rowNumber, propertyName: existingProperty.name, error: 'You do not have permission to update this property' })
+          if (
+            accessibleIds !== 'all' &&
+            !accessibleIds.includes(existingProperty.id)
+          ) {
+            result.errors.push({
+              row: rowNumber,
+              propertyName: existingProperty.name,
+              error: 'You do not have permission to update this property'
+            })
             result.failureCount++
             continue
           }
@@ -2123,63 +2489,137 @@ export class PropertyService implements IPropertyService {
 
           // Normalize to UPPER_SNAKE_CASE (ServiceType and Frequency)
           const toUpperSnakeCase = (val: string): string =>
-            val.trim().toUpperCase().replace(/[\s\-.]+/g, '_').replace(/_+/g, '_').replace(/^_|_$/, '')
+            val
+              .trim()
+              .toUpperCase()
+              .replace(/[\s\-.]+/g, '_')
+              .replace(/_+/g, '_')
+              .replace(/^_|_$/, '')
 
           // Helper functions to resolve names to ObjectIds (find-or-create)
-          const resolveProcessor = async (name?: string): Promise<string | undefined> => {
+          const resolveProcessor = async (
+            name?: string
+          ): Promise<string | undefined> => {
             if (!name) return undefined
             const normalized = name.trim()
-            let rec = await this.prisma.processor.findFirst({ where: { name: { equals: normalized, mode: 'insensitive' } } })
+            let rec = await this.prisma.processor.findFirst({
+              where: { name: { equals: normalized, mode: 'insensitive' } }
+            })
             if (!rec) {
-              const last = await this.prisma.processor.findFirst({ orderBy: { order: 'desc' }, select: { order: true } })
-              rec = await this.prisma.processor.create({ data: { name: normalized, is_active: true, order: (last?.order ?? 0) + 1 } })
+              const last = await this.prisma.processor.findFirst({
+                orderBy: { order: 'desc' },
+                select: { order: true }
+              })
+              rec = await this.prisma.processor.create({
+                data: {
+                  name: normalized,
+                  is_active: true,
+                  order: (last?.order ?? 0) + 1
+                }
+              })
             }
             return rec.id
           }
-          const resolveServiceType = async (name?: string): Promise<string | undefined> => {
+          const resolveServiceType = async (
+            name?: string
+          ): Promise<string | undefined> => {
             if (!name) return undefined
             const normalized = toUpperSnakeCase(name)
-            let rec = await this.prisma.serviceType.findFirst({ where: { type: { equals: normalized, mode: 'insensitive' } } })
+            let rec = await this.prisma.serviceType.findFirst({
+              where: { type: { equals: normalized, mode: 'insensitive' } }
+            })
             if (!rec) {
-              const maxOrder = await this.prisma.serviceType.findFirst({ orderBy: { order: 'desc' }, select: { order: true } })
-              rec = await this.prisma.serviceType.create({ data: { type: normalized, is_active: true, order: (maxOrder?.order ?? 0) + 1 } })
+              const maxOrder = await this.prisma.serviceType.findFirst({
+                orderBy: { order: 'desc' },
+                select: { order: true }
+              })
+              rec = await this.prisma.serviceType.create({
+                data: {
+                  type: normalized,
+                  is_active: true,
+                  order: (maxOrder?.order ?? 0) + 1
+                }
+              })
             }
             return rec.id
           }
-          const resolveBillingType = async (name?: string): Promise<string | undefined> => {
+          const resolveBillingType = async (
+            name?: string
+          ): Promise<string | undefined> => {
             if (!name) return undefined
             const normalized = name.trim()
-            let rec = await this.prisma.billingType.findFirst({ where: { name: { equals: normalized, mode: 'insensitive' } } })
+            let rec = await this.prisma.billingType.findFirst({
+              where: { name: { equals: normalized, mode: 'insensitive' } }
+            })
             if (!rec) {
-              const last = await this.prisma.billingType.findFirst({ orderBy: { order: 'desc' }, select: { order: true } })
-              rec = await this.prisma.billingType.create({ data: { name: normalized, is_active: true, order: (last?.order ?? 0) + 1 } })
+              const last = await this.prisma.billingType.findFirst({
+                orderBy: { order: 'desc' },
+                select: { order: true }
+              })
+              rec = await this.prisma.billingType.create({
+                data: {
+                  name: normalized,
+                  is_active: true,
+                  order: (last?.order ?? 0) + 1
+                }
+              })
             }
             return rec.id
           }
-          const resolveFrequency = async (name?: string): Promise<string | undefined> => {
+          const resolveFrequency = async (
+            name?: string
+          ): Promise<string | undefined> => {
             if (!name) return undefined
             const normalized = toUpperSnakeCase(name)
-            let rec = await this.prisma.frequency.findFirst({ where: { name: { equals: normalized, mode: 'insensitive' } } })
+            let rec = await this.prisma.frequency.findFirst({
+              where: { name: { equals: normalized, mode: 'insensitive' } }
+            })
             if (!rec) {
-              const last = await this.prisma.frequency.findFirst({ orderBy: { order: 'desc' }, select: { order: true } })
-              rec = await this.prisma.frequency.create({ data: { name: normalized, is_active: true, order: (last?.order ?? 0) + 1 } })
+              const last = await this.prisma.frequency.findFirst({
+                orderBy: { order: 'desc' },
+                select: { order: true }
+              })
+              rec = await this.prisma.frequency.create({
+                data: {
+                  name: normalized,
+                  is_active: true,
+                  order: (last?.order ?? 0) + 1
+                }
+              })
             }
             return rec.id
           }
-          const resolvePriority = async (name?: string): Promise<string | undefined> => {
+          const resolvePriority = async (
+            name?: string
+          ): Promise<string | undefined> => {
             if (!name) return undefined
             const normalized = name.trim()
-            let rec = await this.prisma.priority.findFirst({ where: { name: { equals: normalized, mode: 'insensitive' } } })
+            let rec = await this.prisma.priority.findFirst({
+              where: { name: { equals: normalized, mode: 'insensitive' } }
+            })
             if (!rec) {
-              const last = await this.prisma.priority.findFirst({ orderBy: { order: 'desc' }, select: { order: true } })
-              rec = await this.prisma.priority.create({ data: { name: normalized, is_active: true, order: (last?.order ?? 0) + 1 } })
+              const last = await this.prisma.priority.findFirst({
+                orderBy: { order: 'desc' },
+                select: { order: true }
+              })
+              rec = await this.prisma.priority.create({
+                data: {
+                  name: normalized,
+                  is_active: true,
+                  order: (last?.order ?? 0) + 1
+                }
+              })
             }
             return rec.id
           }
 
           // Rename: only possible when matched by property_identifier.
           // The "Property Name" column then carries the new name.
-          if (matchedByIdentifier && propertyName && propertyName !== existingProperty.name) {
+          if (
+            matchedByIdentifier &&
+            propertyName &&
+            propertyName !== existingProperty.name
+          ) {
             updateData.name = propertyName
           }
 
@@ -2195,7 +2635,8 @@ export class PropertyService implements IPropertyService {
               result.errors.push({
                 row: rowNumber,
                 propertyName: existingProperty.name,
-                error: 'Property identifier already exists and cannot be updated'
+                error:
+                  'Property identifier already exists and cannot be updated'
               })
               result.failureCount++
               continue
@@ -2205,7 +2646,8 @@ export class PropertyService implements IPropertyService {
               result.errors.push({
                 row: rowNumber,
                 propertyName: existingProperty.name,
-                error: 'Property Name is required to assign a property identifier'
+                error:
+                  'Property Name is required to assign a property identifier'
               })
               result.failureCount++
               continue
@@ -2227,12 +2669,23 @@ export class PropertyService implements IPropertyService {
           }
 
           // Hotel address
-          const hotelAddress = findValue(row, ['Hotel Address', 'Hotel address', 'Address', 'Property Address'])
-          if (hotelAddress !== undefined) updateData.hotel_address = hotelAddress
+          const hotelAddress = findValue(row, [
+            'Hotel Address',
+            'Hotel address',
+            'Address',
+            'Property Address'
+          ])
+          if (hotelAddress !== undefined)
+            updateData.hotel_address = hotelAddress
 
           // Card descriptor
-          const cardDescriptor = findValue(row, ['Card Descriptor', 'Card descriptor', 'Descriptor'])
-          if (cardDescriptor !== undefined) updateData.card_descriptor = cardDescriptor
+          const cardDescriptor = findValue(row, [
+            'Card Descriptor',
+            'Card descriptor',
+            'Descriptor'
+          ])
+          if (cardDescriptor !== undefined)
+            updateData.card_descriptor = cardDescriptor
 
           // Description
           const description = findValue(row, ['Description', 'Desc'])
@@ -2240,26 +2693,48 @@ export class PropertyService implements IPropertyService {
 
           // Service type
           const serviceType = findValue(row, ['Service Type', 'Service type'])
-          if (serviceType !== undefined) updateData.service_type_id = await resolveServiceType(serviceType)
+          if (serviceType !== undefined)
+            updateData.service_type_id = await resolveServiceType(serviceType)
 
           // Currency — resolve code → currency_id (find or create)
           const currencyCode = findValue(row, ['Currency', 'currency'])
           if (currencyCode !== undefined) {
             const normalized = currencyCode.trim().toUpperCase()
-            let currencyRec = await this.prisma.currency.findFirst({ where: { code: { equals: normalized, mode: 'insensitive' } } })
+            let currencyRec = await this.prisma.currency.findFirst({
+              where: { code: { equals: normalized, mode: 'insensitive' } }
+            })
             if (!currencyRec) {
-              const last = await this.prisma.currency.findFirst({ orderBy: { order: 'desc' }, select: { order: true } })
-              currencyRec = await this.prisma.currency.create({ data: { code: normalized, name: normalized, is_active: true, order: (last?.order ?? 0) + 1 } })
+              const last = await this.prisma.currency.findFirst({
+                orderBy: { order: 'desc' },
+                select: { order: true }
+              })
+              currencyRec = await this.prisma.currency.create({
+                data: {
+                  code: normalized,
+                  name: normalized,
+                  is_active: true,
+                  order: (last?.order ?? 0) + 1
+                }
+              })
             }
             updateData.currency_id = currencyRec.id
           }
 
           // Next due date
-          const nextDueDateRaw = getRawValue(row, ['Next Due Date', 'Next due date', 'Due Date'])
+          const nextDueDateRaw = getRawValue(row, [
+            'Next Due Date',
+            'Next due date',
+            'Due Date'
+          ])
           if (nextDueDateRaw) {
             const nextDueDate = parseDate(nextDueDateRaw)
             if (!nextDueDate) {
-              result.errors.push({ row: rowNumber, propertyName: existingProperty.name, error: 'Invalid date format for Next Due Date (expected mm/dd/yyyy)' })
+              result.errors.push({
+                row: rowNumber,
+                propertyName: existingProperty.name,
+                error:
+                  'Invalid date format for Next Due Date (expected mm/dd/yyyy)'
+              })
               result.failureCount++
               continue
             }
@@ -2267,11 +2742,21 @@ export class PropertyService implements IPropertyService {
           }
 
           // Portfolio (look up by name)
-          const portfolioName = findValue(row, ['Portfolio', 'Portfolio Name', 'Portfolio name'])
+          const portfolioName = findValue(row, [
+            'Portfolio',
+            'Portfolio Name',
+            'Portfolio name'
+          ])
           if (portfolioName) {
-            const portfolio = await this.prisma.portfolio.findFirst({ where: { name: portfolioName } })
+            const portfolio = await this.prisma.portfolio.findFirst({
+              where: { name: portfolioName }
+            })
             if (!portfolio) {
-              result.errors.push({ row: rowNumber, propertyName: existingProperty.name, error: `Portfolio not found: ${portfolioName}` })
+              result.errors.push({
+                row: rowNumber,
+                propertyName: existingProperty.name,
+                error: `Portfolio not found: ${portfolioName}`
+              })
               result.failureCount++
               continue
             }
@@ -2279,57 +2764,111 @@ export class PropertyService implements IPropertyService {
           }
 
           // Case management contact
-          const caseContact = findValue(row, ['Case Management Contact', 'Case management contact', 'Case Contact'])
-          if (caseContact !== undefined) updateData.case_management_contact = caseContact
+          const caseContact = findValue(row, [
+            'Case Management Contact',
+            'Case management contact',
+            'Case Contact'
+          ])
+          if (caseContact !== undefined)
+            updateData.case_management_contact = caseContact
 
           // Access contact
-          const accessContact = findValue(row, ['Access Contact', 'Access contact'])
-          if (accessContact !== undefined) updateData.access_contact = accessContact
+          const accessContact = findValue(row, [
+            'Access Contact',
+            'Access contact'
+          ])
+          if (accessContact !== undefined)
+            updateData.access_contact = accessContact
 
           // Reporting contact
-          const reportingContact = findValue(row, ['Reporting Contact', 'Reporting contact'])
-          if (reportingContact !== undefined) updateData.reporting_contact = reportingContact
+          const reportingContact = findValue(row, [
+            'Reporting Contact',
+            'Reporting contact'
+          ])
+          if (reportingContact !== undefined)
+            updateData.reporting_contact = reportingContact
 
           // Processors
-          const expediaProcessor = findValue(row, ['Expedia Processor', 'Expedia processor'])
-          if (expediaProcessor !== undefined) updateData.expedia_processor_id = await resolveProcessor(expediaProcessor)
+          const expediaProcessor = findValue(row, [
+            'Expedia Processor',
+            'Expedia processor'
+          ])
+          if (expediaProcessor !== undefined)
+            updateData.expedia_processor_id =
+              await resolveProcessor(expediaProcessor)
 
-          const bookingProcessor = findValue(row, ['Booking Processor', 'Booking processor'])
-          if (bookingProcessor !== undefined) updateData.booking_processor_id = await resolveProcessor(bookingProcessor)
+          const bookingProcessor = findValue(row, [
+            'Booking Processor',
+            'Booking processor'
+          ])
+          if (bookingProcessor !== undefined)
+            updateData.booking_processor_id =
+              await resolveProcessor(bookingProcessor)
 
-          const agodaProcessor = findValue(row, ['Agoda Processor', 'Agoda processor'])
-          if (agodaProcessor !== undefined) updateData.agoda_processor_id = await resolveProcessor(agodaProcessor)
+          const agodaProcessor = findValue(row, [
+            'Agoda Processor',
+            'Agoda processor'
+          ])
+          if (agodaProcessor !== undefined)
+            updateData.agoda_processor_id =
+              await resolveProcessor(agodaProcessor)
 
           // FP MID
           const fpMid = findValue(row, ['FP MID', 'FP Mid', 'fp_mid'])
           if (fpMid !== undefined) updateData.fp_mid = fpMid
 
           // Stripe account email
-          const stripeEmail = findValue(row, ['Stripe Account Email', 'Stripe account email', 'Stripe Email'])
-          if (stripeEmail !== undefined) updateData.stripe_account_email = stripeEmail
+          const stripeEmail = findValue(row, [
+            'Stripe Account Email',
+            'Stripe account email',
+            'Stripe Email'
+          ])
+          if (stripeEmail !== undefined)
+            updateData.stripe_account_email = stripeEmail
 
           // New domains email
-          const newDomainsEmail = findValue(row, ['New Domains Email', 'New domains email', 'new_domain_email'])
-          if (newDomainsEmail !== undefined) updateData.new_domain_email = newDomainsEmail
+          const newDomainsEmail = findValue(row, [
+            'New Domains Email',
+            'New domains email',
+            'new_domain_email'
+          ])
+          if (newDomainsEmail !== undefined)
+            updateData.new_domain_email = newDomainsEmail
 
           // Portfolio contact
-          const portfolioContact = findValue(row, ['Portfolio Contact', 'Portfolio contact'])
-          if (portfolioContact !== undefined) updateData.portfolio_contact = portfolioContact
+          const portfolioContact = findValue(row, [
+            'Portfolio Contact',
+            'Portfolio contact'
+          ])
+          if (portfolioContact !== undefined)
+            updateData.portfolio_contact = portfolioContact
 
           // Portfolio contact email
-          const portfolioContactEmail = findValue(row, ['Portfolio Contact Email', 'Portfolio contact email'])
-          if (portfolioContactEmail !== undefined) updateData.portfolio_contact_email = portfolioContactEmail
+          const portfolioContactEmail = findValue(row, [
+            'Portfolio Contact Email',
+            'Portfolio contact email'
+          ])
+          if (portfolioContactEmail !== undefined)
+            updateData.portfolio_contact_email = portfolioContactEmail
 
           // is_active flag
-          const isActiveStr = findValue(row, ['Is Active', 'is_active', 'Active'])
+          const isActiveStr = findValue(row, [
+            'Is Active',
+            'is_active',
+            'Active'
+          ])
           if (isActiveStr !== undefined) {
             const lower = isActiveStr.toLowerCase()
-            if (lower === 'true' || lower === '1' || lower === 'yes') updateData.is_active = true
-            else if (lower === 'false' || lower === '0' || lower === 'no') updateData.is_active = false
+            if (lower === 'true' || lower === '1' || lower === 'yes')
+              updateData.is_active = true
+            else if (lower === 'false' || lower === '0' || lower === 'no')
+              updateData.is_active = false
           }
 
           // Helper: parse boolean cell values
-          const parseBoolCell = (val: string | undefined): boolean | undefined => {
+          const parseBoolCell = (
+            val: string | undefined
+          ): boolean | undefined => {
             if (val === undefined) return undefined
             const l = val.toLowerCase()
             if (l === 'true' || l === '1' || l === 'yes') return true
@@ -2339,59 +2878,167 @@ export class PropertyService implements IPropertyService {
 
           // ── Expedia OTA fields ─────────────────────────────────────────────
           const expediaIdVal = findValue(row, ['Expedia ID', 'Expedia id'])
-          if (expediaIdVal !== undefined) { const n = parseInt(expediaIdVal); if (!isNaN(n)) updateData.expedia_id = n }
-          const expediaStatus = findValue(row, ['Expedia Status', 'Expedia status'])
-          if (expediaStatus !== undefined) updateData.expedia_status = expediaStatus
-          const expediaBillingType = findValue(row, ['Expedia Billing Type', 'Expedia billing type'])
-          if (expediaBillingType !== undefined) updateData.expedia_billing_type_id = await resolveBillingType(expediaBillingType)
-          const expediaServiceType = findValue(row, ['Expedia Service Type', 'Expedia service type'])
-          if (expediaServiceType !== undefined) updateData.expedia_service_type_id = await resolveServiceType(expediaServiceType)
-          const expediaFrequency = findValue(row, ['Expedia Frequency', 'Expedia frequency'])
-          if (expediaFrequency !== undefined) updateData.expedia_frequency_id = await resolveFrequency(expediaFrequency)
-          const expediaPriority = findValue(row, ['Expedia Priority', 'Expedia priority'])
-          if (expediaPriority !== undefined) updateData.expedia_priority_id = await resolvePriority(expediaPriority)
-          const expediaAccessLevelBool = parseBoolCell(findValue(row, ['Expedia Access Level', 'Expedia access level']))
-          if (expediaAccessLevelBool !== undefined) updateData.expedia_access_level = expediaAccessLevelBool
+          if (expediaIdVal !== undefined) {
+            const n = parseInt(expediaIdVal)
+            if (!isNaN(n)) updateData.expedia_id = n
+          }
+          const expediaStatus = findValue(row, [
+            'Expedia Status',
+            'Expedia status'
+          ])
+          if (expediaStatus !== undefined)
+            updateData.expedia_status = expediaStatus
+          const expediaBillingType = findValue(row, [
+            'Expedia Billing Type',
+            'Expedia billing type'
+          ])
+          if (expediaBillingType !== undefined)
+            updateData.expedia_billing_type_id =
+              await resolveBillingType(expediaBillingType)
+          const expediaServiceType = findValue(row, [
+            'Expedia Service Type',
+            'Expedia service type'
+          ])
+          if (expediaServiceType !== undefined)
+            updateData.expedia_service_type_id =
+              await resolveServiceType(expediaServiceType)
+          const expediaFrequency = findValue(row, [
+            'Expedia Frequency',
+            'Expedia frequency'
+          ])
+          if (expediaFrequency !== undefined)
+            updateData.expedia_frequency_id =
+              await resolveFrequency(expediaFrequency)
+          const expediaPriority = findValue(row, [
+            'Expedia Priority',
+            'Expedia priority'
+          ])
+          if (expediaPriority !== undefined)
+            updateData.expedia_priority_id =
+              await resolvePriority(expediaPriority)
+          const expediaAccessLevelBool = parseBoolCell(
+            findValue(row, ['Expedia Access Level', 'Expedia access level'])
+          )
+          if (expediaAccessLevelBool !== undefined)
+            updateData.expedia_access_level = expediaAccessLevelBool
           const expediaFrom = findValue(row, ['Expedia From', 'Expedia from'])
           if (expediaFrom !== undefined) updateData.expedia_from = expediaFrom
           const expediaTo = findValue(row, ['Expedia To', 'Expedia to'])
           if (expediaTo !== undefined) updateData.expedia_to = expediaTo
-          const expediaSchedulerBool = parseBoolCell(findValue(row, ['Expedia Scheduler', 'Expedia scheduler']))
-          if (expediaSchedulerBool !== undefined) updateData.expedia_scheduler = expediaSchedulerBool
-          const expediaDurationVal = findValue(row, ['Expedia Duration', 'Expedia duration'])
-          if (expediaDurationVal !== undefined) { const n = parseInt(expediaDurationVal); if (!isNaN(n)) updateData.expedia_duration = n }
-          const expediaServiceFeeVal = findValue(row, ['Expedia Service Fee', 'Expedia service fee'])
-          if (expediaServiceFeeVal !== undefined) { const n = parseInt(expediaServiceFeeVal); if (!isNaN(n)) updateData.expedia_service_fee = n }
+          const expediaSchedulerBool = parseBoolCell(
+            findValue(row, ['Expedia Scheduler', 'Expedia scheduler'])
+          )
+          if (expediaSchedulerBool !== undefined)
+            updateData.expedia_scheduler = expediaSchedulerBool
+          const expediaDurationVal = findValue(row, [
+            'Expedia Duration',
+            'Expedia duration'
+          ])
+          if (expediaDurationVal !== undefined) {
+            const n = parseInt(expediaDurationVal)
+            if (!isNaN(n)) updateData.expedia_duration = n
+          }
+          const expediaServiceFeeVal = findValue(row, [
+            'Expedia Service Fee',
+            'Expedia service fee'
+          ])
+          if (expediaServiceFeeVal !== undefined) {
+            const n = parseInt(expediaServiceFeeVal)
+            if (!isNaN(n)) updateData.expedia_service_fee = n
+          }
           const expediaCrs = findValue(row, ['Expedia CRS', 'Expedia crs'])
           if (expediaCrs !== undefined) updateData.expedia_crs = expediaCrs
-          const expediaCrsDb = findValue(row, ['Expedia CRS DB', 'Expedia crs db'])
-          if (expediaCrsDb !== undefined) updateData.expedia_crs_db = expediaCrsDb
-          const expediaRunDateFrom = findValue(row, ['Expedia Run Date From', 'Expedia run date from'])
-          if (expediaRunDateFrom !== undefined) updateData.expedia_run_date_from = expediaRunDateFrom
-          const expediaRunDateTo = findValue(row, ['Expedia Run Date To', 'Expedia run date to'])
-          if (expediaRunDateTo !== undefined) updateData.expedia_run_date_to = expediaRunDateTo
-          const expediaRunDateDbFrom = findValue(row, ['Expedia Run Date DB From', 'Expedia run date db from'])
-          if (expediaRunDateDbFrom !== undefined) updateData.expedia_run_date_db_from = expediaRunDateDbFrom
-          const expediaRunDateDbTo = findValue(row, ['Expedia Run Date DB To', 'Expedia run date db to'])
-          if (expediaRunDateDbTo !== undefined) updateData.expedia_run_date_db_to = expediaRunDateDbTo
-          const expediaRevisedDate = findValue(row, ['Expedia Revised Date', 'Expedia revised date'])
-          if (expediaRevisedDate !== undefined) updateData.expedia_revised_date = expediaRevisedDate
-          const expediaSchedulerReviewFrom = findValue(row, ['Expedia Scheduler Review From', 'Expedia scheduler review from'])
-          if (expediaSchedulerReviewFrom !== undefined) updateData.expedia_scheduler_review_from = expediaSchedulerReviewFrom
-          const expediaSchedulerReviewTo = findValue(row, ['Expedia Scheduler Review To', 'Expedia scheduler review to'])
-          if (expediaSchedulerReviewTo !== undefined) updateData.expedia_scheduler_review_to = expediaSchedulerReviewTo
-          const expediaSchedulerDb = findValue(row, ['Expedia Scheduler DB', 'Expedia scheduler db'])
-          if (expediaSchedulerDb !== undefined) updateData.expedia_scheduler_db = expediaSchedulerDb
-          const expediaSchedulerReviewDbFrom = findValue(row, ['Expedia Scheduler Review DB From', 'Expedia scheduler review db from'])
-          if (expediaSchedulerReviewDbFrom !== undefined) updateData.expedia_scheduler_review_db_from = expediaSchedulerReviewDbFrom
-          const expediaSchedulerReviewDbTo = findValue(row, ['Expedia Scheduler Review DB To', 'Expedia scheduler review db to'])
-          if (expediaSchedulerReviewDbTo !== undefined) updateData.expedia_scheduler_review_db_to = expediaSchedulerReviewDbTo
-          const expediaDbDurationVal = findValue(row, ['Expedia DB Duration', 'Expedia db duration'])
-          if (expediaDbDurationVal !== undefined) { const n = parseInt(expediaDbDurationVal); if (!isNaN(n)) updateData.expedia_db_duration = n }
-          const expediaCredVerified = parseBoolCell(findValue(row, ['Expedia Credential Verified', 'Expedia credential verified']))
-          if (expediaCredVerified !== undefined) updateData.expedia_credential_verified = expediaCredVerified
-          const expediaOtpNumber = findValue(row, ['Expedia OTP Number', 'Expedia otp number'])
-          if (expediaOtpNumber !== undefined) updateData.expedia_otp_number = expediaOtpNumber
+          const expediaCrsDb = findValue(row, [
+            'Expedia CRS DB',
+            'Expedia crs db'
+          ])
+          if (expediaCrsDb !== undefined)
+            updateData.expedia_crs_db = expediaCrsDb
+          const expediaRunDateFrom = findValue(row, [
+            'Expedia Run Date From',
+            'Expedia run date from'
+          ])
+          if (expediaRunDateFrom !== undefined)
+            updateData.expedia_run_date_from = expediaRunDateFrom
+          const expediaRunDateTo = findValue(row, [
+            'Expedia Run Date To',
+            'Expedia run date to'
+          ])
+          if (expediaRunDateTo !== undefined)
+            updateData.expedia_run_date_to = expediaRunDateTo
+          const expediaRunDateDbFrom = findValue(row, [
+            'Expedia Run Date DB From',
+            'Expedia run date db from'
+          ])
+          if (expediaRunDateDbFrom !== undefined)
+            updateData.expedia_run_date_db_from = expediaRunDateDbFrom
+          const expediaRunDateDbTo = findValue(row, [
+            'Expedia Run Date DB To',
+            'Expedia run date db to'
+          ])
+          if (expediaRunDateDbTo !== undefined)
+            updateData.expedia_run_date_db_to = expediaRunDateDbTo
+          const expediaRevisedDate = findValue(row, [
+            'Expedia Revised Date',
+            'Expedia revised date'
+          ])
+          if (expediaRevisedDate !== undefined)
+            updateData.expedia_revised_date = expediaRevisedDate
+          const expediaSchedulerReviewFrom = findValue(row, [
+            'Expedia Scheduler Review From',
+            'Expedia scheduler review from'
+          ])
+          if (expediaSchedulerReviewFrom !== undefined)
+            updateData.expedia_scheduler_review_from =
+              expediaSchedulerReviewFrom
+          const expediaSchedulerReviewTo = findValue(row, [
+            'Expedia Scheduler Review To',
+            'Expedia scheduler review to'
+          ])
+          if (expediaSchedulerReviewTo !== undefined)
+            updateData.expedia_scheduler_review_to = expediaSchedulerReviewTo
+          const expediaSchedulerDb = findValue(row, [
+            'Expedia Scheduler DB',
+            'Expedia scheduler db'
+          ])
+          if (expediaSchedulerDb !== undefined)
+            updateData.expedia_scheduler_db = expediaSchedulerDb
+          const expediaSchedulerReviewDbFrom = findValue(row, [
+            'Expedia Scheduler Review DB From',
+            'Expedia scheduler review db from'
+          ])
+          if (expediaSchedulerReviewDbFrom !== undefined)
+            updateData.expedia_scheduler_review_db_from =
+              expediaSchedulerReviewDbFrom
+          const expediaSchedulerReviewDbTo = findValue(row, [
+            'Expedia Scheduler Review DB To',
+            'Expedia scheduler review db to'
+          ])
+          if (expediaSchedulerReviewDbTo !== undefined)
+            updateData.expedia_scheduler_review_db_to =
+              expediaSchedulerReviewDbTo
+          const expediaDbDurationVal = findValue(row, [
+            'Expedia DB Duration',
+            'Expedia db duration'
+          ])
+          if (expediaDbDurationVal !== undefined) {
+            const n = parseInt(expediaDbDurationVal)
+            if (!isNaN(n)) updateData.expedia_db_duration = n
+          }
+          const expediaCredVerified = parseBoolCell(
+            findValue(row, [
+              'Expedia Credential Verified',
+              'Expedia credential verified'
+            ])
+          )
+          if (expediaCredVerified !== undefined)
+            updateData.expedia_credential_verified = expediaCredVerified
+          const expediaOtpNumber = findValue(row, [
+            'Expedia OTP Number',
+            'Expedia otp number'
+          ])
+          if (expediaOtpNumber !== undefined)
+            updateData.expedia_otp_number = expediaOtpNumber
 
           // From DB / To DB
           const fromDb = findValue(row, ['From DB', 'From db'])
@@ -2401,158 +3048,377 @@ export class PropertyService implements IPropertyService {
 
           // ── Booking OTA fields ────────────────────────────────────────────
           const bookingIdVal = findValue(row, ['Booking ID', 'Booking id'])
-          if (bookingIdVal !== undefined) { const n = parseInt(bookingIdVal); if (!isNaN(n)) updateData.booking_id = n }
-          const bookingStatus = findValue(row, ['Booking Status', 'Booking status'])
-          if (bookingStatus !== undefined) updateData.booking_status = bookingStatus
-          const bookingBillingType = findValue(row, ['Booking Billing Type', 'Booking billing type'])
-          if (bookingBillingType !== undefined) updateData.booking_billing_type_id = await resolveBillingType(bookingBillingType)
-          const bookingServiceType = findValue(row, ['Booking Service Type', 'Booking service type'])
-          if (bookingServiceType !== undefined) updateData.booking_service_type_id = await resolveServiceType(bookingServiceType)
-          const bookingFrequency = findValue(row, ['Booking Frequency', 'Booking frequency'])
-          if (bookingFrequency !== undefined) updateData.booking_frequency_id = await resolveFrequency(bookingFrequency)
-          const bookingPriority = findValue(row, ['Booking Priority', 'Booking priority'])
-          if (bookingPriority !== undefined) updateData.booking_priority_id = await resolvePriority(bookingPriority)
-          const bookingAccessLevelBool = parseBoolCell(findValue(row, ['Booking Access Level', 'Booking access level']))
-          if (bookingAccessLevelBool !== undefined) updateData.booking_access_level = bookingAccessLevelBool
+          if (bookingIdVal !== undefined) {
+            const n = parseInt(bookingIdVal)
+            if (!isNaN(n)) updateData.booking_id = n
+          }
+          const bookingStatus = findValue(row, [
+            'Booking Status',
+            'Booking status'
+          ])
+          if (bookingStatus !== undefined)
+            updateData.booking_status = bookingStatus
+          const bookingBillingType = findValue(row, [
+            'Booking Billing Type',
+            'Booking billing type'
+          ])
+          if (bookingBillingType !== undefined)
+            updateData.booking_billing_type_id =
+              await resolveBillingType(bookingBillingType)
+          const bookingServiceType = findValue(row, [
+            'Booking Service Type',
+            'Booking service type'
+          ])
+          if (bookingServiceType !== undefined)
+            updateData.booking_service_type_id =
+              await resolveServiceType(bookingServiceType)
+          const bookingFrequency = findValue(row, [
+            'Booking Frequency',
+            'Booking frequency'
+          ])
+          if (bookingFrequency !== undefined)
+            updateData.booking_frequency_id =
+              await resolveFrequency(bookingFrequency)
+          const bookingPriority = findValue(row, [
+            'Booking Priority',
+            'Booking priority'
+          ])
+          if (bookingPriority !== undefined)
+            updateData.booking_priority_id =
+              await resolvePriority(bookingPriority)
+          const bookingAccessLevelBool = parseBoolCell(
+            findValue(row, ['Booking Access Level', 'Booking access level'])
+          )
+          if (bookingAccessLevelBool !== undefined)
+            updateData.booking_access_level = bookingAccessLevelBool
           const bookingFrom = findValue(row, ['Booking From', 'Booking from'])
           if (bookingFrom !== undefined) updateData.booking_from = bookingFrom
           const bookingTo = findValue(row, ['Booking To', 'Booking to'])
           if (bookingTo !== undefined) updateData.booking_to = bookingTo
-          const bookingSchedulerBool = parseBoolCell(findValue(row, ['Booking Scheduler', 'Booking scheduler']))
-          if (bookingSchedulerBool !== undefined) updateData.booking_scheduler = bookingSchedulerBool
-          const bookingDurationVal = findValue(row, ['Booking Duration', 'Booking duration'])
-          if (bookingDurationVal !== undefined) { const n = parseInt(bookingDurationVal); if (!isNaN(n)) updateData.booking_duration = n }
-          const bookingServiceFeeVal = findValue(row, ['Booking Service Fee', 'Booking service fee'])
-          if (bookingServiceFeeVal !== undefined) { const n = parseInt(bookingServiceFeeVal); if (!isNaN(n)) updateData.booking_service_fee = n }
+          const bookingSchedulerBool = parseBoolCell(
+            findValue(row, ['Booking Scheduler', 'Booking scheduler'])
+          )
+          if (bookingSchedulerBool !== undefined)
+            updateData.booking_scheduler = bookingSchedulerBool
+          const bookingDurationVal = findValue(row, [
+            'Booking Duration',
+            'Booking duration'
+          ])
+          if (bookingDurationVal !== undefined) {
+            const n = parseInt(bookingDurationVal)
+            if (!isNaN(n)) updateData.booking_duration = n
+          }
+          const bookingServiceFeeVal = findValue(row, [
+            'Booking Service Fee',
+            'Booking service fee'
+          ])
+          if (bookingServiceFeeVal !== undefined) {
+            const n = parseInt(bookingServiceFeeVal)
+            if (!isNaN(n)) updateData.booking_service_fee = n
+          }
           const bookingCrs = findValue(row, ['Booking CRS', 'Booking crs'])
           if (bookingCrs !== undefined) updateData.booking_crs = bookingCrs
-          const bookingRunDate = findValue(row, ['Booking Run Date', 'Booking run date'])
-          if (bookingRunDate !== undefined) updateData.booking_run_date = bookingRunDate
-          const bookingRevisedDate = findValue(row, ['Booking Revised Date', 'Booking revised date'])
-          if (bookingRevisedDate !== undefined) updateData.booking_revised_date = bookingRevisedDate
-          const bookingCredVerified = parseBoolCell(findValue(row, ['Booking Credential Verified', 'Booking credential verified']))
-          if (bookingCredVerified !== undefined) updateData.booking_credential_verified = bookingCredVerified
-          const bookingOtpNumber = findValue(row, ['Booking OTP Number', 'Booking otp number'])
-          if (bookingOtpNumber !== undefined) updateData.booking_otp_number = bookingOtpNumber
-          const bookingOtpPhone = findValue(row, ['Booking OTP Phone', 'Booking otp phone'])
-          if (bookingOtpPhone !== undefined) updateData.booking_otp_phone = bookingOtpPhone
+          const bookingRunDate = findValue(row, [
+            'Booking Run Date',
+            'Booking run date'
+          ])
+          if (bookingRunDate !== undefined)
+            updateData.booking_run_date = bookingRunDate
+          const bookingRevisedDate = findValue(row, [
+            'Booking Revised Date',
+            'Booking revised date'
+          ])
+          if (bookingRevisedDate !== undefined)
+            updateData.booking_revised_date = bookingRevisedDate
+          const bookingCredVerified = parseBoolCell(
+            findValue(row, [
+              'Booking Credential Verified',
+              'Booking credential verified'
+            ])
+          )
+          if (bookingCredVerified !== undefined)
+            updateData.booking_credential_verified = bookingCredVerified
+          const bookingOtpNumber = findValue(row, [
+            'Booking OTP Number',
+            'Booking otp number'
+          ])
+          if (bookingOtpNumber !== undefined)
+            updateData.booking_otp_number = bookingOtpNumber
+          const bookingOtpPhone = findValue(row, [
+            'Booking OTP Phone',
+            'Booking otp phone'
+          ])
+          if (bookingOtpPhone !== undefined)
+            updateData.booking_otp_phone = bookingOtpPhone
 
           // ── Agoda OTA fields ──────────────────────────────────────────────
           const agodaIdVal = findValue(row, ['Agoda ID', 'Agoda id'])
-          if (agodaIdVal !== undefined) { const n = parseInt(agodaIdVal); if (!isNaN(n)) updateData.agoda_id = n }
+          if (agodaIdVal !== undefined) {
+            const n = parseInt(agodaIdVal)
+            if (!isNaN(n)) updateData.agoda_id = n
+          }
           const agodaStatus = findValue(row, ['Agoda Status', 'Agoda status'])
           if (agodaStatus !== undefined) updateData.agoda_status = agodaStatus
-          const agodaBillingType = findValue(row, ['Agoda Billing Type', 'Agoda billing type'])
-          if (agodaBillingType !== undefined) updateData.agoda_billing_type_id = await resolveBillingType(agodaBillingType)
-          const agodaServiceType = findValue(row, ['Agoda Service Type', 'Agoda service type'])
-          if (agodaServiceType !== undefined) updateData.agoda_service_type_id = await resolveServiceType(agodaServiceType)
-          const agodaFrequency = findValue(row, ['Agoda Frequency', 'Agoda frequency'])
-          if (agodaFrequency !== undefined) updateData.agoda_frequency_id = await resolveFrequency(agodaFrequency)
-          const agodaPriority = findValue(row, ['Agoda Priority', 'Agoda priority'])
-          if (agodaPriority !== undefined) updateData.agoda_priority_id = await resolvePriority(agodaPriority)
-          const agodaAccessLevelBool = parseBoolCell(findValue(row, ['Agoda Access Level', 'Agoda access level']))
-          if (agodaAccessLevelBool !== undefined) updateData.agoda_access_level = agodaAccessLevelBool
+          const agodaBillingType = findValue(row, [
+            'Agoda Billing Type',
+            'Agoda billing type'
+          ])
+          if (agodaBillingType !== undefined)
+            updateData.agoda_billing_type_id =
+              await resolveBillingType(agodaBillingType)
+          const agodaServiceType = findValue(row, [
+            'Agoda Service Type',
+            'Agoda service type'
+          ])
+          if (agodaServiceType !== undefined)
+            updateData.agoda_service_type_id =
+              await resolveServiceType(agodaServiceType)
+          const agodaFrequency = findValue(row, [
+            'Agoda Frequency',
+            'Agoda frequency'
+          ])
+          if (agodaFrequency !== undefined)
+            updateData.agoda_frequency_id =
+              await resolveFrequency(agodaFrequency)
+          const agodaPriority = findValue(row, [
+            'Agoda Priority',
+            'Agoda priority'
+          ])
+          if (agodaPriority !== undefined)
+            updateData.agoda_priority_id = await resolvePriority(agodaPriority)
+          const agodaAccessLevelBool = parseBoolCell(
+            findValue(row, ['Agoda Access Level', 'Agoda access level'])
+          )
+          if (agodaAccessLevelBool !== undefined)
+            updateData.agoda_access_level = agodaAccessLevelBool
           const agodaFrom = findValue(row, ['Agoda From', 'Agoda from'])
           if (agodaFrom !== undefined) updateData.agoda_from = agodaFrom
           const agodaTo = findValue(row, ['Agoda To', 'Agoda to'])
           if (agodaTo !== undefined) updateData.agoda_to = agodaTo
-          const agodaSchedulerBool = parseBoolCell(findValue(row, ['Agoda Scheduler', 'Agoda scheduler']))
-          if (agodaSchedulerBool !== undefined) updateData.agoda_scheduler = agodaSchedulerBool
-          const agodaDurationVal = findValue(row, ['Agoda Duration', 'Agoda duration'])
-          if (agodaDurationVal !== undefined) { const n = parseInt(agodaDurationVal); if (!isNaN(n)) updateData.agoda_duration = n }
-          const agodaServiceFeeVal = findValue(row, ['Agoda Service Fee', 'Agoda service fee'])
-          if (agodaServiceFeeVal !== undefined) { const n = parseInt(agodaServiceFeeVal); if (!isNaN(n)) updateData.agoda_service_fee = n }
+          const agodaSchedulerBool = parseBoolCell(
+            findValue(row, ['Agoda Scheduler', 'Agoda scheduler'])
+          )
+          if (agodaSchedulerBool !== undefined)
+            updateData.agoda_scheduler = agodaSchedulerBool
+          const agodaDurationVal = findValue(row, [
+            'Agoda Duration',
+            'Agoda duration'
+          ])
+          if (agodaDurationVal !== undefined) {
+            const n = parseInt(agodaDurationVal)
+            if (!isNaN(n)) updateData.agoda_duration = n
+          }
+          const agodaServiceFeeVal = findValue(row, [
+            'Agoda Service Fee',
+            'Agoda service fee'
+          ])
+          if (agodaServiceFeeVal !== undefined) {
+            const n = parseInt(agodaServiceFeeVal)
+            if (!isNaN(n)) updateData.agoda_service_fee = n
+          }
           const agodaCrs = findValue(row, ['Agoda CRS', 'Agoda crs'])
           if (agodaCrs !== undefined) updateData.agoda_crs = agodaCrs
-          const agodaRunDate = findValue(row, ['Agoda Run Date', 'Agoda run date'])
-          if (agodaRunDate !== undefined) updateData.agoda_run_date = agodaRunDate
-          const agodaRevisedDate = findValue(row, ['Agoda Revised Date', 'Agoda revised date'])
-          if (agodaRevisedDate !== undefined) updateData.agoda_revised_date = agodaRevisedDate
-          const agodaCredVerified = parseBoolCell(findValue(row, ['Agoda Credential Verified', 'Agoda credential verified']))
-          if (agodaCredVerified !== undefined) updateData.agoda_credential_verified = agodaCredVerified
-          const agodaOtpNumber = findValue(row, ['Agoda OTP Number', 'Agoda otp number'])
-          if (agodaOtpNumber !== undefined) updateData.agoda_otp_number = agodaOtpNumber
+          const agodaRunDate = findValue(row, [
+            'Agoda Run Date',
+            'Agoda run date'
+          ])
+          if (agodaRunDate !== undefined)
+            updateData.agoda_run_date = agodaRunDate
+          const agodaRevisedDate = findValue(row, [
+            'Agoda Revised Date',
+            'Agoda revised date'
+          ])
+          if (agodaRevisedDate !== undefined)
+            updateData.agoda_revised_date = agodaRevisedDate
+          const agodaCredVerified = parseBoolCell(
+            findValue(row, [
+              'Agoda Credential Verified',
+              'Agoda credential verified'
+            ])
+          )
+          if (agodaCredVerified !== undefined)
+            updateData.agoda_credential_verified = agodaCredVerified
+          const agodaOtpNumber = findValue(row, [
+            'Agoda OTP Number',
+            'Agoda otp number'
+          ])
+          if (agodaOtpNumber !== undefined)
+            updateData.agoda_otp_number = agodaOtpNumber
 
           // ── Misc fields ───────────────────────────────────────────────────
-          const needAnotherDomain = parseBoolCell(findValue(row, ['Need Another Domain', 'Need another domain']))
-          if (needAnotherDomain !== undefined) updateData.need_another_domain = needAnotherDomain
+          const needAnotherDomain = parseBoolCell(
+            findValue(row, ['Need Another Domain', 'Need another domain'])
+          )
+          if (needAnotherDomain !== undefined)
+            updateData.need_another_domain = needAnotherDomain
           const salesRep = findValue(row, ['Sales Rep', 'Sales rep'])
           if (salesRep !== undefined) updateData.sales_rep = salesRep
-          const caseContactEmail = findValue(row, ['Case Contact Email', 'Case contact email', 'Primary Case Email'])
-          if (caseContactEmail !== undefined) updateData.primary_case_email = caseContactEmail
+          const caseContactEmail = findValue(row, [
+            'Case Contact Email',
+            'Case contact email',
+            'Primary Case Email'
+          ])
+          if (caseContactEmail !== undefined)
+            updateData.primary_case_email = caseContactEmail
 
           // ── QP / FP credentials (stored on Property, encrypted) ───────────
           const qpUsername = findValue(row, ['Qp Username', 'QP Username'])
           if (qpUsername !== undefined) updateData.qp_username = qpUsername
           const qpPasswordVal = findValue(row, ['Qp Password', 'QP Password'])
-          if (qpPasswordVal !== undefined) updateData.qp_password = this.encryptionUtil.encrypt(qpPasswordVal)
-          const qpApiKeyVal = findValue(row, ['Qp Api Key', 'QP Api Key', 'QP API Key'])
-          if (qpApiKeyVal !== undefined) updateData.qp_api_key = this.encryptionUtil.encrypt(qpApiKeyVal)
+          if (qpPasswordVal !== undefined)
+            updateData.qp_password = this.encryptionUtil.encrypt(qpPasswordVal)
+          const qpApiKeyVal = findValue(row, [
+            'Qp Api Key',
+            'QP Api Key',
+            'QP API Key'
+          ])
+          if (qpApiKeyVal !== undefined)
+            updateData.qp_api_key = this.encryptionUtil.encrypt(qpApiKeyVal)
           const fpUsernameVal = findValue(row, ['FP Username', 'Fp Username'])
-          if (fpUsernameVal !== undefined) updateData.fp_username = fpUsernameVal
+          if (fpUsernameVal !== undefined)
+            updateData.fp_username = fpUsernameVal
           const fpPasswordVal = findValue(row, ['FP Password', 'Fp Password'])
-          if (fpPasswordVal !== undefined) updateData.fp_password = this.encryptionUtil.encrypt(fpPasswordVal)
-          const webmailPasswordVal = findValue(row, ['Webmail Password', 'Webmail password'])
-          if (webmailPasswordVal !== undefined) updateData.webmail_password = this.encryptionUtil.encrypt(webmailPasswordVal)
+          if (fpPasswordVal !== undefined)
+            updateData.fp_password = this.encryptionUtil.encrypt(fpPasswordVal)
+          const webmailPasswordVal = findValue(row, [
+            'Webmail Password',
+            'Webmail password'
+          ])
+          if (webmailPasswordVal !== undefined)
+            updateData.webmail_password =
+              this.encryptionUtil.encrypt(webmailPasswordVal)
 
           // ── Credential fields (PropertyCredentials collection) ─────────────
-          const expediaUsername = findValue(row, ['Expedia Username', 'Expedia username'])
-          const expediaPassword = findValue(row, ['Expedia Password', 'Expedia password'])
-          const agodaUsername = findValue(row, ['Agoda Username', 'Agoda username'])
-          const agodaPassword = findValue(row, ['Agoda Password', 'Agoda password'])
-          const bookingUsername = findValue(row, ['Booking Username', 'Booking username'])
-          const bookingPassword = findValue(row, ['Booking Password', 'Booking password'])
-          const expediaSecondaryUsername = findValue(row, ['Expedia Secondary Username', 'Expedia secondary username'])
-          const expediaSecondaryPassword = findValue(row, ['Expedia Secondary Password', 'Expedia secondary password'])
-          const bookingSecondaryUsername = findValue(row, ['Booking Secondary Username', 'Booking secondary username'])
-          const bookingSecondaryPassword = findValue(row, ['Booking Secondary Password', 'Booking secondary password'])
-          const agodaSecondaryUsername = findValue(row, ['Agoda Secondary Username', 'Agoda secondary username'])
-          const agodaSecondaryPassword = findValue(row, ['Agoda Secondary Password', 'Agoda secondary password'])
+          const expediaUsername = findValue(row, [
+            'Expedia Username',
+            'Expedia username'
+          ])
+          const expediaPassword = findValue(row, [
+            'Expedia Password',
+            'Expedia password'
+          ])
+          const agodaUsername = findValue(row, [
+            'Agoda Username',
+            'Agoda username'
+          ])
+          const agodaPassword = findValue(row, [
+            'Agoda Password',
+            'Agoda password'
+          ])
+          const bookingUsername = findValue(row, [
+            'Booking Username',
+            'Booking username'
+          ])
+          const bookingPassword = findValue(row, [
+            'Booking Password',
+            'Booking password'
+          ])
+          const expediaSecondaryUsername = findValue(row, [
+            'Expedia Secondary Username',
+            'Expedia secondary username'
+          ])
+          const expediaSecondaryPassword = findValue(row, [
+            'Expedia Secondary Password',
+            'Expedia secondary password'
+          ])
+          const bookingSecondaryUsername = findValue(row, [
+            'Booking Secondary Username',
+            'Booking secondary username'
+          ])
+          const bookingSecondaryPassword = findValue(row, [
+            'Booking Secondary Password',
+            'Booking secondary password'
+          ])
+          const agodaSecondaryUsername = findValue(row, [
+            'Agoda Secondary Username',
+            'Agoda secondary username'
+          ])
+          const agodaSecondaryPassword = findValue(row, [
+            'Agoda Secondary Password',
+            'Agoda secondary password'
+          ])
 
           // Validate credential pairs: if one is provided, the other must be too
           if (!!expediaUsername !== !!expediaPassword) {
-            result.errors.push({ row: rowNumber, propertyName: existingProperty.name, error: 'Expedia username and password must be provided together' })
+            result.errors.push({
+              row: rowNumber,
+              propertyName: existingProperty.name,
+              error: 'Expedia username and password must be provided together'
+            })
             result.failureCount++
             continue
           }
           if (!!agodaUsername !== !!agodaPassword) {
-            result.errors.push({ row: rowNumber, propertyName: existingProperty.name, error: 'Agoda username and password must be provided together' })
+            result.errors.push({
+              row: rowNumber,
+              propertyName: existingProperty.name,
+              error: 'Agoda username and password must be provided together'
+            })
             result.failureCount++
             continue
           }
           if (!!bookingUsername !== !!bookingPassword) {
-            result.errors.push({ row: rowNumber, propertyName: existingProperty.name, error: 'Booking username and password must be provided together' })
+            result.errors.push({
+              row: rowNumber,
+              propertyName: existingProperty.name,
+              error: 'Booking username and password must be provided together'
+            })
             result.failureCount++
             continue
           }
           if (!!expediaSecondaryUsername !== !!expediaSecondaryPassword) {
-            result.errors.push({ row: rowNumber, propertyName: existingProperty.name, error: 'Expedia secondary username and password must be provided together' })
+            result.errors.push({
+              row: rowNumber,
+              propertyName: existingProperty.name,
+              error:
+                'Expedia secondary username and password must be provided together'
+            })
             result.failureCount++
             continue
           }
           if (!!bookingSecondaryUsername !== !!bookingSecondaryPassword) {
-            result.errors.push({ row: rowNumber, propertyName: existingProperty.name, error: 'Booking secondary username and password must be provided together' })
+            result.errors.push({
+              row: rowNumber,
+              propertyName: existingProperty.name,
+              error:
+                'Booking secondary username and password must be provided together'
+            })
             result.failureCount++
             continue
           }
           if (!!agodaSecondaryUsername !== !!agodaSecondaryPassword) {
-            result.errors.push({ row: rowNumber, propertyName: existingProperty.name, error: 'Agoda secondary username and password must be provided together' })
+            result.errors.push({
+              row: rowNumber,
+              propertyName: existingProperty.name,
+              error:
+                'Agoda secondary username and password must be provided together'
+            })
             result.failureCount++
             continue
           }
 
           const hasCredentialsUpdate =
-            expediaUsername || expediaPassword ||
-            agodaUsername || agodaPassword ||
-            bookingUsername || bookingPassword ||
-            expediaSecondaryUsername || expediaSecondaryPassword ||
-            bookingSecondaryUsername || bookingSecondaryPassword ||
-            agodaSecondaryUsername || agodaSecondaryPassword
+            expediaUsername ||
+            expediaPassword ||
+            agodaUsername ||
+            agodaPassword ||
+            bookingUsername ||
+            bookingPassword ||
+            expediaSecondaryUsername ||
+            expediaSecondaryPassword ||
+            bookingSecondaryUsername ||
+            bookingSecondaryPassword ||
+            agodaSecondaryUsername ||
+            agodaSecondaryPassword
 
           const hasPropertyUpdate = Object.keys(updateData).length > 0
 
           if (!hasPropertyUpdate && !hasCredentialsUpdate) {
-            result.errors.push({ row: rowNumber, propertyName: existingProperty.name, error: 'No fields to update (all cells are empty)' })
+            result.errors.push({
+              row: rowNumber,
+              propertyName: existingProperty.name,
+              error: 'No fields to update (all cells are empty)'
+            })
             result.failureCount++
             continue
           }
@@ -2586,24 +3452,51 @@ export class PropertyService implements IPropertyService {
           // Apply credentials update
           if (hasCredentialsUpdate) {
             const credentialsData: Record<string, any> = {}
-            if (expediaUsername !== undefined) credentialsData.expediaUsername = expediaUsername
-            if (expediaPassword) credentialsData.expediaPassword = this.encryptionUtil.encrypt(expediaPassword)
-            if (agodaUsername !== undefined) credentialsData.agodaUsername = agodaUsername
-            if (agodaPassword) credentialsData.agodaPassword = this.encryptionUtil.encrypt(agodaPassword)
-            if (bookingUsername !== undefined) credentialsData.bookingUsername = bookingUsername
-            if (bookingPassword) credentialsData.bookingPassword = this.encryptionUtil.encrypt(bookingPassword)
-            if (expediaSecondaryUsername !== undefined) credentialsData.expediaSecondaryUsername = expediaSecondaryUsername
-            if (expediaSecondaryPassword) credentialsData.expediaSecondaryPassword = this.encryptionUtil.encrypt(expediaSecondaryPassword)
-            if (bookingSecondaryUsername !== undefined) credentialsData.bookingSecondaryUsername = bookingSecondaryUsername
-            if (bookingSecondaryPassword) credentialsData.bookingSecondaryPassword = this.encryptionUtil.encrypt(bookingSecondaryPassword)
-            if (agodaSecondaryUsername !== undefined) credentialsData.agodaSecondaryUsername = agodaSecondaryUsername
-            if (agodaSecondaryPassword) credentialsData.agodaSecondaryPassword = this.encryptionUtil.encrypt(agodaSecondaryPassword)
+            if (expediaUsername !== undefined)
+              credentialsData.expediaUsername = expediaUsername
+            if (expediaPassword)
+              credentialsData.expediaPassword =
+                this.encryptionUtil.encrypt(expediaPassword)
+            if (agodaUsername !== undefined)
+              credentialsData.agodaUsername = agodaUsername
+            if (agodaPassword)
+              credentialsData.agodaPassword =
+                this.encryptionUtil.encrypt(agodaPassword)
+            if (bookingUsername !== undefined)
+              credentialsData.bookingUsername = bookingUsername
+            if (bookingPassword)
+              credentialsData.bookingPassword =
+                this.encryptionUtil.encrypt(bookingPassword)
+            if (expediaSecondaryUsername !== undefined)
+              credentialsData.expediaSecondaryUsername =
+                expediaSecondaryUsername
+            if (expediaSecondaryPassword)
+              credentialsData.expediaSecondaryPassword =
+                this.encryptionUtil.encrypt(expediaSecondaryPassword)
+            if (bookingSecondaryUsername !== undefined)
+              credentialsData.bookingSecondaryUsername =
+                bookingSecondaryUsername
+            if (bookingSecondaryPassword)
+              credentialsData.bookingSecondaryPassword =
+                this.encryptionUtil.encrypt(bookingSecondaryPassword)
+            if (agodaSecondaryUsername !== undefined)
+              credentialsData.agodaSecondaryUsername = agodaSecondaryUsername
+            if (agodaSecondaryPassword)
+              credentialsData.agodaSecondaryPassword =
+                this.encryptionUtil.encrypt(agodaSecondaryPassword)
 
-            const existingCredentials = await this.credentialsService.findByPropertyId(propertyId)
+            const existingCredentials =
+              await this.credentialsService.findByPropertyId(propertyId)
             if (existingCredentials) {
-              await this.credentialsService.update(existingCredentials.id, credentialsData)
+              await this.credentialsService.update(
+                existingCredentials.id,
+                credentialsData
+              )
             } else {
-              await this.credentialsService.create({ ...credentialsData, property_id: propertyId })
+              await this.credentialsService.create({
+                ...credentialsData,
+                property_id: propertyId
+              })
             }
           }
 
@@ -2618,13 +3511,18 @@ export class PropertyService implements IPropertyService {
           syncQueue.push({ rowNumber, propertyId: existingProperty.id })
         } catch (error) {
           const nameFromRow =
-            findValue(row, ['Property Identifier', 'Property identifier', 'Identifier']) ||
+            findValue(row, [
+              'Property Identifier',
+              'Property identifier',
+              'Identifier'
+            ]) ||
             findValue(row, ['Property Name', 'Property name', 'Name']) ||
             'Unknown'
           result.errors.push({
             row: rowNumber,
             propertyName: nameFromRow,
-            error: error instanceof Error ? error.message : 'Unknown error occurred'
+            error:
+              error instanceof Error ? error.message : 'Unknown error occurred'
           })
           result.failureCount++
         }
@@ -2634,19 +3532,47 @@ export class PropertyService implements IPropertyService {
       if (syncQueue.length > 0) {
         const rowResults: SyncBulkUpsertRowResult[] = await Promise.all(
           syncQueue.map(async ({ rowNumber, propertyId }) => {
-            const p = (await this.repo.findById(propertyId)) as PropertyWithRelations
-            const identifier = String(p?.expedia_id ?? p?.booking_id ?? p?.agoda_id ?? propertyId)
+            const p = (await this.repo.findById(
+              propertyId
+            )) as PropertyWithRelations
+            const identifier = String(
+              p?.expedia_id ?? p?.booking_id ?? p?.agoda_id ?? propertyId
+            )
 
             const [dashboardResult, parserResult] = await Promise.all([
               p
-                ? this.syncUpsertPropertyToDashboard(p).catch(e => ({ success: false, reason: e?.message ?? String(e) }))
-                : Promise.resolve({ success: false, reason: 'Property not found after update' }),
+                ? this.syncUpsertPropertyToDashboard(p).catch(e => ({
+                    success: false,
+                    reason: e?.message ?? String(e)
+                  }))
+                : Promise.resolve({
+                    success: false,
+                    reason: 'Property not found after update'
+                  }),
               p
                 ? this.fanOutPropertyUpdate(
-                    { expedia_id: p.expedia_id ?? null, booking_id: p.booking_id ?? null, agoda_id: p.agoda_id ?? null },
-                    { name: p.name, hotel_address: p.hotel_address, card_descriptor: p.card_descriptor, is_active: p.is_active, expedia_id: p.expedia_id, booking_id: p.booking_id, agoda_id: p.agoda_id }
-                  ).catch(e => ({ success: false, reason: e?.message ?? String(e) }))
-                : Promise.resolve({ success: false, reason: 'Property not found after update' })
+                    {
+                      expedia_id: p.expedia_id ?? null,
+                      booking_id: p.booking_id ?? null,
+                      agoda_id: p.agoda_id ?? null
+                    },
+                    {
+                      name: p.name,
+                      hotel_address: p.hotel_address,
+                      card_descriptor: p.card_descriptor,
+                      is_active: p.is_active,
+                      expedia_id: p.expedia_id,
+                      booking_id: p.booking_id,
+                      agoda_id: p.agoda_id
+                    }
+                  ).catch(e => ({
+                    success: false,
+                    reason: e?.message ?? String(e)
+                  }))
+                : Promise.resolve({
+                    success: false,
+                    reason: 'Property not found after update'
+                  })
             ])
 
             return {
@@ -2663,31 +3589,46 @@ export class PropertyService implements IPropertyService {
         )
 
         // Add rows that failed at DBMS level (not found, no access, etc.)
-        const dbmsFailedResults: SyncBulkUpsertRowResult[] = result.errors.map(e => ({
-          row: e.row,
-          parent_id: e.propertyName,
-          name: e.propertyName,
-          identifier: e.propertyName,
-          action: 'failed' as const,
-          dbms: false,
-          dashboard: { success: false, reason: 'Skipped — DBMS error' },
-          parser:    { success: false, reason: 'Skipped — DBMS error' },
-          error: e.error
-        }))
+        const dbmsFailedResults: SyncBulkUpsertRowResult[] = result.errors.map(
+          e => ({
+            row: e.row,
+            parent_id: e.propertyName,
+            name: e.propertyName,
+            identifier: e.propertyName,
+            action: 'failed' as const,
+            dbms: false,
+            dashboard: { success: false, reason: 'Skipped — DBMS error' },
+            parser: { success: false, reason: 'Skipped — DBMS error' },
+            error: e.error
+          })
+        )
 
-        const allRowResults = [
-          ...dbmsFailedResults,
-          ...rowResults
-        ].sort((a, b) => a.row - b.row)
+        const allRowResults = [...dbmsFailedResults, ...rowResults].sort(
+          (a, b) => a.row - b.row
+        )
 
-        const failedRows = allRowResults.filter(r => !r.dbms || !r.dashboard.success || !r.parser.success)
+        const failedRows = allRowResults.filter(
+          r => !r.dbms || !r.dashboard.success || !r.parser.success
+        )
         const defectRows = failedRows.map(r => {
           const reasons: string[] = []
           if (r.error) reasons.push(r.error)
-          if (!r.dashboard.success && r.dashboard.reason && r.dashboard.reason !== 'Skipped — DBMS error') reasons.push(`Dashboard: ${r.dashboard.reason}`)
-          if (!r.parser.success && r.parser.reason && r.parser.reason !== 'Skipped — DBMS error') reasons.push(`Parser: ${r.parser.reason}`)
+          if (
+            !r.dashboard.success &&
+            r.dashboard.reason &&
+            r.dashboard.reason !== 'Skipped — DBMS error'
+          )
+            reasons.push(`Dashboard: ${r.dashboard.reason}`)
+          if (
+            !r.parser.success &&
+            r.parser.reason &&
+            r.parser.reason !== 'Skipped — DBMS error'
+          )
+            reasons.push(`Parser: ${r.parser.reason}`)
           return {
-            Row: r.row, 'Property Name': r.name, Identifier: r.identifier,
+            Row: r.row,
+            'Property Name': r.name,
+            Identifier: r.identifier,
             DBMS: r.dbms ? 'YES' : 'NO',
             Dashboard: r.dashboard.success ? 'YES' : 'NO',
             Parser: r.parser.success ? 'YES' : 'NO',
@@ -2698,21 +3639,38 @@ export class PropertyService implements IPropertyService {
         const wb = XLSX.utils.book_new()
         XLSX.utils.book_append_sheet(
           wb,
-          XLSX.utils.json_to_sheet(defectRows.length ? defectRows : [{ note: 'All rows synced successfully' }]),
+          XLSX.utils.json_to_sheet(
+            defectRows.length
+              ? defectRows
+              : [{ note: 'All rows synced successfully' }]
+          ),
           'Sync Results'
         )
-        const excelBuffer = Buffer.from(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }))
+        const excelBuffer = Buffer.from(
+          XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
+        )
         const filename = `bulk-update-sync-report-${new Date().toISOString().slice(0, 10)}.xlsx`
 
         this.emailUtil
-          .sendBulkSyncResultEmail(user.email, allRowResults, excelBuffer, filename)
-          .catch(e => this.logger.error(`[email] bulk-update sync report failed: ${e?.message ?? e}`))
+          .sendBulkSyncResultEmail(
+            user.email,
+            allRowResults,
+            excelBuffer,
+            filename
+          )
+          .catch(e =>
+            this.logger.error(
+              `[email] bulk-update sync report failed: ${e?.message ?? e}`
+            )
+          )
       }
 
       return result
     } catch (error) {
       if (error instanceof BadRequestException) throw error
-      throw new BadRequestException(`Failed to process file: ${(error as Error).message}`)
+      throw new BadRequestException(
+        `Failed to process file: ${(error as Error).message}`
+      )
     }
   }
 
@@ -2752,21 +3710,16 @@ export class PropertyService implements IPropertyService {
         await this.repo.delete(id)
         success.push({ id: property.id, name: property.name })
 
-        // Dashboard sync-delete (non-blocking)
-        if (this.dashboardJwtClient) {
-          this.dashboardJwtClient
-            .post(`/api/property/sync-delete/${id}`, {}, { headers: this.syncCommunication.createAuthHeaders() })
-            .then(r => this.logger.log(`[sync] bulk-delete dashboard ${id}: ${JSON.stringify(r.data)}`))
-            .catch(e => this.logger.error(`[sync] bulk-delete dashboard ${id} failed: ${e?.response?.data ? JSON.stringify(e.response.data) : (e?.message ?? e)}`))
-        }
-
         // Scraper sync-delete (non-blocking)
         this.fanOutPropertyDelete({
           expedia_id: property.expedia_id ?? null,
           booking_id: property.booking_id ?? null,
-          agoda_id:   property.agoda_id   ?? null
-        }).catch(e => this.logger.error(`[sync] bulk-delete scraper ${id} failed: ${e?.message ?? e}`))
-
+          agoda_id: property.agoda_id ?? null
+        }).catch(e =>
+          this.logger.error(
+            `[sync] bulk-delete scraper ${id} failed: ${e?.message ?? e}`
+          )
+        )
       } catch (err: any) {
         this.logger.error(`Error deleting property ${id}: ${err.message}`)
         skipped.push({
@@ -2786,6 +3739,12 @@ export class PropertyService implements IPropertyService {
         ...success.map(({ id }) => this.redisService.del(CACHE_KEY(id))),
         this.redisService.deleteByPattern(ALL_PATTERN)
       ])
+
+      this.syncBulkDeleteToDashboard(success.map(({ id }) => id)).catch(e =>
+        this.logger.error(
+          `[sync] bulk-delete dashboard failed: ${e?.message ?? e}`
+        )
+      )
     }
 
     return {
@@ -2838,7 +3797,7 @@ export class PropertyService implements IPropertyService {
     // Delete all property cache keys (all users and individual items)
     await this.redisService.deleteByPattern(ALL_PATTERN)
     await this.redisService.deleteByPattern('property:*')
-    
+
     // Delete all portfolio cache keys (portfolios are used in global filter)
     await this.redisService.deleteByPattern('portfolio:*')
 
@@ -2850,7 +3809,8 @@ export class PropertyService implements IPropertyService {
     )
 
     return {
-      message: 'Cache refreshed successfully. All users will get fresh data on next request.'
+      message:
+        'Cache refreshed successfully. All users will get fresh data on next request.'
     }
   }
 
@@ -2976,7 +3936,7 @@ export class PropertyService implements IPropertyService {
         uniquePortfolioContactEmails.add(portfolio.portfolio_contact_email)
     })
 
-    subportfolios.forEach((subportfolio) => {
+    subportfolios.forEach(subportfolio => {
       subportfolioMap.set(subportfolio.id, {
         id: subportfolio.id,
         name: subportfolio.name,
@@ -3028,19 +3988,25 @@ export class PropertyService implements IPropertyService {
             : String(property.next_due_date)
         )
       if (property.expedia_processor)
-        expediaProcessorMap.set(property.expedia_processor.id, property.expedia_processor)
+        expediaProcessorMap.set(
+          property.expedia_processor.id,
+          property.expedia_processor
+        )
       if (property.booking_processor)
-        bookingProcessorMap.set(property.booking_processor.id, property.booking_processor)
+        bookingProcessorMap.set(
+          property.booking_processor.id,
+          property.booking_processor
+        )
       if (property.agoda_processor)
-        agodaProcessorMap.set(property.agoda_processor.id, property.agoda_processor)
-      if (property.fp_mid)
-        uniqueFpMids.add(property.fp_mid)
+        agodaProcessorMap.set(
+          property.agoda_processor.id,
+          property.agoda_processor
+        )
+      if (property.fp_mid) uniqueFpMids.add(property.fp_mid)
       if (property.stripe_account_email)
         uniqueStripeAccountEmails.add(property.stripe_account_email)
-      if (property.from)
-        uniqueFromDates.add(property.from)
-      if (property.to)
-        uniqueToDates.add(property.to)
+      if (property.from) uniqueFromDates.add(property.from)
+      if (property.to) uniqueToDates.add(property.to)
       if (property.portfolio?.id && property.portfolio?.name) {
         portfolioMap.set(property.portfolio.id, {
           id: property.portfolio.id,
@@ -3053,11 +4019,20 @@ export class PropertyService implements IPropertyService {
         uniquePortfolioContacts.add(property.portfolio_contact)
       if (property.fp_username) uniqueFpUsernames.add(property.fp_username)
       if (property.expedia_billing_type)
-        expediaBillingTypeMap.set(property.expedia_billing_type.id, property.expedia_billing_type)
+        expediaBillingTypeMap.set(
+          property.expedia_billing_type.id,
+          property.expedia_billing_type
+        )
       if (property.expedia_service_type)
-        expediaServiceTypeMap.set(property.expedia_service_type.id, property.expedia_service_type)
+        expediaServiceTypeMap.set(
+          property.expedia_service_type.id,
+          property.expedia_service_type
+        )
       if (property.expedia_frequency)
-        expediaFrequencyMap.set(property.expedia_frequency.id, property.expedia_frequency)
+        expediaFrequencyMap.set(
+          property.expedia_frequency.id,
+          property.expedia_frequency
+        )
       if (property.expedia_from) uniqueExpediaFroms.add(property.expedia_from)
       if (property.expedia_to) uniqueExpediaTos.add(property.expedia_to)
       if (property.expedia_duration != null)
@@ -3067,11 +4042,20 @@ export class PropertyService implements IPropertyService {
       if (property.expedia_scheduler != null)
         uniqueExpediaSchedulers.add(String(property.expedia_scheduler))
       if (property.booking_billing_type)
-        bookingBillingTypeMap.set(property.booking_billing_type.id, property.booking_billing_type)
+        bookingBillingTypeMap.set(
+          property.booking_billing_type.id,
+          property.booking_billing_type
+        )
       if (property.booking_service_type)
-        bookingServiceTypeMap.set(property.booking_service_type.id, property.booking_service_type)
+        bookingServiceTypeMap.set(
+          property.booking_service_type.id,
+          property.booking_service_type
+        )
       if (property.booking_frequency)
-        bookingFrequencyMap.set(property.booking_frequency.id, property.booking_frequency)
+        bookingFrequencyMap.set(
+          property.booking_frequency.id,
+          property.booking_frequency
+        )
       if (property.booking_from) uniqueBookingFroms.add(property.booking_from)
       if (property.booking_to) uniqueBookingTos.add(property.booking_to)
       if (property.booking_duration != null)
@@ -3081,11 +4065,20 @@ export class PropertyService implements IPropertyService {
       if (property.booking_scheduler != null)
         uniqueBookingSchedulers.add(String(property.booking_scheduler))
       if (property.agoda_billing_type)
-        agodaBillingTypeMap.set(property.agoda_billing_type.id, property.agoda_billing_type)
+        agodaBillingTypeMap.set(
+          property.agoda_billing_type.id,
+          property.agoda_billing_type
+        )
       if (property.agoda_service_type)
-        agodaServiceTypeMap.set(property.agoda_service_type.id, property.agoda_service_type)
+        agodaServiceTypeMap.set(
+          property.agoda_service_type.id,
+          property.agoda_service_type
+        )
       if (property.agoda_frequency)
-        agodaFrequencyMap.set(property.agoda_frequency.id, property.agoda_frequency)
+        agodaFrequencyMap.set(
+          property.agoda_frequency.id,
+          property.agoda_frequency
+        )
       if (property.agoda_from) uniqueAgodaFroms.add(property.agoda_from)
       if (property.agoda_to) uniqueAgodaTos.add(property.agoda_to)
       if (property.agoda_duration != null)
@@ -3112,29 +4105,43 @@ export class PropertyService implements IPropertyService {
       if (property.expedia_service_fee)
         uniqueExpediaServiceFees.add(property.expedia_service_fee)
       if (property.expedia_priority)
-        expediaPriorityMap.set(property.expedia_priority.id, property.expedia_priority)
-      if (property.from_db)
-        uniqueFromDb.add(property.from_db)
-      if (property.to_db)
-        uniqueToDb.add(property.to_db)
+        expediaPriorityMap.set(
+          property.expedia_priority.id,
+          property.expedia_priority
+        )
+      if (property.from_db) uniqueFromDb.add(property.from_db)
+      if (property.to_db) uniqueToDb.add(property.to_db)
       if (property.expedia_revised_date) {
-        if (revisedDateMin === null || property.expedia_revised_date < revisedDateMin)
+        if (
+          revisedDateMin === null ||
+          property.expedia_revised_date < revisedDateMin
+        )
           revisedDateMin = property.expedia_revised_date
-        if (revisedDateMax === null || property.expedia_revised_date > revisedDateMax)
+        if (
+          revisedDateMax === null ||
+          property.expedia_revised_date > revisedDateMax
+        )
           revisedDateMax = property.expedia_revised_date
       }
       if (property.expedia_scheduler_review_from)
-        uniqueExpediaSchedulerReviewFroms.add(property.expedia_scheduler_review_from)
+        uniqueExpediaSchedulerReviewFroms.add(
+          property.expedia_scheduler_review_from
+        )
       if (property.expedia_scheduler_review_to)
-        uniqueExpediaSchedulerReviewTos.add(property.expedia_scheduler_review_to)
+        uniqueExpediaSchedulerReviewTos.add(
+          property.expedia_scheduler_review_to
+        )
       if (property.expedia_scheduler_review_db_from)
-        uniqueExpediaSchedulerReviewDbFroms.add(property.expedia_scheduler_review_db_from)
+        uniqueExpediaSchedulerReviewDbFroms.add(
+          property.expedia_scheduler_review_db_from
+        )
       if (property.expedia_scheduler_review_db_to)
-        uniqueExpediaSchedulerReviewDbTos.add(property.expedia_scheduler_review_db_to)
+        uniqueExpediaSchedulerReviewDbTos.add(
+          property.expedia_scheduler_review_db_to
+        )
       if (property.expedia_scheduler_db)
         uniqueExpediaSchedulerDbs.add(property.expedia_scheduler_db)
-      if (property.expedia_crs)
-        uniqueExpediaCrs.add(property.expedia_crs)
+      if (property.expedia_crs) uniqueExpediaCrs.add(property.expedia_crs)
       if (property.expedia_crs_db)
         uniqueExpediaCrsDbs.add(property.expedia_crs_db)
       if (property.expedia_run_date_from)
@@ -3148,39 +4155,48 @@ export class PropertyService implements IPropertyService {
       if (property.expedia_db_duration != null)
         uniqueExpediaDbDurations.add(String(property.expedia_db_duration))
       if (property.expedia_credential_verified != null)
-        uniqueExpediaCredentialVerified.add(String(property.expedia_credential_verified))
+        uniqueExpediaCredentialVerified.add(
+          String(property.expedia_credential_verified)
+        )
       if (property.expedia_otp_number)
         uniqueExpediaOtpNumbers.add(property.expedia_otp_number)
       if (property.booking_service_fee != null)
         uniqueBookingServiceFees.add(String(property.booking_service_fee))
       if (property.booking_priority)
-        bookingPriorityMap.set(property.booking_priority.id, property.booking_priority)
-      if (property.booking_crs)
-        uniqueBookingCrs.add(property.booking_crs)
+        bookingPriorityMap.set(
+          property.booking_priority.id,
+          property.booking_priority
+        )
+      if (property.booking_crs) uniqueBookingCrs.add(property.booking_crs)
       if (property.booking_run_date)
         uniqueBookingRunDates.add(property.booking_run_date)
       if (property.booking_revised_date)
         uniqueBookingRevisedDates.add(property.booking_revised_date)
       if (property.booking_credential_verified != null)
-        uniqueBookingCredentialVerified.add(String(property.booking_credential_verified))
+        uniqueBookingCredentialVerified.add(
+          String(property.booking_credential_verified)
+        )
       if (property.booking_otp_number)
         uniqueBookingOtpNumbers.add(property.booking_otp_number)
       if (property.agoda_service_fee != null)
         uniqueAgodaServiceFees.add(String(property.agoda_service_fee))
       if (property.agoda_priority)
-        agodaPriorityMap.set(property.agoda_priority.id, property.agoda_priority)
-      if (property.agoda_crs)
-        uniqueAgodaCrs.add(property.agoda_crs)
+        agodaPriorityMap.set(
+          property.agoda_priority.id,
+          property.agoda_priority
+        )
+      if (property.agoda_crs) uniqueAgodaCrs.add(property.agoda_crs)
       if (property.agoda_run_date)
         uniqueAgodaRunDates.add(property.agoda_run_date)
       if (property.agoda_revised_date)
         uniqueAgodaRevisedDates.add(property.agoda_revised_date)
       if (property.agoda_credential_verified != null)
-        uniqueAgodaCredentialVerified.add(String(property.agoda_credential_verified))
+        uniqueAgodaCredentialVerified.add(
+          String(property.agoda_credential_verified)
+        )
       if (property.agoda_otp_number)
         uniqueAgodaOtpNumbers.add(property.agoda_otp_number)
-      if (property.sales_rep)
-        uniqueSalesReps.add(property.sales_rep)
+      if (property.sales_rep) uniqueSalesReps.add(property.sales_rep)
     })
 
     return {
@@ -3209,40 +4225,68 @@ export class PropertyService implements IPropertyService {
       expedia_status: Array.from(uniqueExpediaStatuses).sort(),
       booking_status: Array.from(uniqueBookingStatuses).sort(),
       agoda_status: Array.from(uniqueAgodaStatuses).sort(),
-      expedia_processor: Array.from(expediaProcessorMap.values()).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
-      booking_processor: Array.from(bookingProcessorMap.values()).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
-      agoda_processor: Array.from(agodaProcessorMap.values()).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+      expedia_processor: Array.from(expediaProcessorMap.values()).sort(
+        (a, b) => (a.order ?? 0) - (b.order ?? 0)
+      ),
+      booking_processor: Array.from(bookingProcessorMap.values()).sort(
+        (a, b) => (a.order ?? 0) - (b.order ?? 0)
+      ),
+      agoda_processor: Array.from(agodaProcessorMap.values()).sort(
+        (a, b) => (a.order ?? 0) - (b.order ?? 0)
+      ),
       fp_mid: Array.from(uniqueFpMids).sort(),
       stripe_account_email: Array.from(uniqueStripeAccountEmails).sort(),
       from: Array.from(uniqueFromDates).sort(),
       to: Array.from(uniqueToDates).sort(),
       property_identifier: Array.from(uniquePropertyIdentifiers).sort(),
       portfolio_contact: Array.from(uniquePortfolioContacts).sort(),
-      service_type: Array.from(serviceTypeMap.values()).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
-      currency: Array.from(currencyMap.values()).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+      service_type: Array.from(serviceTypeMap.values()).sort(
+        (a, b) => (a.order ?? 0) - (b.order ?? 0)
+      ),
+      currency: Array.from(currencyMap.values()).sort(
+        (a, b) => (a.order ?? 0) - (b.order ?? 0)
+      ),
       fp_username: Array.from(uniqueFpUsernames).sort(),
       qp_username: Array.from(uniqueQpUsernames).sort(),
       previous_portfolio_id: Array.from(uniquePreviousPortfolioIds).sort(),
       next_due_date: Array.from(uniqueNextDueDates).sort(),
-      expedia_billing_type: Array.from(expediaBillingTypeMap.values()).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
-      expedia_service_type: Array.from(expediaServiceTypeMap.values()).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
-      expedia_frequency: Array.from(expediaFrequencyMap.values()).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+      expedia_billing_type: Array.from(expediaBillingTypeMap.values()).sort(
+        (a, b) => (a.order ?? 0) - (b.order ?? 0)
+      ),
+      expedia_service_type: Array.from(expediaServiceTypeMap.values()).sort(
+        (a, b) => (a.order ?? 0) - (b.order ?? 0)
+      ),
+      expedia_frequency: Array.from(expediaFrequencyMap.values()).sort(
+        (a, b) => (a.order ?? 0) - (b.order ?? 0)
+      ),
       expedia_from: Array.from(uniqueExpediaFroms).sort(),
       expedia_to: Array.from(uniqueExpediaTos).sort(),
       expedia_duration: Array.from(uniqueExpediaDurations).sort(),
       expedia_access_level: Array.from(uniqueExpediaAccessLevels).sort(),
       expedia_scheduler: Array.from(uniqueExpediaSchedulers).sort(),
-      booking_billing_type: Array.from(bookingBillingTypeMap.values()).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
-      booking_service_type: Array.from(bookingServiceTypeMap.values()).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
-      booking_frequency: Array.from(bookingFrequencyMap.values()).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+      booking_billing_type: Array.from(bookingBillingTypeMap.values()).sort(
+        (a, b) => (a.order ?? 0) - (b.order ?? 0)
+      ),
+      booking_service_type: Array.from(bookingServiceTypeMap.values()).sort(
+        (a, b) => (a.order ?? 0) - (b.order ?? 0)
+      ),
+      booking_frequency: Array.from(bookingFrequencyMap.values()).sort(
+        (a, b) => (a.order ?? 0) - (b.order ?? 0)
+      ),
       booking_from: Array.from(uniqueBookingFroms).sort(),
       booking_to: Array.from(uniqueBookingTos).sort(),
       booking_duration: Array.from(uniqueBookingDurations).sort(),
       booking_access_level: Array.from(uniqueBookingAccessLevels).sort(),
       booking_scheduler: Array.from(uniqueBookingSchedulers).sort(),
-      agoda_billing_type: Array.from(agodaBillingTypeMap.values()).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
-      agoda_service_type: Array.from(agodaServiceTypeMap.values()).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
-      agoda_frequency: Array.from(agodaFrequencyMap.values()).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+      agoda_billing_type: Array.from(agodaBillingTypeMap.values()).sort(
+        (a, b) => (a.order ?? 0) - (b.order ?? 0)
+      ),
+      agoda_service_type: Array.from(agodaServiceTypeMap.values()).sort(
+        (a, b) => (a.order ?? 0) - (b.order ?? 0)
+      ),
+      agoda_frequency: Array.from(agodaFrequencyMap.values()).sort(
+        (a, b) => (a.order ?? 0) - (b.order ?? 0)
+      ),
       agoda_from: Array.from(uniqueAgodaFroms).sort(),
       agoda_to: Array.from(uniqueAgodaTos).sort(),
       agoda_duration: Array.from(uniqueAgodaDurations).sort(),
@@ -3260,14 +4304,24 @@ export class PropertyService implements IPropertyService {
         uniqueAgodaSecondaryUsernames
       ).sort(),
       expedia_service_fee: Array.from(uniqueExpediaServiceFees).sort(),
-      expedia_priority: Array.from(expediaPriorityMap.values()).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+      expedia_priority: Array.from(expediaPriorityMap.values()).sort(
+        (a, b) => (a.order ?? 0) - (b.order ?? 0)
+      ),
       from_db: Array.from(uniqueFromDb).sort(),
       to_db: Array.from(uniqueToDb).sort(),
       expedia_revised_date: { min: revisedDateMin, max: revisedDateMax },
-      expedia_scheduler_review_from: Array.from(uniqueExpediaSchedulerReviewFroms).sort(),
-      expedia_scheduler_review_to: Array.from(uniqueExpediaSchedulerReviewTos).sort(),
-      expedia_scheduler_review_db_from: Array.from(uniqueExpediaSchedulerReviewDbFroms).sort(),
-      expedia_scheduler_review_db_to: Array.from(uniqueExpediaSchedulerReviewDbTos).sort(),
+      expedia_scheduler_review_from: Array.from(
+        uniqueExpediaSchedulerReviewFroms
+      ).sort(),
+      expedia_scheduler_review_to: Array.from(
+        uniqueExpediaSchedulerReviewTos
+      ).sort(),
+      expedia_scheduler_review_db_from: Array.from(
+        uniqueExpediaSchedulerReviewDbFroms
+      ).sort(),
+      expedia_scheduler_review_db_to: Array.from(
+        uniqueExpediaSchedulerReviewDbTos
+      ).sort(),
       expedia_scheduler_db: Array.from(uniqueExpediaSchedulerDbs).sort(),
       expedia_crs: Array.from(uniqueExpediaCrs).sort(),
       expedia_crs_db: Array.from(uniqueExpediaCrsDbs).sort(),
@@ -3276,23 +4330,33 @@ export class PropertyService implements IPropertyService {
       expedia_run_date_db_from: Array.from(uniqueExpediaRunDateDbFroms).sort(),
       expedia_run_date_db_to: Array.from(uniqueExpediaRunDateDbTos).sort(),
       expedia_db_duration: Array.from(uniqueExpediaDbDurations).sort(),
-      expedia_credential_verified: Array.from(uniqueExpediaCredentialVerified).sort(),
+      expedia_credential_verified: Array.from(
+        uniqueExpediaCredentialVerified
+      ).sort(),
       expedia_otp_number: Array.from(uniqueExpediaOtpNumbers).sort(),
       booking_service_fee: Array.from(uniqueBookingServiceFees).sort(),
-      booking_priority: Array.from(bookingPriorityMap.values()).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+      booking_priority: Array.from(bookingPriorityMap.values()).sort(
+        (a, b) => (a.order ?? 0) - (b.order ?? 0)
+      ),
       booking_crs: Array.from(uniqueBookingCrs).sort(),
       booking_run_date: Array.from(uniqueBookingRunDates).sort(),
       booking_revised_date: Array.from(uniqueBookingRevisedDates).sort(),
-      booking_credential_verified: Array.from(uniqueBookingCredentialVerified).sort(),
+      booking_credential_verified: Array.from(
+        uniqueBookingCredentialVerified
+      ).sort(),
       booking_otp_number: Array.from(uniqueBookingOtpNumbers).sort(),
       agoda_service_fee: Array.from(uniqueAgodaServiceFees).sort(),
-      agoda_priority: Array.from(agodaPriorityMap.values()).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+      agoda_priority: Array.from(agodaPriorityMap.values()).sort(
+        (a, b) => (a.order ?? 0) - (b.order ?? 0)
+      ),
       agoda_crs: Array.from(uniqueAgodaCrs).sort(),
       agoda_run_date: Array.from(uniqueAgodaRunDates).sort(),
       agoda_revised_date: Array.from(uniqueAgodaRevisedDates).sort(),
-      agoda_credential_verified: Array.from(uniqueAgodaCredentialVerified).sort(),
+      agoda_credential_verified: Array.from(
+        uniqueAgodaCredentialVerified
+      ).sort(),
       agoda_otp_number: Array.from(uniqueAgodaOtpNumbers).sort(),
-      sales_rep: Array.from(uniqueSalesReps).sort(),
+      sales_rep: Array.from(uniqueSalesReps).sort()
     }
   }
 
@@ -3360,7 +4424,9 @@ export class PropertyService implements IPropertyService {
       // For false filters on nullable boolean fields, treat null as false so
       // records that were never explicitly set are included in the result.
       if (bools[0] === false) {
-        return { OR: [{ [fieldName]: { equals: false } }, { [fieldName]: null }] }
+        return {
+          OR: [{ [fieldName]: { equals: false } }, { [fieldName]: null }]
+        }
       }
       return { [fieldName]: { equals: true } }
     }
@@ -3385,19 +4451,31 @@ export class PropertyService implements IPropertyService {
     return out
   }
   private async fanOutPropertyUpdate(
-    otaIds: { expedia_id: number | null; booking_id: number | null; agoda_id: number | null },
+    otaIds: {
+      expedia_id: number | null
+      booking_id: number | null
+      agoda_id: number | null
+    },
     data: Record<string, any>
   ): Promise<{ success: boolean; reason?: string }> {
     const jobs: Promise<any>[] = []
     if (this.dashboardClient) {
-      jobs.push(this.dashboardClient.patch('/api/property/sync-by-ota', { ...otaIds, data })
-        .then(r => ['dashboard', r.data]).catch(e => ['dashboard', { error: e?.message }]))
+      jobs.push(
+        this.dashboardClient
+          .patch('/api/property/sync-by-ota', { ...otaIds, data })
+          .then(r => ['dashboard', r.data])
+          .catch(e => ['dashboard', { error: e?.message }])
+      )
     }
     let scraperSuccess = true
     let scraperReason: string | undefined
     if (this.scraperClient) {
-      jobs.push(this.scraperClient.patch('/properties/sync-by-ota', { ...otaIds, data })
-        .then(r => ['scraper', r.data]).catch(e => ['scraper', { error: e?.message }]))
+      jobs.push(
+        this.scraperClient
+          .patch('/properties/sync-by-ota', { ...otaIds, data })
+          .then(r => ['scraper', r.data])
+          .catch(e => ['scraper', { error: e?.message }])
+      )
     } else {
       scraperSuccess = false
       scraperReason = 'Scraper client disabled — URL or token missing'
@@ -3436,7 +4514,10 @@ export class PropertyService implements IPropertyService {
       return { success: false, reason }
     }
     try {
-      const r = await this.scraperClient.post('/properties/sync-create', property)
+      const r = await this.scraperClient.post(
+        '/properties/sync-create',
+        property
+      )
       this.logger.log(`[sync] scraper create: ${JSON.stringify(r.data)}`)
       return { success: true }
     } catch (e: any) {
@@ -3481,38 +4562,95 @@ export class PropertyService implements IPropertyService {
     return e?.message ?? String(e)
   }
 
-  private readonly inboundSyncFields = ['name', 'card_descriptor', 'is_active', 'next_due_date',
-    'expedia_id', 'expedia_status', 'booking_id', 'booking_status', 'agoda_id', 'agoda_status']
-    
+  private readonly inboundSyncFields = [
+    'name',
+    'card_descriptor',
+    'is_active',
+    'next_due_date',
+    'expedia_id',
+    'expedia_status',
+    'booking_id',
+    'booking_status',
+    'agoda_id',
+    'agoda_status'
+  ]
+
   async syncByOta(dto: SyncByOtaDto) {
-    if (dto.expedia_id == null && dto.booking_id == null && dto.agoda_id == null) return { status: 'no_ota_ids' }
+    if (
+      dto.expedia_id == null &&
+      dto.booking_id == null &&
+      dto.agoda_id == null
+    )
+      return { status: 'no_ota_ids' }
     const ids = await this.repo.findIdsByOtaIds(dto)
     if (!ids.length) return { status: 'not_found' }
-    if (ids.length > 1) { this.logger.warn(`[sync] ambiguous: ${ids.join(',')}`); return { status: 'ambiguous', candidates: ids } }
-  
+    if (ids.length > 1) {
+      this.logger.warn(`[sync] ambiguous: ${ids.join(',')}`)
+      return { status: 'ambiguous', candidates: ids }
+    }
+
     const patch: Record<string, any> = {}
-    for (const k of this.inboundSyncFields) if (dto.data?.[k] !== undefined) patch[k] = dto.data[k]
+    for (const k of this.inboundSyncFields)
+      if (dto.data?.[k] !== undefined) patch[k] = dto.data[k]
     if (!Object.keys(patch).length) return { status: 'no_op', id: ids[0] }
-  
+
     const updated = await this.repo.update(ids[0], patch as UpdatePropertyDto)
-    await Promise.all([this.redisService.del(CACHE_KEY(updated.id)), this.redisService.deleteByPattern(ALL_PATTERN)])
+    await Promise.all([
+      this.redisService.del(CACHE_KEY(updated.id)),
+      this.redisService.deleteByPattern(ALL_PATTERN)
+    ])
     return { status: 'updated', id: updated.id }
+  }
+
+  private async syncBulkDeleteToDashboard(parentIds: string[]): Promise<void> {
+    if (!parentIds.length) return
+
+    if (!this.dashboardJwtClient) {
+      this.logger.warn(
+        '[sync] dashboard JWT client disabled, skipping property sync-bulk-delete'
+      )
+      return
+    }
+
+    const body = { items: parentIds.map(parent_id => ({ parent_id })) }
+
+    try {
+      const r = await this.dashboardJwtClient.post(
+        '/api/property/sync-bulk-delete',
+        body,
+        { headers: this.syncCommunication.createAuthHeaders() }
+      )
+      this.logger.log(
+        `[sync] dashboard property sync-bulk-delete: ${JSON.stringify(r.data)}`
+      )
+    } catch (e: any) {
+      this.logger.error(
+        `[sync] dashboard property sync-bulk-delete failed: ${e?.response?.data ? JSON.stringify(e.response.data) : (e?.message ?? e)}`
+      )
+    }
   }
 
   private async syncUpsertPropertyToDashboard(
     property: PropertyWithRelations
   ): Promise<{ success: boolean; reason?: string }> {
     if (!this.dashboardJwtClient) {
-      const reason = 'Dashboard JWT client disabled — URL or JWT_COMMUNICATION_SECRET missing'
+      const reason =
+        'Dashboard JWT client disabled — URL or JWT_COMMUNICATION_SECRET missing'
       this.logger.warn(`[sync] ${reason}`)
       return { success: false, reason }
     }
 
-    const credentials = await this.credentialsService.findByPropertyId(property.id)
+    const credentials = await this.credentialsService.findByPropertyId(
+      property.id
+    )
 
     const safeDecrypt = (val: string | null | undefined): string => {
       if (!val) return ''
-      try { return this.encryptionUtil.decrypt(val) } catch { return '' }
+      try {
+        return this.encryptionUtil.decrypt(val)
+      } catch {
+        return ''
+      }
     }
 
     const currencyCode = property.currency?.code ?? 'USD'
@@ -3548,7 +4686,9 @@ export class PropertyService implements IPropertyService {
         payload,
         { headers: this.syncCommunication.createAuthHeaders() }
       )
-      this.logger.log(`[sync] dashboard property upsert: ${JSON.stringify(r.data)}`)
+      this.logger.log(
+        `[sync] dashboard property upsert: ${JSON.stringify(r.data)}`
+      )
       return { success: true }
     } catch (e: any) {
       const reason = this.extractSyncErrorReason(e)
