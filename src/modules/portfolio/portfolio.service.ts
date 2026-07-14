@@ -634,7 +634,7 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
 
   async importFromExcel(
     file: Express.Multer.File,
-    _user: IUserWithPermissions
+    user: IUserWithPermissions
   ): Promise<ImportPortfoliosResult> {
     const buffer = file.buffer || (file as any).buffer
     if (!buffer || buffer.length === 0) {
@@ -704,7 +704,7 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
     }
 
     let portfoliosCreated = 0
-    const portfolios: any[] = []
+    const portfolios: Array<{ row_no: number; portfolio: any; service_type_name: string; currency_code: string; file_count: number }> = []
     const skipped_portfolios: any[] = []
     const portfolioNames = [
       ...new Set(
@@ -742,6 +742,7 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
         const row = data[rowIndex] as any
 
         let service_type_id: string = defaultServiceType.id
+        let resolved_service_type_name: string = defaultServiceType.type
 
         if (row?.[serviceTypeCol]) {
           const stName = String(row[serviceTypeCol]).trim()
@@ -766,6 +767,7 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
             this.logger.log(`ServiceType "${stName}" created successfully`)
           }
           service_type_id = st.id
+          resolved_service_type_name = st.type
         }
 
         const valActive = row?.['Active status']
@@ -811,9 +813,6 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
             : undefined,
           commission:
             row?.['Commission'] != null ? Number(row['Commission']) : undefined,
-          attachment: row?.['Documents']
-            ? String(row['Documents']).trim()
-            : undefined,
           attachments: row?.['Attachments']
             ? String(row['Attachments'])
                 .split(',')
@@ -823,8 +822,46 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
           contract_signed
         }
 
+        const resolved_currency_code: string = row?.['Currency']
+          ? String(row['Currency']).trim().toUpperCase()
+          : ''
+
         const created = await this.portfolioRepository.create(dto)
-        portfolios.push(created)
+
+        // Create File records for each URL in the Documents column → becomes contract_urls
+        let file_count = 0
+        if (row?.['Documents']) {
+          const urls = String(row['Documents'])
+            .split(',')
+            .map((u: string) => u.trim())
+            .filter(Boolean)
+          for (const url of urls) {
+            const fileName = url.split('/').pop() ?? 'contract-document'
+            try {
+              await this.prisma.file.create({
+                data: {
+                  url,
+                  name: fileName,
+                  is_active: true,
+                  uploaded_by: user.id,
+                  portfolio_id: created.id
+                }
+              })
+              file_count++
+            } catch (fileErr: any) {
+              this.logger.warn(
+                `[import] Could not create File record for URL "${url}" on portfolio "${name}": ${fileErr?.message ?? fileErr}`
+              )
+            }
+          }
+        }
+        portfolios.push({
+          row_no,
+          portfolio: created,
+          service_type_name: resolved_service_type_name,
+          currency_code: resolved_currency_code,
+          file_count
+        })
         portfoliosCreated++
         this.logger.log(`Created portfolio: ${name}`)
       } catch (err: any) {
@@ -839,7 +876,38 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
     }
 
     await this.redisService.deleteByPattern(ALL_PATTERN)
-    return { portfoliosCreated, portfolios, skipped_portfolios }
+
+    // ── Dashboard bulk-upsert sync ────────────────────────────────────────────
+    if (portfolios.length && this.dashboardClient) {
+      const items = portfolios.map(({ row_no, portfolio: p, service_type_name, currency_code, file_count }) => ({
+        row:               row_no,
+        parent_id:         p.id,
+        name:              p.name,
+        service_type:      service_type_name,
+        currency:          currency_code,
+        is_active:         p.is_active,
+        is_commissionable: p.is_commissionable,
+        file_count
+      }))
+
+      this.postSync(
+        this.dashboardClient,
+        '/api/portfolio/sync-bulk-upsert',
+        { items } as unknown as Record<string, unknown>,
+        'dashboard',
+        'bulk-upsert-import'
+      ).catch(e =>
+        this.logger.error(`[sync] dashboard portfolio bulk-upsert failed: ${e?.message ?? e}`)
+      )
+    } else if (portfolios.length && !this.dashboardClient) {
+      this.logger.warn('[sync] dashboard disabled — skipping portfolio bulk-upsert sync')
+    }
+
+    return {
+      portfoliosCreated,
+      portfolios: portfolios.map(({ portfolio: p }) => p),
+      skipped_portfolios
+    }
   }
 
   async findAllCached(
