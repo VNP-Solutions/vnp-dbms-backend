@@ -4,6 +4,7 @@ import { Type } from 'class-transformer'
 import {
   IsBoolean,
   IsEnum,
+  IsMongoId,
   IsNotEmpty,
   IsObject,
   IsOptional,
@@ -119,6 +120,15 @@ export class CreateUserRoleDto {
   @Type(() => PermissionDto)
   @IsOptional()
   access_logs_permission?: PermissionDto
+
+  @ApiPropertyOptional({
+    example: '507f1f77bcf86cd799439011',
+    description:
+      'User column template ID to copy column_list from when creating this role\'s column template'
+  })
+  @IsMongoId()
+  @IsOptional()
+  user_column_template_id?: string
 }
 
 export class UpdateUserRoleDto extends PartialType(CreateUserRoleDto) {}
