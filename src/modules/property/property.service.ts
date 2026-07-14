@@ -68,6 +68,7 @@ export class PropertyService implements IPropertyService {
   private readonly dashboardClient: AxiosInstance | null
   private readonly dashboardJwtClient: AxiosInstance | null
   private readonly scraperClient: AxiosInstance | null
+  private readonly scraperJwtClient: AxiosInstance | null
 
   constructor(
     @Inject('IPropertyRepository')
@@ -114,6 +115,10 @@ export class PropertyService implements IPropertyService {
             headers: { 'X-Service-Token': scrTok }
           })
         : null
+    this.scraperJwtClient =
+      scrUrl && this.syncCommunication.isConfigured()
+        ? axios.create({ baseURL: scrUrl, timeout })
+        : null
     if (!this.dashboardClient)
       this.logger.warn('[sync] dashboard disabled — URL/token missing')
     if (!this.dashboardJwtClient)
@@ -122,6 +127,10 @@ export class PropertyService implements IPropertyService {
       )
     if (!this.scraperClient)
       this.logger.warn('[sync] scraper disabled — URL/token missing')
+    if (!this.scraperJwtClient)
+      this.logger.warn(
+        '[sync] scraper JWT client disabled — URL or JWT_COMMUNICATION_SECRET missing'
+      )
   }
 
   async create(
@@ -196,17 +205,10 @@ export class PropertyService implements IPropertyService {
         success: false,
         reason: e?.message ?? String(e)
       })),
-      this.fanOutPropertyCreate({
-        name: property.name,
-        portfolio_name: property.portfolio?.name ?? null,
-        sub_portfolio_name: property.subportfolio?.name ?? null,
-        expedia_id: property.expedia_id ?? null,
-        expedia_status: property.expedia_status ?? null,
-        booking_id: property.booking_id ?? null,
-        booking_status: property.booking_status ?? null,
-        agoda_id: property.agoda_id ?? null,
-        agoda_status: property.agoda_status ?? null
-      }).catch(e => ({ success: false, reason: e?.message ?? String(e) }))
+      this.syncUpsertPropertyToScraper(property).catch(e => ({
+        success: false,
+        reason: e?.message ?? String(e)
+      }))
     ])
 
     const identifier =
@@ -1185,8 +1187,8 @@ export class PropertyService implements IPropertyService {
     data: UpdatePropertyDto,
     user: IUserWithPermissions
   ) {
-    const before = await this.repo.findById(id)
-    if (!before) throw new NotFoundException('Property not found')
+    const existing = await this.repo.findById(id)
+    if (!existing) throw new NotFoundException('Property not found')
     const updated = await this.update(id, data, user)
 
     const [dashboardResult, parserResult] = await Promise.all([
@@ -1194,14 +1196,10 @@ export class PropertyService implements IPropertyService {
         success: false,
         reason: e?.message ?? String(e)
       })),
-      this.fanOutPropertyUpdate(
-        {
-          expedia_id: before.expedia_id ?? null,
-          booking_id: before.booking_id ?? null,
-          agoda_id: before.agoda_id ?? null
-        },
-        data
-      ).catch(e => ({ success: false, reason: e?.message ?? String(e) }))
+      this.syncUpsertPropertyToScraper(updated).catch(e => ({
+        success: false,
+        reason: e?.message ?? String(e)
+      }))
     ])
 
     const identifier =
@@ -1289,11 +1287,7 @@ export class PropertyService implements IPropertyService {
         }
 
         // 4 ── Scraper sync-delete (non-blocking)
-        this.fanOutPropertyDelete({
-          expedia_id: property.expedia_id ?? null,
-          booking_id: property.booking_id ?? null,
-          agoda_id: property.agoda_id ?? null
-        }).catch(e =>
+        this.syncDeletePropertyToScraper(parent_id).catch(e =>
           this.logger.error(
             `[sync] bulk-delete scraper ${parent_id} failed: ${e?.message ?? e}`
           )
@@ -1350,11 +1344,7 @@ export class PropertyService implements IPropertyService {
     const result = await this.remove(id, user)
     if (before) {
       try {
-        await this.fanOutPropertyDelete({
-          expedia_id: before.expedia_id ?? null,
-          booking_id: before.booking_id ?? null,
-          agoda_id: before.agoda_id ?? null
-        })
+        await this.syncDeletePropertyToScraper(before.id)
       } catch (e: any) {
         this.logger.error(`[sync] unexpected on delete: ${e?.message ?? e}`)
       }
@@ -2111,17 +2101,12 @@ export class PropertyService implements IPropertyService {
               reason: e?.message ?? String(e)
             })
           ),
-          this.fanOutPropertyCreate({
-            name: p.name,
-            portfolio_name: p.portfolio?.name ?? null,
-            sub_portfolio_name: p.subportfolio?.name ?? null,
-            expedia_id: p.expedia_id ?? null,
-            expedia_status: p.expedia_status ?? null,
-            booking_id: p.booking_id ?? null,
-            booking_status: p.booking_status ?? null,
-            agoda_id: p.agoda_id ?? null,
-            agoda_status: p.agoda_status ?? null
-          }).catch(e => ({ success: false, reason: e?.message ?? String(e) }))
+          this.syncUpsertPropertyToScraper(p as PropertyWithRelations).catch(
+            e => ({
+              success: false,
+              reason: e?.message ?? String(e)
+            })
+          )
         ])
 
         return {
@@ -3550,22 +3535,7 @@ export class PropertyService implements IPropertyService {
                     reason: 'Property not found after update'
                   }),
               p
-                ? this.fanOutPropertyUpdate(
-                    {
-                      expedia_id: p.expedia_id ?? null,
-                      booking_id: p.booking_id ?? null,
-                      agoda_id: p.agoda_id ?? null
-                    },
-                    {
-                      name: p.name,
-                      hotel_address: p.hotel_address,
-                      card_descriptor: p.card_descriptor,
-                      is_active: p.is_active,
-                      expedia_id: p.expedia_id,
-                      booking_id: p.booking_id,
-                      agoda_id: p.agoda_id
-                    }
-                  ).catch(e => ({
+                ? this.syncUpsertPropertyToScraper(p).catch(e => ({
                     success: false,
                     reason: e?.message ?? String(e)
                   }))
@@ -3709,17 +3679,6 @@ export class PropertyService implements IPropertyService {
 
         await this.repo.delete(id)
         success.push({ id: property.id, name: property.name })
-
-        // Scraper sync-delete (non-blocking)
-        this.fanOutPropertyDelete({
-          expedia_id: property.expedia_id ?? null,
-          booking_id: property.booking_id ?? null,
-          agoda_id: property.agoda_id ?? null
-        }).catch(e =>
-          this.logger.error(
-            `[sync] bulk-delete scraper ${id} failed: ${e?.message ?? e}`
-          )
-        )
       } catch (err: any) {
         this.logger.error(`Error deleting property ${id}: ${err.message}`)
         skipped.push({
@@ -3743,6 +3702,12 @@ export class PropertyService implements IPropertyService {
       this.syncBulkDeleteToDashboard(success.map(({ id }) => id)).catch(e =>
         this.logger.error(
           `[sync] bulk-delete dashboard failed: ${e?.message ?? e}`
+        )
+      )
+
+      this.syncBulkDeleteToScraper(success.map(({ id }) => id)).catch(e =>
+        this.logger.error(
+          `[sync] bulk-delete scraper failed: ${e?.message ?? e}`
         )
       )
     }
@@ -4450,97 +4415,131 @@ export class PropertyService implements IPropertyService {
     for (const f of fields) if (src?.[f] !== undefined) out[f] = src[f]
     return out
   }
-  private async fanOutPropertyUpdate(
-    otaIds: {
-      expedia_id: number | null
-      booking_id: number | null
-      agoda_id: number | null
-    },
-    data: Record<string, any>
+  private async syncUpsertPropertyToScraper(
+    property: PropertyWithRelations
   ): Promise<{ success: boolean; reason?: string }> {
-    const jobs: Promise<any>[] = []
-    if (this.dashboardClient) {
-      jobs.push(
-        this.dashboardClient
-          .patch('/api/property/sync-by-ota', { ...otaIds, data })
-          .then(r => ['dashboard', r.data])
-          .catch(e => ['dashboard', { error: e?.message }])
-      )
-    }
-    let scraperSuccess = true
-    let scraperReason: string | undefined
-    if (this.scraperClient) {
-      jobs.push(
-        this.scraperClient
-          .patch('/properties/sync-by-ota', { ...otaIds, data })
-          .then(r => ['scraper', r.data])
-          .catch(e => ['scraper', { error: e?.message }])
-      )
-    } else {
-      scraperSuccess = false
-      scraperReason = 'Scraper client disabled — URL or token missing'
-    }
-    const results = await Promise.allSettled(jobs)
-    for (const r of results) {
-      if (r.status === 'fulfilled') {
-        this.logger.log(`[sync] ${r.value[0]}: ${JSON.stringify(r.value[1])}`)
-        if (r.value[0] === 'scraper' && r.value[1]?.error) {
-          scraperSuccess = false
-          scraperReason = r.value[1].error
-        }
-      } else {
-        this.logger.error(`[sync] failed: ${r.reason}`)
-        scraperSuccess = false
-        scraperReason = String(r.reason)
-      }
-    }
-    return { success: scraperSuccess, reason: scraperReason }
-  }
-
-  private async fanOutPropertyCreate(property: {
-    name: string
-    portfolio_name?: string | null
-    sub_portfolio_name?: string | null
-    expedia_id?: number | null
-    expedia_status?: string | null
-    booking_id?: number | null
-    booking_status?: string | null
-    agoda_id?: number | null
-    agoda_status?: string | null
-  }): Promise<{ success: boolean; reason?: string }> {
-    if (!this.scraperClient) {
-      const reason = 'Scraper client disabled — URL or token missing'
+    if (!this.scraperJwtClient) {
+      const reason =
+        'Scraper JWT client disabled — URL or JWT_COMMUNICATION_SECRET missing'
       this.logger.warn(`[sync] ${reason}`)
       return { success: false, reason }
     }
+
+    if (!property.portfolio_id) {
+      const reason = 'Property has no portfolio_id — cannot sync to scraper'
+      this.logger.warn(`[sync] ${reason}`)
+      return { success: false, reason }
+    }
+
+    const credentials = await this.credentialsService.findByPropertyId(
+      property.id
+    )
+
+    const safeDecrypt = (val: string | null | undefined): string => {
+      if (!val) return ''
+      try {
+        return this.encryptionUtil.decrypt(val)
+      } catch {
+        return ''
+      }
+    }
+
+    const payload = {
+      name: property.name,
+      portfolio_parent_id: property.portfolio_id,
+      ...(property.expedia_id != null
+        ? { expedia_id: property.expedia_id }
+        : {}),
+      ...(property.booking_id != null
+        ? { booking_id: property.booking_id }
+        : {}),
+      ...(property.agoda_id != null ? { agoda_id: property.agoda_id } : {}),
+      ...(credentials?.expediaUsername
+        ? { expedia_username: credentials.expediaUsername }
+        : {}),
+      ...(credentials?.expediaPassword
+        ? { expedia_password: safeDecrypt(credentials.expediaPassword) }
+        : {}),
+      ...(credentials?.agodaUsername
+        ? { agoda_username: credentials.agodaUsername }
+        : {}),
+      ...(credentials?.agodaPassword
+        ? { agoda_password: safeDecrypt(credentials.agodaPassword) }
+        : {}),
+      ...(credentials?.bookingUsername
+        ? { booking_username: credentials.bookingUsername }
+        : {}),
+      ...(credentials?.bookingPassword
+        ? { booking_password: safeDecrypt(credentials.bookingPassword) }
+        : {})
+    }
+
     try {
-      const r = await this.scraperClient.post(
-        '/properties/sync-create',
-        property
+      const r = await this.scraperJwtClient.post(
+        `/properties/sync-upsert/${property.id}`,
+        payload,
+        { headers: this.syncCommunication.createAuthHeaders() }
       )
-      this.logger.log(`[sync] scraper create: ${JSON.stringify(r.data)}`)
+      this.logger.log(
+        `[sync] scraper property upsert: ${JSON.stringify(r.data)}`
+      )
       return { success: true }
     } catch (e: any) {
       const reason = this.extractSyncErrorReason(e)
-      this.logger.error(`[sync] scraper create failed: ${reason}`)
+      this.logger.error(`[sync] scraper property upsert failed: ${reason}`)
       return { success: false, reason }
     }
   }
 
-  private async fanOutPropertyDelete(otaIds: {
-    expedia_id: number | null
-    booking_id: number | null
-    agoda_id: number | null
-  }) {
-    if (!this.scraperClient) {
-      this.logger.warn('[sync] scraper disabled, skipping delete sync')
+  private async syncDeletePropertyToScraper(parentId: string): Promise<void> {
+    if (!this.scraperJwtClient) {
+      this.logger.warn(
+        '[sync] scraper JWT client disabled, skipping property delete sync'
+      )
       return
     }
+
     try {
-      const r = await this.scraperClient.post('/properties/sync-delete', otaIds)
-      this.logger.log(`[sync] scraper delete: ${JSON.stringify(r.data)}`)
+      const r = await this.scraperJwtClient.post(
+        `/properties/sync-delete/${parentId}`,
+        {},
+        { headers: this.syncCommunication.createAuthHeaders() }
+      )
+      this.logger.log(
+        `[sync] scraper property delete: ${JSON.stringify(r.data)}`
+      )
     } catch (e: any) {
-      this.logger.error(`[sync] scraper delete failed: ${e?.message ?? e}`)
+      this.logger.error(
+        `[sync] scraper property delete failed: ${e?.response?.data ? JSON.stringify(e.response.data) : (e?.message ?? e)}`
+      )
+    }
+  }
+
+  private async syncBulkDeleteToScraper(parentIds: string[]): Promise<void> {
+    if (!parentIds.length) return
+
+    if (!this.scraperJwtClient) {
+      this.logger.warn(
+        '[sync] scraper JWT client disabled, skipping property sync-bulk-delete'
+      )
+      return
+    }
+
+    const body = { items: parentIds.map(parent_id => ({ parent_id })) }
+
+    try {
+      const r = await this.scraperJwtClient.post(
+        '/properties/sync-bulk-delete',
+        body,
+        { headers: this.syncCommunication.createAuthHeaders() }
+      )
+      this.logger.log(
+        `[sync] scraper property sync-bulk-delete: ${JSON.stringify(r.data)}`
+      )
+    } catch (e: any) {
+      this.logger.error(
+        `[sync] scraper property sync-bulk-delete failed: ${e?.response?.data ? JSON.stringify(e.response.data) : (e?.message ?? e)}`
+      )
     }
   }
 
