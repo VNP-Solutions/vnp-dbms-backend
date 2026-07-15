@@ -93,10 +93,7 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
   ): AxiosInstance {
     const client = axios.create({ baseURL, timeout })
     client.interceptors.request.use(config => {
-      Object.assign(
-        config.headers,
-        this.syncCommunication.createAuthHeaders()
-      )
+      Object.assign(config.headers, this.syncCommunication.createAuthHeaders())
       return config
     })
     return client
@@ -395,7 +392,10 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
     id: string,
     fileIds: string[],
     user: IUserWithPermissions
-  ): Promise<{ deleted: string[]; failed: Array<{ fileId: string; reason: string }> }> {
+  ): Promise<{
+    deleted: string[]
+    failed: Array<{ fileId: string; reason: string }>
+  }> {
     const accessibleIds =
       await this.portfolioRepository.getAccessiblePortfolioIds(user.id)
     if (Array.isArray(accessibleIds) && !accessibleIds.includes(id)) {
@@ -412,7 +412,10 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
       try {
         const file = await this.fileUploadService.findOneFile(fileId, user)
         if (file.portfolio_id !== id) {
-          failed.push({ fileId, reason: 'Contract URL not found in this portfolio' })
+          failed.push({
+            fileId,
+            reason: 'Contract URL not found in this portfolio'
+          })
           continue
         }
         await this.fileUploadService.removeFile(fileId, user)
@@ -737,7 +740,13 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
     }
 
     let portfoliosCreated = 0
-    const portfolios: Array<{ row_no: number; portfolio: any; service_type_name: string; currency_code: string; file_count: number }> = []
+    const portfolios: Array<{
+      row_no: number
+      portfolio: any
+      service_type_name: string
+      currency_code: string
+      file_count: number
+    }> = []
     const skipped_portfolios: any[] = []
     const portfolioNames = [
       ...new Set(
@@ -910,30 +919,68 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
 
     await this.redisService.deleteByPattern(ALL_PATTERN)
 
-    // ── Dashboard bulk-upsert sync ────────────────────────────────────────────
-    if (portfolios.length && this.dashboardClient) {
-      const items = portfolios.map(({ row_no, portfolio: p, service_type_name, currency_code, file_count }) => ({
-        row:               row_no,
-        parent_id:         p.id,
-        name:              p.name,
-        service_type:      service_type_name,
-        currency:          currency_code,
-        is_active:         p.is_active,
-        is_commissionable: p.is_commissionable,
-        file_count
+    // ── Dashboard & parser bulk-upsert sync ───────────────────────────────────
+    if (portfolios.length) {
+      const dashboardItems = portfolios.map(
+        ({
+          row_no,
+          portfolio: p,
+          service_type_name,
+          currency_code,
+          file_count
+        }) => ({
+          row: row_no,
+          parent_id: p.id,
+          name: p.name,
+          service_type: service_type_name,
+          currency: currency_code,
+          is_active: p.is_active,
+          is_commissionable: p.is_commissionable,
+          file_count
+        })
+      )
+
+      const parserItems = portfolios.map(({ row_no, portfolio: p }) => ({
+        row: row_no,
+        parent_id: p.id,
+        name: p.name
       }))
 
-      this.postSync(
-        this.dashboardClient,
-        '/api/portfolio/sync-bulk-upsert',
-        { items } as unknown as Record<string, unknown>,
-        'dashboard',
-        'bulk-upsert-import'
-      ).catch(e =>
-        this.logger.error(`[sync] dashboard portfolio bulk-upsert failed: ${e?.message ?? e}`)
-      )
-    } else if (portfolios.length && !this.dashboardClient) {
-      this.logger.warn('[sync] dashboard disabled — skipping portfolio bulk-upsert sync')
+      if (this.dashboardClient) {
+        this.postSync(
+          this.dashboardClient,
+          '/api/portfolio/sync-bulk-upsert',
+          { items: dashboardItems } as unknown as Record<string, unknown>,
+          'dashboard',
+          'bulk-upsert-import'
+        ).catch(e =>
+          this.logger.error(
+            `[sync] dashboard portfolio bulk-upsert failed: ${e?.message ?? e}`
+          )
+        )
+      } else {
+        this.logger.warn(
+          '[sync] dashboard disabled — skipping portfolio bulk-upsert sync'
+        )
+      }
+
+      if (this.scraperClient) {
+        this.postSync(
+          this.scraperClient,
+          '/portfolios/sync-bulk-upsert',
+          { items: parserItems } as unknown as Record<string, unknown>,
+          'scraper',
+          'bulk-upsert-import'
+        ).catch(e =>
+          this.logger.error(
+            `[sync] scraper portfolio bulk-upsert failed: ${e?.message ?? e}`
+          )
+        )
+      } else {
+        this.logger.warn(
+          '[sync] scraper disabled — skipping portfolio bulk-upsert sync'
+        )
+      }
     }
 
     return {
