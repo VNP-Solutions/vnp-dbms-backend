@@ -67,20 +67,17 @@ export class UserRoleService implements IUserRoleService {
     const role = await this.userRoleRepository.create(roleData as CreateUserRoleDto)
 
     if (user_column_template_id) {
-      const userTemplate = await this.prisma.userColumnTemplate.findUnique({
+      const columnTemplate = await this.prisma.columnTemplate.findUnique({
         where: { id: user_column_template_id }
       })
 
-      if (!userTemplate) {
-        throw new NotFoundException('User column template not found')
+      if (!columnTemplate) {
+        throw new NotFoundException('Column template not found')
       }
 
-      await this.prisma.roleColumnTemplate.create({
-        data: {
-          name: userTemplate.name,
-          column_list: userTemplate.column_list,
-          role_id: role.id
-        }
+      await this.prisma.columnTemplate.update({
+        where: { id: user_column_template_id },
+        data: { role_id: role.id }
       })
     }
 

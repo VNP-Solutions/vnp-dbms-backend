@@ -1,6 +1,6 @@
 import { PartialType } from '@nestjs/mapped-types'
-import { ApiProperty } from '@nestjs/swagger'
-import { IsArray, IsMongoId, IsNotEmpty, IsString } from 'class-validator'
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
+import { IsArray, IsMongoId, IsNotEmpty, IsOptional, IsString } from 'class-validator'
 
 export class CreateColumnTemplateDto {
   @ApiProperty({ example: 'My Custom Template', description: 'Template name' })
@@ -21,6 +21,14 @@ export class CreateColumnTemplateDto {
   @IsMongoId()
   @IsNotEmpty()
   user_id: string
+
+  @ApiPropertyOptional({
+    example: '507f1f77bcf86cd799439011',
+    description: 'Role ID (MongoDB ObjectId) to assign this template to as the role\'s default column layout'
+  })
+  @IsMongoId()
+  @IsOptional()
+  role_id?: string
 }
 
 export class UpdateColumnTemplateDto extends PartialType(CreateColumnTemplateDto) {}

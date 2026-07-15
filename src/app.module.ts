@@ -39,7 +39,6 @@ import { ProcessorModule } from './modules/processor/processor.module'
 import { ScheduleModule } from '@nestjs/schedule'
 import { OtaAccessNotificationModule } from './modules/ota-access-notification/ota-access-notification.module'
 import { OtpStatusModule } from './modules/otp-status/otp-status.module'
-import { RoleColumnTemplateModule } from './modules/role-column-template/role-column-template.module'
 import { ColumnTemplateModule } from './modules/column-template/column-template.module'
 
 @Module({
@@ -77,7 +76,6 @@ import { ColumnTemplateModule } from './modules/column-template/column-template.
     NotificationEmailModule,
     OtaAccessNotificationModule,
     OtpStatusModule,
-    RoleColumnTemplateModule,
     ColumnTemplateModule
   ],
   controllers: [AppController],

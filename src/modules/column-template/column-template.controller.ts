@@ -44,7 +44,7 @@ export class ColumnTemplateController {
   @ApiOperation({
     summary: 'Get column templates for the authenticated user',
     description:
-      'Returns main_column (column_list from the role template matching the user\'s role) and all_columns (all user column templates belonging to the user).'
+      'Returns main_column (column_list of the column template assigned to the user\'s role) and all_columns (all column templates belonging to the user).'
   })
   @ApiResponse({
     status: 200,
@@ -65,6 +65,13 @@ export class ColumnTemplateController {
   @ApiResponse({ status: 200, description: 'Column templates for the specified user' })
   findByUserId(@Param('userId') userId: string) {
     return this.service.findByUserId(userId)
+  }
+
+  @Get('role/:roleId')
+  @ApiOperation({ summary: 'Get column templates assigned to a role ID' })
+  @ApiResponse({ status: 200, description: 'Column templates assigned to the specified role' })
+  findByRoleId(@Param('roleId') roleId: string) {
+    return this.service.findByRoleId(roleId)
   }
 
   @Get(':id')

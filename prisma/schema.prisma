@@ -73,7 +73,7 @@ model User {
   receivedInvitations          UserInvitation[]              @relation("InvitedUser")
   userProjectRoles             UserProjectRole[]
   uploadedFiles                File[]
-  column_templates             UserColumnTemplate[]
+  column_templates             ColumnTemplate[]
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -165,7 +165,7 @@ model UserRole {
   invitations                UserInvitation[]
   projectRoles               ProjectRole[]
   userProjectRoles           UserProjectRole[]
-  role_column_templates      RoleColumnTemplate[]
+  role_column_templates      ColumnTemplate[]
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -716,28 +716,19 @@ model OtpStatus {
   @@map("otp_statuses")
 }
 
-model RoleColumnTemplate {
-  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+model ColumnTemplate {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
   name        String
   column_list String[]
-  role_id     String   @db.ObjectId
-  role        UserRole @relation(fields: [role_id], references: [id])
-
-  created_at DateTime @default(now())
-  updated_at DateTime @updatedAt
-
-  @@index([role_id])
-}
-
-model UserColumnTemplate {
-  id          String   @id @default(auto()) @map("_id") @db.ObjectId
-  name        String
-  column_list String[]
-  user_id     String   @db.ObjectId
-  user        User     @relation(fields: [user_id], references: [id])
+  user_id     String    @db.ObjectId
+  user        User      @relation(fields: [user_id], references: [id])
+  role_id     String?   @db.ObjectId
+  role        UserRole? @relation(fields: [role_id], references: [id])
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
   @@index([user_id])
+  @@index([role_id])
+  @@map("UserColumnTemplate")
 }

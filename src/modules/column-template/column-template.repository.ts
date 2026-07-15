@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common'
-import { UserColumnTemplate } from '@prisma/client'
+import { ColumnTemplate } from '@prisma/client'
 import { PrismaService } from '../prisma/prisma.service'
 import { CreateColumnTemplateDto, UpdateColumnTemplateDto } from './column-template.dto'
 import type { IColumnTemplateRepository } from './column-template.interface'
@@ -8,30 +8,37 @@ import type { IColumnTemplateRepository } from './column-template.interface'
 export class ColumnTemplateRepository implements IColumnTemplateRepository {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
-  create(data: CreateColumnTemplateDto): Promise<UserColumnTemplate> {
-    return this.prisma.userColumnTemplate.create({ data })
+  create(data: CreateColumnTemplateDto): Promise<ColumnTemplate> {
+    return this.prisma.columnTemplate.create({ data })
   }
 
-  findAll(): Promise<UserColumnTemplate[]> {
-    return this.prisma.userColumnTemplate.findMany({ orderBy: { created_at: 'desc' } })
+  findAll(): Promise<ColumnTemplate[]> {
+    return this.prisma.columnTemplate.findMany({ orderBy: { created_at: 'desc' } })
   }
 
-  findById(id: string): Promise<UserColumnTemplate | null> {
-    return this.prisma.userColumnTemplate.findUnique({ where: { id } })
+  findById(id: string): Promise<ColumnTemplate | null> {
+    return this.prisma.columnTemplate.findUnique({ where: { id } })
   }
 
-  findByUserId(userId: string): Promise<UserColumnTemplate[]> {
-    return this.prisma.userColumnTemplate.findMany({
+  findByUserId(userId: string): Promise<ColumnTemplate[]> {
+    return this.prisma.columnTemplate.findMany({
       where: { user_id: userId },
       orderBy: { created_at: 'desc' }
     })
   }
 
-  update(id: string, data: UpdateColumnTemplateDto): Promise<UserColumnTemplate> {
-    return this.prisma.userColumnTemplate.update({ where: { id }, data })
+  findByRoleId(roleId: string): Promise<ColumnTemplate[]> {
+    return this.prisma.columnTemplate.findMany({
+      where: { role_id: roleId },
+      orderBy: { created_at: 'desc' }
+    })
   }
 
-  delete(id: string): Promise<UserColumnTemplate> {
-    return this.prisma.userColumnTemplate.delete({ where: { id } })
+  update(id: string, data: UpdateColumnTemplateDto): Promise<ColumnTemplate> {
+    return this.prisma.columnTemplate.update({ where: { id }, data })
+  }
+
+  delete(id: string): Promise<ColumnTemplate> {
+    return this.prisma.columnTemplate.delete({ where: { id } })
   }
 }

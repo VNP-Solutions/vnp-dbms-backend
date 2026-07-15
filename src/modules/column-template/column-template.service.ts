@@ -1,5 +1,5 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common'
-import { UserColumnTemplate } from '@prisma/client'
+import { ColumnTemplate } from '@prisma/client'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
 import { PrismaService } from '../prisma/prisma.service'
 import { CreateColumnTemplateDto, UpdateColumnTemplateDto } from './column-template.dto'
@@ -18,27 +18,31 @@ export class ColumnTemplateService implements IColumnTemplateService {
     private readonly prisma: PrismaService
   ) {}
 
-  create(data: CreateColumnTemplateDto): Promise<UserColumnTemplate> {
+  create(data: CreateColumnTemplateDto): Promise<ColumnTemplate> {
     return this.repo.create(data)
   }
 
-  findAll(): Promise<UserColumnTemplate[]> {
+  findAll(): Promise<ColumnTemplate[]> {
     return this.repo.findAll()
   }
 
-  async findOne(id: string): Promise<UserColumnTemplate> {
+  async findOne(id: string): Promise<ColumnTemplate> {
     const item = await this.repo.findById(id)
     if (!item) throw new NotFoundException('Column template not found')
     return item
   }
 
-  findByUserId(userId: string): Promise<UserColumnTemplate[]> {
+  findByUserId(userId: string): Promise<ColumnTemplate[]> {
     return this.repo.findByUserId(userId)
+  }
+
+  findByRoleId(roleId: string): Promise<ColumnTemplate[]> {
+    return this.repo.findByRoleId(roleId)
   }
 
   async findByAuth(user: IUserWithPermissions): Promise<AuthColumnTemplateResult> {
     const [roleTemplate, userTemplates] = await Promise.all([
-      this.prisma.roleColumnTemplate.findFirst({
+      this.prisma.columnTemplate.findFirst({
         where: { role_id: user.user_role_id }
       }),
       this.repo.findByUserId(user.id)
@@ -50,7 +54,7 @@ export class ColumnTemplateService implements IColumnTemplateService {
     }
   }
 
-  async update(id: string, data: UpdateColumnTemplateDto): Promise<UserColumnTemplate> {
+  async update(id: string, data: UpdateColumnTemplateDto): Promise<ColumnTemplate> {
     await this.findOne(id)
     return this.repo.update(id, data)
   }
