@@ -27,13 +27,6 @@ export class ColumnTemplateRepository implements IColumnTemplateRepository {
     })
   }
 
-  findByRoleId(roleId: string): Promise<ColumnTemplate[]> {
-    return this.prisma.columnTemplate.findMany({
-      where: { role_id: roleId },
-      orderBy: { created_at: 'desc' }
-    })
-  }
-
   update(id: string, data: UpdateColumnTemplateDto): Promise<ColumnTemplate> {
     return this.prisma.columnTemplate.update({ where: { id }, data })
   }

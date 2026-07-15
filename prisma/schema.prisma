@@ -165,7 +165,8 @@ model UserRole {
   invitations                UserInvitation[]
   projectRoles               ProjectRole[]
   userProjectRoles           UserProjectRole[]
-  role_column_templates      ColumnTemplate[]
+  user_column_template_id    String?                   @db.ObjectId
+  user_column_template       ColumnTemplate?           @relation(fields: [user_column_template_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -173,6 +174,7 @@ model UserRole {
   @@index([is_active])
   @@index([is_external])
   @@index([order])
+  @@index([user_column_template_id])
 }
 
 type PortfolioPermission {
@@ -717,18 +719,16 @@ model OtpStatus {
 }
 
 model ColumnTemplate {
-  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
   name        String
   column_list String[]
-  user_id     String    @db.ObjectId
-  user        User      @relation(fields: [user_id], references: [id])
-  role_id     String?   @db.ObjectId
-  role        UserRole? @relation(fields: [role_id], references: [id])
+  user_id     String   @db.ObjectId
+  user        User     @relation(fields: [user_id], references: [id])
+  roles       UserRole[]
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
   @@index([user_id])
-  @@index([role_id])
   @@map("UserColumnTemplate")
 }

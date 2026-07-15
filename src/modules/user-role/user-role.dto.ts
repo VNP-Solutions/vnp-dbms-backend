@@ -123,8 +123,7 @@ export class CreateUserRoleDto {
 
   @ApiPropertyOptional({
     example: '507f1f77bcf86cd799439011',
-    description:
-      'Column template ID to assign to this role as its default column layout (sets that template\'s role_id to the newly created role)'
+    description: 'Column template ID to assign to this role as its default column layout'
   })
   @IsMongoId()
   @IsOptional()

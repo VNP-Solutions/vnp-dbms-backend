@@ -68,8 +68,12 @@ export class ColumnTemplateController {
   }
 
   @Get('role/:roleId')
-  @ApiOperation({ summary: 'Get column templates assigned to a role ID' })
-  @ApiResponse({ status: 200, description: 'Column templates assigned to the specified role' })
+  @ApiOperation({ summary: 'Get the column template assigned to a role ID' })
+  @ApiResponse({
+    status: 200,
+    description:
+      'The column template assigned to the specified role (via UserRole.user_column_template_id), or null if none is assigned'
+  })
   findByRoleId(@Param('roleId') roleId: string) {
     return this.service.findByRoleId(roleId)
   }
