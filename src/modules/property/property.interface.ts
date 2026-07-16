@@ -257,6 +257,10 @@ export interface AllDataForGlobalFilterResponse {
   agoda_credential_verified: string[]
   agoda_otp_number: string[]
   sales_rep: string[]
+  discontinued_email_ids: string[]
+  cybersource_mid: string[]
+  adyen_location: string[]
+  stripe_connected_email: string[]
 }
 
 export interface IPropertyRepository {

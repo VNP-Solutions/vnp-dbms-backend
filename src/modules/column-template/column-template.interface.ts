@@ -21,7 +21,6 @@ export interface IColumnTemplateService {
   findAll(): Promise<ColumnTemplate[]>
   findOne(id: string): Promise<ColumnTemplate>
   findByUserId(userId: string): Promise<ColumnTemplate[]>
-  findByRoleId(roleId: string): Promise<ColumnTemplate | null>
   findByAuth(user: IUserWithPermissions): Promise<AuthColumnTemplateResult>
   update(id: string, data: UpdateColumnTemplateDto): Promise<ColumnTemplate>
   remove(id: string): Promise<{ message: string }>

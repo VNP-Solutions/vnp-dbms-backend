@@ -48,6 +48,14 @@ import {
   SyncByOtaDto,
   UpdatePropertyDto
 } from './property.dto'
+import {
+  collectPropertyUniqueConflicts,
+  normalizePropertyIdentifier,
+  propertyIdentifierKey
+} from './property-uniqueness.util'
+import { mapPropertyToExcelRow, writePropertyExportBuffer } from '../../common/utils/property-excel.util'
+import { applyColumnFilter } from './property-column-filter.util'
+import type { Priority } from '@prisma/client'
 import type {
   ImportPropertiesResult,
   ImportPropertyRow,
@@ -848,14 +856,20 @@ export class PropertyService implements IPropertyService {
 
     this.logger.debug(`Final where clause: ${JSON.stringify(where, null, 2)}`)
 
-    const [data, total] = await Promise.all([
-      this.repo.findAll({ where, skip, take, orderBy }),
-      this.repo.count(where)
+    const [[data, total], columnList] = await Promise.all([
+      Promise.all([
+        this.repo.findAll({ where, skip, take, orderBy }),
+        this.repo.count(where)
+      ]),
+      this.getRoleColumnList(user)
     ])
 
     const totalPages = usePagination ? Math.ceil(total / (take || 10)) || 1 : 1
     const currentPage = usePagination ? filterDto.page || 1 : 1
     const limit = usePagination ? take || 10 : data.length
+
+    const applyFilter = (p: PropertyWithRelations) =>
+      columnList ? applyColumnFilter(p, columnList) as PropertyWithRelations : p
 
     const shouldDecrypt = filterDto.masked === false
 
@@ -874,7 +888,7 @@ export class PropertyService implements IPropertyService {
           `Failed credential verification for user: ${user.email}`
         )
         const dataWithMaskedCredentials = data.map(p =>
-          this.maskCredentialsForResponse(p)
+          applyFilter(this.maskCredentialsForResponse(p))
         )
         return {
           data: dataWithMaskedCredentials,
@@ -892,7 +906,7 @@ export class PropertyService implements IPropertyService {
         'Credentials verified successfully, returning decrypted data'
       )
       const dataWithDecryptedCredentials = data.map(p =>
-        this.decryptCredentialsForResponse(p)
+        applyFilter(this.decryptCredentialsForResponse(p))
       )
       return {
         data: dataWithDecryptedCredentials,
@@ -906,7 +920,7 @@ export class PropertyService implements IPropertyService {
     }
 
     const dataWithMaskedCredentials = data.map(p =>
-      this.maskCredentialsForResponse(p)
+      applyFilter(this.maskCredentialsForResponse(p))
     )
 
     return {
@@ -980,6 +994,24 @@ export class PropertyService implements IPropertyService {
     return result
   }
 
+  /**
+   * Returns the column_list from the RoleColumnTemplate for the user's role,
+   * or null if no template is defined (meaning return all fields).
+   */
+  /**
+   * Returns the column_list from the ColumnTemplate assigned to the user's role,
+   * or null if no template is assigned (meaning all fields are returned).
+   */
+  private async getRoleColumnList(
+    user: IUserWithPermissions
+  ): Promise<string[] | null> {
+    const role = await this.prisma.userRole.findUnique({
+      where: { id: user.user_role_id },
+      select: { user_column_template: { select: { column_list: true } } }
+    })
+    return role?.user_column_template?.column_list ?? null
+  }
+
   private maskCredentialsForResponse(
     property: PropertyWithRelations
   ): PropertyWithRelations {
@@ -1041,7 +1073,11 @@ export class PropertyService implements IPropertyService {
     if (!property) throw new NotFoundException('Property not found')
 
     await this.redisService.set(cacheKey, property, CACHE_TTL_ITEM)
-    return property
+
+    const columnList = await this.getRoleColumnList(user)
+    return columnList
+      ? applyColumnFilter(property, columnList) as PropertyWithRelations
+      : property
   }
 
   async getContact(
@@ -1442,22 +1478,34 @@ export class PropertyService implements IPropertyService {
     portfolioId: string,
     user: IUserWithPermissions
   ): Promise<PropertyWithRelations[]> {
-    const accessibleIds = await this.repo.getAccessiblePropertyIds(user.id)
+    const [accessibleIds, columnList] = await Promise.all([
+      this.repo.getAccessiblePropertyIds(user.id),
+      this.getRoleColumnList(user)
+    ])
     const list = await this.repo.findByPortfolioId(portfolioId)
-    if (accessibleIds === 'all') return list
-    const idSet = new Set(accessibleIds)
-    return list.filter(p => idSet.has(p.id))
+    const filtered = accessibleIds === 'all'
+      ? list
+      : list.filter(p => (accessibleIds as string[]).includes(p.id))
+    return columnList
+      ? filtered.map(p => applyColumnFilter(p, columnList) as PropertyWithRelations)
+      : filtered
   }
 
   async findBySubportfolioId(
     subportfolioId: string,
     user: IUserWithPermissions
   ): Promise<PropertyWithRelations[]> {
-    const accessibleIds = await this.repo.getAccessiblePropertyIds(user.id)
+    const [accessibleIds, columnList] = await Promise.all([
+      this.repo.getAccessiblePropertyIds(user.id),
+      this.getRoleColumnList(user)
+    ])
     const list = await this.repo.findBySubportfolioId(subportfolioId)
-    if (accessibleIds === 'all') return list
-    const idSet = new Set(accessibleIds)
-    return list.filter(p => idSet.has(p.id))
+    const filtered = accessibleIds === 'all'
+      ? list
+      : list.filter(p => (accessibleIds as string[]).includes(p.id))
+    return columnList
+      ? filtered.map(p => applyColumnFilter(p, columnList) as PropertyWithRelations)
+      : filtered
   }
 
   async getDropdown(user: IUserWithPermissions) {
@@ -3704,13 +3752,19 @@ export class PropertyService implements IPropertyService {
     user: IUserWithPermissions
   ): Promise<PropertyWithRelations[]> {
     const cacheKey = `property:all:${user.id}`
-    const cached =
-      await this.redisService.get<PropertyWithRelations[]>(cacheKey)
+    const [cached, columnList] = await Promise.all([
+      this.redisService.get<PropertyWithRelations[]>(cacheKey),
+      this.getRoleColumnList(user)
+    ])
+
+    const applyFilter = (p: PropertyWithRelations) =>
+      columnList ? applyColumnFilter(p, columnList) as PropertyWithRelations : p
+
     if (cached) {
       this.logger.log(
         `[CACHE HIT] property:findAllCached — served from Redis (key: ${cacheKey})`
       )
-      return cached
+      return cached.map(applyFilter)
     }
     this.logger.log(
       `[CACHE MISS] property:findAllCached — fetching from MongoDB (key: ${cacheKey})`
@@ -3730,7 +3784,7 @@ export class PropertyService implements IPropertyService {
     const masked = data.map(p => this.maskCredentialsForResponse(p))
     // TTL 1 hour = auto-refresh cache every hour
     await this.redisService.set(cacheKey, masked, CACHE_TTL_ALL)
-    return masked
+    return masked.map(applyFilter)
   }
 
   async refreshCache(user: IUserWithPermissions) {
@@ -3800,6 +3854,10 @@ export class PropertyService implements IPropertyService {
     const uniqueAgodaCredentialVerified = new Set<string>()
     const uniqueAgodaOtpNumbers = new Set<string>()
     const uniqueSalesReps = new Set<string>()
+    const uniqueDiscontinuedEmailIds = new Set<string>()
+    const uniqueCybersourceMids = new Set<string>()
+    const uniqueAdyenLocations = new Set<string>()
+    const uniqueStripeConnectedEmails = new Set<string>()
     const uniqueExpediaIds = new Set<string>()
     const portfolioMap = new Map<string, { id: string; name: string }>()
     const propertyMap = new Map<string, { id: string; name: string }>()
@@ -4140,7 +4198,17 @@ export class PropertyService implements IPropertyService {
         )
       if (property.agoda_otp_number)
         uniqueAgodaOtpNumbers.add(property.agoda_otp_number)
-      if (property.sales_rep) uniqueSalesReps.add(property.sales_rep)
+      if (property.sales_rep)
+        uniqueSalesReps.add(property.sales_rep)
+      if (Array.isArray(property.discontinued_email_ids)) {
+        property.discontinued_email_ids.forEach((e: string) => uniqueDiscontinuedEmailIds.add(e))
+      }
+      if (property.cybersource_mid)
+        uniqueCybersourceMids.add(property.cybersource_mid)
+      if (property.adyen_location)
+        uniqueAdyenLocations.add(property.adyen_location)
+      if (property.stripe_connected_email)
+        uniqueStripeConnectedEmails.add(property.stripe_connected_email)
     })
 
     return {
@@ -4300,7 +4368,11 @@ export class PropertyService implements IPropertyService {
         uniqueAgodaCredentialVerified
       ).sort(),
       agoda_otp_number: Array.from(uniqueAgodaOtpNumbers).sort(),
-      sales_rep: Array.from(uniqueSalesReps).sort()
+      sales_rep: Array.from(uniqueSalesReps).sort(),
+      discontinued_email_ids: Array.from(uniqueDiscontinuedEmailIds).sort(),
+      cybersource_mid: Array.from(uniqueCybersourceMids).sort(),
+      adyen_location: Array.from(uniqueAdyenLocations).sort(),
+      stripe_connected_email: Array.from(uniqueStripeConnectedEmails).sort(),
     }
   }
 

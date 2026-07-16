@@ -473,6 +473,12 @@ model Property {
 
   sales_rep   String?
 
+  // Payment gateway fields
+  discontinued_email_ids String[] @default([])
+  cybersource_mid        String?
+  adyen_location         String?
+  stripe_connected_email String?
+
   // OTA Configuration
   need_another_domain Boolean?
   booking_otp_phone   String?

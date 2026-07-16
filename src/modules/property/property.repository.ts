@@ -170,6 +170,10 @@ export class PropertyRepository implements IPropertyRepository {
       agoda_credential_verified: data.agoda_credential_verified,
       agoda_otp_number: data.agoda_otp_number,
       sales_rep: data.sales_rep,
+      discontinued_email_ids: data.discontinued_email_ids ?? [],
+      cybersource_mid: data.cybersource_mid,
+      adyen_location: data.adyen_location,
+      stripe_connected_email: data.stripe_connected_email,
       need_another_domain: data.need_another_domain,
       booking_otp_phone: data.booking_otp_phone
     }

@@ -36,36 +36,17 @@ export class ColumnTemplateService implements IColumnTemplateService {
     return this.repo.findByUserId(userId)
   }
 
-  async findByRoleId(roleId: string): Promise<ColumnTemplate | null> {
-    const role = await this.prisma.userRole.findUnique({
-      where: { id: roleId },
-      select: { user_column_template_id: true }
-    })
-
-    if (!role?.user_column_template_id) return null
-
-    return this.prisma.columnTemplate.findUnique({
-      where: { id: role.user_column_template_id }
-    })
-  }
-
   async findByAuth(user: IUserWithPermissions): Promise<AuthColumnTemplateResult> {
     const [role, userTemplates] = await Promise.all([
       this.prisma.userRole.findUnique({
         where: { id: user.user_role_id },
-        select: { user_column_template_id: true }
+        select: { user_column_template: { select: { column_list: true } } }
       }),
       this.repo.findByUserId(user.id)
     ])
 
-    const roleTemplate = role?.user_column_template_id
-      ? await this.prisma.columnTemplate.findUnique({
-          where: { id: role.user_column_template_id }
-        })
-      : null
-
     return {
-      main_column: roleTemplate?.column_list ?? [],
+      main_column: role?.user_column_template?.column_list ?? [],
       all_columns: userTemplates
     }
   }
