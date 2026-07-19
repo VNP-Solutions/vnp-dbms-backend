@@ -33,7 +33,15 @@ const propertyInclude = {
   agoda_processor: true,
   expedia_priority: true,
   booking_priority: true,
-  agoda_priority: true
+  agoda_priority: true,
+  _count: { select: { notes: true } }
+}
+
+function withTotalNotes<T extends { _count: { notes: number } }>(
+  raw: T
+): Omit<T, '_count'> & { total_notes: number } {
+  const { _count, ...rest } = raw
+  return { ...rest, total_notes: _count.notes }
 }
 
 @Injectable()
@@ -179,10 +187,11 @@ export class PropertyRepository implements IPropertyRepository {
     }
     if (data.subportfolio_id) payload.subportfolio_id = data.subportfolio_id
 
-    return this.prisma.property.create({
+    const raw = await this.prisma.property.create({
       data: payload,
       include: propertyInclude
-    }) as Promise<PropertyWithRelations>
+    })
+    return withTotalNotes(raw) as PropertyWithRelations
   }
 
   async findAll(queryOptions: {
@@ -192,13 +201,14 @@ export class PropertyRepository implements IPropertyRepository {
     orderBy?: any
   }): Promise<PropertyWithRelations[]> {
     const { where, skip, take, orderBy } = queryOptions
-    return this.prisma.property.findMany({
+    const rows = await this.prisma.property.findMany({
       where,
       skip,
       take,
       orderBy,
       include: propertyInclude
-    }) as Promise<PropertyWithRelations[]>
+    })
+    return rows.map(withTotalNotes) as PropertyWithRelations[]
   }
 
   async count(where: any): Promise<number> {
@@ -206,10 +216,11 @@ export class PropertyRepository implements IPropertyRepository {
   }
 
   async findById(id: string): Promise<PropertyWithRelations | null> {
-    return this.prisma.property.findUnique({
+    const raw = await this.prisma.property.findUnique({
       where: { id },
       include: propertyInclude
-    }) as Promise<PropertyWithRelations | null>
+    })
+    return raw ? (withTotalNotes(raw) as PropertyWithRelations) : null
   }
 
   async findIdsByOtaIds(ota: { expedia_id?: number | null; booking_id?: number | null; agoda_id?: number | null }): Promise<string[]> {
@@ -230,11 +241,12 @@ export class PropertyRepository implements IPropertyRepository {
     const payload: any = { ...data }
     if (data.next_due_date !== undefined) payload.next_due_date = data.next_due_date ? new Date(data.next_due_date) : null
     if (data.is_active !== undefined) payload.is_active = data.is_active
-    return this.prisma.property.update({
+    const raw = await this.prisma.property.update({
       where: { id },
       data: payload,
       include: propertyInclude
-    }) as Promise<PropertyWithRelations>
+    })
+    return withTotalNotes(raw) as PropertyWithRelations
   }
 
   async delete(id: string) {
@@ -242,7 +254,7 @@ export class PropertyRepository implements IPropertyRepository {
   }
 
   async findByPortfolioId(portfolioId: string): Promise<PropertyWithRelations[]> {
-    return this.prisma.property.findMany({
+    const rows = await this.prisma.property.findMany({
       where: {
         OR: [
           { portfolio_id: portfolioId },
@@ -250,14 +262,16 @@ export class PropertyRepository implements IPropertyRepository {
         ]
       },
       include: propertyInclude
-    }) as Promise<PropertyWithRelations[]>
+    })
+    return rows.map(withTotalNotes) as PropertyWithRelations[]
   }
 
   async findBySubportfolioId(subportfolioId: string): Promise<PropertyWithRelations[]> {
-    return this.prisma.property.findMany({
+    const rows = await this.prisma.property.findMany({
       where: { subportfolio_id: subportfolioId },
       include: propertyInclude
-    }) as Promise<PropertyWithRelations[]>
+    })
+    return rows.map(withTotalNotes) as PropertyWithRelations[]
   }
 
   async getDropdownPortfoliosAndSubportfolios(userId: string) {

@@ -24,6 +24,7 @@ export type PropertyWithRelations = Property & {
   expedia_priority: Priority | null
   booking_priority: Priority | null
   agoda_priority: Priority | null
+  total_notes: number
 }
 
 export interface ImportPropertyRow {

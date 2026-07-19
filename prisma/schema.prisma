@@ -74,6 +74,7 @@ model User {
   userProjectRoles             UserProjectRole[]
   uploadedFiles                File[]
   column_templates             ColumnTemplate[]
+  notes                        Note[]
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -306,6 +307,7 @@ model Portfolio {
   subportfolios                Subportfolio[]
   properties                   Property[]
   userFeatureAccessPermissions UserFeatureAccessPermission[]
+  notes                        Note[]
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -485,6 +487,7 @@ model Property {
 
   userFeatureAccessPermissions UserFeatureAccessPermission[]
   credentials                  PropertyCredentials[]
+  notes                        Note[]
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -737,4 +740,23 @@ model ColumnTemplate {
 
   @@index([user_id])
   @@map("UserColumnTemplate")
+}
+
+model Note {
+  id           String     @id @default(auto()) @map("_id") @db.ObjectId
+  text         String
+  is_done      Boolean    @default(false)
+  user_id      String     @db.ObjectId
+  user         User       @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  portfolio_id String?    @db.ObjectId
+  portfolio    Portfolio? @relation(fields: [portfolio_id], references: [id], onDelete: Cascade)
+  property_id  String?    @db.ObjectId
+  property     Property?  @relation(fields: [property_id], references: [id], onDelete: Cascade)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([user_id])
+  @@index([portfolio_id])
+  @@index([property_id])
 }

@@ -40,6 +40,7 @@ import { ScheduleModule } from '@nestjs/schedule'
 import { OtaAccessNotificationModule } from './modules/ota-access-notification/ota-access-notification.module'
 import { OtpStatusModule } from './modules/otp-status/otp-status.module'
 import { ColumnTemplateModule } from './modules/column-template/column-template.module'
+import { NoteModule } from './modules/note/note.module'
 
 @Module({
   imports: [
@@ -76,7 +77,8 @@ import { ColumnTemplateModule } from './modules/column-template/column-template.
     NotificationEmailModule,
     OtaAccessNotificationModule,
     OtpStatusModule,
-    ColumnTemplateModule
+    ColumnTemplateModule,
+    NoteModule
   ],
   controllers: [AppController],
   providers: [
