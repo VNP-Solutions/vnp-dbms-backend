@@ -1,6 +1,7 @@
 import type { Note, Prisma } from '@prisma/client'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
 import type {
+  BulkDeleteNotesDto,
   CreateNoteDto,
   DeleteAllNotesDto,
   NoteQueryDto,
@@ -39,6 +40,7 @@ export interface INoteRepository {
   update(id: string, data: UpdateNoteDto): Promise<NoteWithRelations>
   delete(id: string): Promise<Note>
   deleteMany(whereClause: any): Promise<number>
+  deleteManyByIds(ids: string[]): Promise<number>
 }
 
 export interface INoteService {
@@ -48,4 +50,5 @@ export interface INoteService {
   update(id: string, data: UpdateNoteDto, user: IUserWithPermissions): Promise<NoteWithRelations>
   remove(id: string, user: IUserWithPermissions): Promise<{ message: string }>
   removeAll(query: DeleteAllNotesDto, user: IUserWithPermissions): Promise<{ message: string; deletedCount: number }>
+  bulkDelete(dto: BulkDeleteNotesDto, user: IUserWithPermissions): Promise<{ message: string; deletedCount: number }>
 }
