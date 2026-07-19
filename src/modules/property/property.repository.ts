@@ -34,6 +34,10 @@ const propertyInclude = {
   expedia_priority: true,
   booking_priority: true,
   agoda_priority: true,
+  notes: {
+    select: { id: true, text: true, is_done: true, user_id: true, created_at: true, updated_at: true },
+    orderBy: { created_at: 'desc' as const }
+  },
   _count: { select: { notes: true } }
 }
 
@@ -653,6 +657,15 @@ export class PropertyRepository implements IPropertyRepository {
       if (row.agodaOtpNumber) propertyPayload.agoda_otp_number = row.agodaOtpNumber
       // Misc
       if (row.salesRep) propertyPayload.sales_rep = row.salesRep
+      if (row.discontinuedEmailIds) {
+        propertyPayload.discontinued_email_ids = row.discontinuedEmailIds
+          .split(',')
+          .map(e => e.trim())
+          .filter(Boolean)
+      }
+      if (row.cybersourceMid) propertyPayload.cybersource_mid = row.cybersourceMid
+      if (row.adyenLocation) propertyPayload.adyen_location = row.adyenLocation
+      if (row.stripeConnectedEmail) propertyPayload.stripe_connected_email = row.stripeConnectedEmail
 
       if (row.serviceTypeName) {
         propertyPayload.service_type_id = await resolveServiceType(row.serviceTypeName)

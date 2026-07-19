@@ -1,4 +1,4 @@
-import { BillingType, Currency, Frequency, Priority, Processor, Property, ServiceType } from '@prisma/client'
+import { BillingType, Currency, Frequency, Note, Priority, Processor, Property, ServiceType } from '@prisma/client'
 import { PaginatedResult } from '../../common/dto/query.dto'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
 import type { SyncBulkDeleteResponseDto } from './property.dto'
@@ -25,6 +25,7 @@ export type PropertyWithRelations = Property & {
   booking_priority: Priority | null
   agoda_priority: Priority | null
   total_notes: number
+  notes: Pick<Note, 'id' | 'text' | 'is_done' | 'user_id' | 'created_at' | 'updated_at'>[]
 }
 
 export interface ImportPropertyRow {
@@ -136,6 +137,10 @@ export interface ImportPropertyRow {
   agodaOtpNumber?: string
   // Misc new fields
   salesRep?: string
+  discontinuedEmailIds?: string   // comma-separated in Excel, stored as array
+  cybersourceMid?: string
+  adyenLocation?: string
+  stripeConnectedEmail?: string
 }
 
 export interface ImportPropertiesResult {

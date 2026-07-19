@@ -2080,7 +2080,11 @@ export class PropertyService implements IPropertyService {
             ? String(r['Agoda OTP Number']).trim()
             : undefined,
           // Misc
-          salesRep: r['Sales Rep'] ? String(r['Sales Rep']).trim() : undefined
+          salesRep: r['Sales Rep'] ? String(r['Sales Rep']).trim() : undefined,
+          discontinuedEmailIds: r['Discontinued Email IDs'] ? String(r['Discontinued Email IDs']).trim() : undefined,
+          cybersourceMid: r['Cybersource MID'] ? String(r['Cybersource MID']).trim() : undefined,
+          adyenLocation: r['Adyen Location'] ? String(r['Adyen Location']).trim() : undefined,
+          stripeConnectedEmail: r['Stripe Connected Email'] ? String(r['Stripe Connected Email']).trim() : undefined
         } satisfies ImportPropertyRow
       })
       .filter(Boolean) as ImportPropertyRow[]
@@ -3248,13 +3252,21 @@ export class PropertyService implements IPropertyService {
             updateData.need_another_domain = needAnotherDomain
           const salesRep = findValue(row, ['Sales Rep', 'Sales rep'])
           if (salesRep !== undefined) updateData.sales_rep = salesRep
-          const caseContactEmail = findValue(row, [
-            'Case Contact Email',
-            'Case contact email',
-            'Primary Case Email'
-          ])
-          if (caseContactEmail !== undefined)
-            updateData.primary_case_email = caseContactEmail
+          const discontinuedEmailIds = findValue(row, ['Discontinued Email IDs', 'Discontinued Email Ids'])
+          if (discontinuedEmailIds !== undefined) {
+            updateData.discontinued_email_ids = discontinuedEmailIds
+              .split(',')
+              .map((e: string) => e.trim())
+              .filter(Boolean)
+          }
+          const cybersourceMid = findValue(row, ['Cybersource MID', 'Cybersource Mid'])
+          if (cybersourceMid !== undefined) updateData.cybersource_mid = cybersourceMid
+          const adyenLocation = findValue(row, ['Adyen Location', 'Adyen location'])
+          if (adyenLocation !== undefined) updateData.adyen_location = adyenLocation
+          const stripeConnectedEmail = findValue(row, ['Stripe Connected Email', 'Stripe connected email'])
+          if (stripeConnectedEmail !== undefined) updateData.stripe_connected_email = stripeConnectedEmail
+          const caseContactEmail = findValue(row, ['Case Contact Email', 'Case contact email', 'Primary Case Email'])
+          if (caseContactEmail !== undefined) updateData.primary_case_email = caseContactEmail
 
           // ── QP / FP credentials (stored on Property, encrypted) ───────────
           const qpUsername = findValue(row, ['Qp Username', 'QP Username'])

@@ -67,6 +67,7 @@ const COLUMN_TO_FIELDS: Record<string, string[]> = {
   cybersource_mid:             ['cybersource_mid'],
   adyen_location:              ['adyen_location'],
   stripe_connected_email:      ['stripe_connected_email'],
+  notes:                       ['notes', 'total_notes'],
 }
 
 /**
