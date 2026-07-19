@@ -73,6 +73,8 @@ model User {
   receivedInvitations          UserInvitation[]              @relation("InvitedUser")
   userProjectRoles             UserProjectRole[]
   uploadedFiles                File[]
+  column_templates             ColumnTemplate[]
+  notes                        Note[]
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -164,6 +166,8 @@ model UserRole {
   invitations                UserInvitation[]
   projectRoles               ProjectRole[]
   userProjectRoles           UserProjectRole[]
+  user_column_template_id    String?                   @db.ObjectId
+  user_column_template       ColumnTemplate?           @relation(fields: [user_column_template_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -171,6 +175,7 @@ model UserRole {
   @@index([is_active])
   @@index([is_external])
   @@index([order])
+  @@index([user_column_template_id])
 }
 
 type PortfolioPermission {
@@ -302,6 +307,7 @@ model Portfolio {
   subportfolios                Subportfolio[]
   properties                   Property[]
   userFeatureAccessPermissions UserFeatureAccessPermission[]
+  notes                        Note[]
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -469,12 +475,19 @@ model Property {
 
   sales_rep   String?
 
+  // Payment gateway fields
+  discontinued_email_ids String[] @default([])
+  cybersource_mid        String?
+  adyen_location         String?
+  stripe_connected_email String?
+
   // OTA Configuration
   need_another_domain Boolean?
   booking_otp_phone   String?
 
   userFeatureAccessPermissions UserFeatureAccessPermission[]
   credentials                  PropertyCredentials[]
+  notes                        Note[]
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -712,4 +725,38 @@ model OtpStatus {
 
   @@unique([platform])
   @@map("otp_statuses")
+}
+
+model ColumnTemplate {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  column_list String[]
+  user_id     String   @db.ObjectId
+  user        User     @relation(fields: [user_id], references: [id])
+  roles       UserRole[]
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([user_id])
+  @@map("UserColumnTemplate")
+}
+
+model Note {
+  id           String     @id @default(auto()) @map("_id") @db.ObjectId
+  text         String
+  is_done      Boolean    @default(false)
+  user_id      String     @db.ObjectId
+  user         User       @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  portfolio_id String?    @db.ObjectId
+  portfolio    Portfolio? @relation(fields: [portfolio_id], references: [id], onDelete: Cascade)
+  property_id  String?    @db.ObjectId
+  property     Property?  @relation(fields: [property_id], references: [id], onDelete: Cascade)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([user_id])
+  @@index([portfolio_id])
+  @@index([property_id])
 }

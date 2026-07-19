@@ -62,6 +62,10 @@ export class UserRoleService implements IUserRoleService {
       warnings.forEach(warning => this.logger.warn(`  - ${warning}`))
     }
 
+    if (data.user_column_template_id) {
+      await this.assertColumnTemplateExists(data.user_column_template_id)
+    }
+
     return this.userRoleRepository.create(data)
   }
 
@@ -108,6 +112,10 @@ export class UserRoleService implements IUserRoleService {
       if (existingRole) {
         throw new ConflictException('Role with this name already exists')
       }
+    }
+
+    if (data.user_column_template_id) {
+      await this.assertColumnTemplateExists(data.user_column_template_id)
     }
 
     // Validate updated role configuration (merge data over existing role)
@@ -230,5 +238,15 @@ export class UserRoleService implements IUserRoleService {
     await this.userRoleRepository.updateMany(updates)
 
     return { message: 'Role order updated successfully' }
+  }
+
+  private async assertColumnTemplateExists(id: string): Promise<void> {
+    const columnTemplate = await this.prisma.columnTemplate.findUnique({
+      where: { id }
+    })
+
+    if (!columnTemplate) {
+      throw new NotFoundException('Column template not found')
+    }
   }
 }

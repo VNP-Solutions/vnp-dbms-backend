@@ -783,6 +783,40 @@ export class CreatePropertyDto {
   sales_rep?: string
 
   @ApiPropertyOptional({
+    example: ['old@hotel.com', 'legacy@hotel.com'],
+    description: 'List of discontinued email IDs associated with the property',
+    type: [String]
+  })
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  discontinued_email_ids?: string[]
+
+  @ApiPropertyOptional({
+    example: '123456789',
+    description: 'CyberSource merchant ID'
+  })
+  @IsString()
+  @IsOptional()
+  cybersource_mid?: string
+
+  @ApiPropertyOptional({
+    example: 'store_001',
+    description: 'Adyen location identifier'
+  })
+  @IsString()
+  @IsOptional()
+  adyen_location?: string
+
+  @ApiPropertyOptional({
+    example: 'billing@hotel.com',
+    description: 'Stripe connected account email'
+  })
+  @IsString()
+  @IsOptional()
+  stripe_connected_email?: string
+
+  @ApiPropertyOptional({
     example: true,
     description: 'Need another domain for OTA integrations'
   })
@@ -1218,7 +1252,11 @@ export const PROPERTY_FILTER_FIELD_NAMES = [
   'agoda_service_fee',
   'agoda_priority_id',
   'agoda_credential_verified',
-  'sales_rep'
+  'sales_rep',
+  'discontinued_email_ids',
+  'cybersource_mid',
+  'adyen_location',
+  'stripe_connected_email'
 ] as const
 
 export type PropertyFilterFieldName = (typeof PROPERTY_FILTER_FIELD_NAMES)[number]
