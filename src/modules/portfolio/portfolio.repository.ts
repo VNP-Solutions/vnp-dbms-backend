@@ -4,6 +4,13 @@ import { PrismaService } from '../prisma/prisma.service'
 import { CreatePortfolioDto, UpdatePortfolioDto } from './portfolio.dto'
 import type { IPortfolioRepository, PortfolioWithCounts } from './portfolio.interface'
 
+const portfolioInclude = {
+  service_type: true,
+  currency: true,
+  contract_urls: true,
+  _count: { select: { properties: true, subportfolios: true } }
+} as any
+
 @Injectable()
 export class PortfolioRepository implements IPortfolioRepository {
   constructor(@Inject(PrismaService) private prisma: PrismaService) {}
@@ -65,19 +72,12 @@ export class PortfolioRepository implements IPortfolioRepository {
       skip,
       take,
       orderBy,
-      include: {
-        service_type: true,
-        currency: true,
-        contract_urls: true,
-        _count: {
-          select: { properties: true, subportfolios: true }
-        }
-      }
+      include: portfolioInclude
     })
-    return portfolios.map((p) => ({
+    return portfolios.map((p: any) => ({
       ...p,
-      total_properties: (p as any)._count?.properties ?? 0,
-      total_subportfolios: (p as any)._count?.subportfolios ?? 0,
+      total_properties: p._count?.properties ?? 0,
+      total_subportfolios: p._count?.subportfolios ?? 0,
       _count: undefined
     })) as PortfolioWithCounts[]
   }
@@ -87,20 +87,15 @@ export class PortfolioRepository implements IPortfolioRepository {
   }
 
   async findById(id: string): Promise<PortfolioWithCounts | null> {
-    const portfolio = await this.prisma.portfolio.findUnique({
+    const portfolio: any = await this.prisma.portfolio.findUnique({
       where: { id },
-      include: {
-        service_type: true,
-        currency: true,
-        contract_urls: true,
-        _count: { select: { properties: true, subportfolios: true } }
-      }
+      include: portfolioInclude
     })
     if (!portfolio) return null
     return {
       ...portfolio,
-      total_properties: (portfolio as any)._count?.properties ?? 0,
-      total_subportfolios: (portfolio as any)._count?.subportfolios ?? 0,
+      total_properties: portfolio._count?.properties ?? 0,
+      total_subportfolios: portfolio._count?.subportfolios ?? 0,
       _count: undefined
     } as PortfolioWithCounts
   }

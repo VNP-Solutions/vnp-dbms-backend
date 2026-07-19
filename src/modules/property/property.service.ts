@@ -48,14 +48,7 @@ import {
   SyncByOtaDto,
   UpdatePropertyDto
 } from './property.dto'
-import {
-  collectPropertyUniqueConflicts,
-  normalizePropertyIdentifier,
-  propertyIdentifierKey
-} from './property-uniqueness.util'
-import { mapPropertyToExcelRow, writePropertyExportBuffer } from '../../common/utils/property-excel.util'
 import { applyColumnFilter } from './property-column-filter.util'
-import type { Priority } from '@prisma/client'
 import type {
   ImportPropertiesResult,
   ImportPropertyRow,
