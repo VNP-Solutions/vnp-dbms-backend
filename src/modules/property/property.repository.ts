@@ -242,9 +242,137 @@ export class PropertyRepository implements IPropertyRepository {
   }
 
   async update(id: string, data: UpdatePropertyDto): Promise<PropertyWithRelations> {
-    const payload: any = { ...data }
-    if (data.next_due_date !== undefined) payload.next_due_date = data.next_due_date ? new Date(data.next_due_date) : null
-    if (data.is_active !== undefined) payload.is_active = data.is_active
+    // Helper: convert a nullable FK id to Prisma connect/disconnect syntax
+    const rel = (fkId: string | null | undefined) => {
+      if (fkId === undefined) return undefined
+      return fkId ? { connect: { id: fkId } } : { disconnect: true }
+    }
+
+    const d = data as any
+
+    // Scalar (non-relation) fields — spread directly
+    const payload: any = {
+      name:                              d.name,
+      property_identifier:               d.property_identifier,
+      card_descriptor:                   d.card_descriptor,
+      description:                       d.description,
+      hotel_address:                     d.hotel_address,
+      previous_portfolio_id:             d.previous_portfolio_id,
+      show_in_portfolio:                 d.show_in_portfolio,
+      new_domain_email:                  d.new_domain_email,
+      others_case_emails:                d.others_case_emails,
+      primary_case_email:                d.primary_case_email,
+      portfolio_contact_email:           d.portfolio_contact_email,
+      portfolio_contact:                 d.portfolio_contact,
+      webmail_password:                  d.webmail_password,
+      case_management_contact:           d.case_management_contact,
+      access_contact:                    d.access_contact,
+      reporting_contact:                 d.reporting_contact,
+      from:                              d.from,
+      to:                                d.to,
+      qp_username:                       d.qp_username,
+      qp_password:                       d.qp_password,
+      qp_api_key:                        d.qp_api_key,
+      fp_mid:                            d.fp_mid,
+      fp_username:                       d.fp_username,
+      fp_password:                       d.fp_password,
+      stripe_account_email:              d.stripe_account_email,
+      expedia_id:                        d.expedia_id,
+      expedia_status:                    d.expedia_status,
+      expedia_access_level:              d.expedia_access_level,
+      expedia_from:                      d.expedia_from,
+      expedia_to:                        d.expedia_to,
+      from_db:                           d.from_db,
+      to_db:                             d.to_db,
+      expedia_scheduler:                 d.expedia_scheduler,
+      expedia_duration:                  d.expedia_duration,
+      expedia_db_duration:               d.expedia_db_duration,
+      expedia_service_fee:               d.expedia_service_fee,
+      expedia_crs:                       d.expedia_crs,
+      expedia_crs_db:                    d.expedia_crs_db,
+      expedia_run_date_from:             d.expedia_run_date_from,
+      expedia_run_date_to:               d.expedia_run_date_to,
+      expedia_run_date_db_from:          d.expedia_run_date_db_from,
+      expedia_run_date_db_to:            d.expedia_run_date_db_to,
+      expedia_revised_date:              d.expedia_revised_date,
+      expedia_scheduler_review_from:     d.expedia_scheduler_review_from,
+      expedia_scheduler_review_to:       d.expedia_scheduler_review_to,
+      expedia_scheduler_db:              d.expedia_scheduler_db,
+      expedia_scheduler_review_db_from:  d.expedia_scheduler_review_db_from,
+      expedia_scheduler_review_db_to:    d.expedia_scheduler_review_db_to,
+      expedia_credential_verified:       d.expedia_credential_verified,
+      expedia_otp_number:                d.expedia_otp_number,
+      booking_id:                        d.booking_id,
+      booking_status:                    d.booking_status,
+      booking_access_level:              d.booking_access_level,
+      booking_from:                      d.booking_from,
+      booking_to:                        d.booking_to,
+      booking_scheduler:                 d.booking_scheduler,
+      booking_duration:                  d.booking_duration,
+      booking_service_fee:               d.booking_service_fee,
+      booking_crs:                       d.booking_crs,
+      booking_run_date:                  d.booking_run_date,
+      booking_revised_date:              d.booking_revised_date,
+      booking_credential_verified:       d.booking_credential_verified,
+      booking_otp_number:                d.booking_otp_number,
+      agoda_id:                          d.agoda_id,
+      agoda_status:                      d.agoda_status,
+      agoda_access_level:                d.agoda_access_level,
+      agoda_from:                        d.agoda_from,
+      agoda_to:                          d.agoda_to,
+      agoda_scheduler:                   d.agoda_scheduler,
+      agoda_duration:                    d.agoda_duration,
+      agoda_service_fee:                 d.agoda_service_fee,
+      agoda_crs:                         d.agoda_crs,
+      agoda_run_date:                    d.agoda_run_date,
+      agoda_revised_date:                d.agoda_revised_date,
+      agoda_credential_verified:         d.agoda_credential_verified,
+      agoda_otp_number:                  d.agoda_otp_number,
+      need_another_domain:               d.need_another_domain,
+      booking_otp_phone:                 d.booking_otp_phone,
+      sales_rep:                         d.sales_rep,
+      cybersource_mid:                   d.cybersource_mid,
+      adyen_location:                    d.adyen_location,
+      stripe_connected_email:            d.stripe_connected_email,
+      // Non-nullable String[] — null → empty array
+      discontinued_email_ids:            d.discontinued_email_ids !== undefined
+                                           ? (d.discontinued_email_ids ?? [])
+                                           : undefined,
+    }
+
+    // Remove undefined keys so Prisma ignores unset fields
+    for (const key of Object.keys(payload)) {
+      if (payload[key] === undefined) delete payload[key]
+    }
+
+    // Special scalar conversions
+    if (d.next_due_date !== undefined) {
+      payload.next_due_date = d.next_due_date ? new Date(d.next_due_date) : null
+    }
+    if (d.is_active !== undefined) payload.is_active = d.is_active
+
+    // All FK relations — must use nested connect/disconnect in update()
+    const portfolioRel   = rel(d.portfolio_id)
+    if (portfolioRel)                         payload.portfolio             = portfolioRel
+    if (d.subportfolio_id !== undefined)      payload.subportfolio          = rel(d.subportfolio_id)
+    if (d.service_type_id !== undefined)      payload.service_type          = rel(d.service_type_id)
+    if (d.currency_id !== undefined)          payload.currency              = rel(d.currency_id)
+    if (d.expedia_billing_type_id !== undefined)  payload.expedia_billing_type  = rel(d.expedia_billing_type_id)
+    if (d.expedia_service_type_id !== undefined)  payload.expedia_service_type  = rel(d.expedia_service_type_id)
+    if (d.expedia_frequency_id !== undefined)     payload.expedia_frequency     = rel(d.expedia_frequency_id)
+    if (d.expedia_priority_id !== undefined)      payload.expedia_priority      = rel(d.expedia_priority_id)
+    if (d.expedia_processor_id !== undefined)     payload.expedia_processor     = rel(d.expedia_processor_id)
+    if (d.booking_billing_type_id !== undefined)  payload.booking_billing_type  = rel(d.booking_billing_type_id)
+    if (d.booking_service_type_id !== undefined)  payload.booking_service_type  = rel(d.booking_service_type_id)
+    if (d.booking_frequency_id !== undefined)     payload.booking_frequency     = rel(d.booking_frequency_id)
+    if (d.booking_priority_id !== undefined)      payload.booking_priority      = rel(d.booking_priority_id)
+    if (d.booking_processor_id !== undefined)     payload.booking_processor     = rel(d.booking_processor_id)
+    if (d.agoda_billing_type_id !== undefined)    payload.agoda_billing_type    = rel(d.agoda_billing_type_id)
+    if (d.agoda_service_type_id !== undefined)    payload.agoda_service_type    = rel(d.agoda_service_type_id)
+    if (d.agoda_frequency_id !== undefined)       payload.agoda_frequency       = rel(d.agoda_frequency_id)
+    if (d.agoda_priority_id !== undefined)        payload.agoda_priority        = rel(d.agoda_priority_id)
+    if (d.agoda_processor_id !== undefined)       payload.agoda_processor       = rel(d.agoda_processor_id)
+
     const raw = await this.prisma.property.update({
       where: { id },
       data: payload,

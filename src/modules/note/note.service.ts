@@ -14,6 +14,7 @@ import {
 } from '../../common/interfaces/permission.interface'
 import { PrismaService } from '../prisma/prisma.service'
 import {
+  BulkDeleteNotesDto,
   CreateNoteDto,
   DeleteAllNotesDto,
   NoteEntityType,
@@ -192,6 +193,23 @@ export class NoteService implements INoteService {
     }
 
     const deletedCount = await this.noteRepository.deleteMany(where)
+    return { message: `${deletedCount} note(s) deleted successfully`, deletedCount }
+  }
+
+  async bulkDelete(
+    dto: BulkDeleteNotesDto,
+    user: IUserWithPermissions
+  ): Promise<{ message: string; deletedCount: number }> {
+    const notes = await Promise.all(dto.ids.map(id => this.noteRepository.findById(id)))
+
+    await Promise.all(
+      notes.map(async (note, i) => {
+        if (!note) throw new NotFoundException(`Note ${dto.ids[i]} not found`)
+        await this.assertNoteAccess(note, user, PermissionAction.DELETE)
+      })
+    )
+
+    const deletedCount = await this.noteRepository.deleteManyByIds(dto.ids)
     return { message: `${deletedCount} note(s) deleted successfully`, deletedCount }
   }
 

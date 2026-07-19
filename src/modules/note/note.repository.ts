@@ -68,4 +68,9 @@ export class NoteRepository implements INoteRepository {
     const result = await this.prisma.note.deleteMany({ where: whereClause })
     return result.count
   }
+
+  async deleteManyByIds(ids: string[]): Promise<number> {
+    const result = await this.prisma.note.deleteMany({ where: { id: { in: ids } } })
+    return result.count
+  }
 }

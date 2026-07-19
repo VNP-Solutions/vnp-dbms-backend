@@ -1,8 +1,10 @@
 import { PartialType } from '@nestjs/mapped-types'
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import {
+  IsArray,
   IsBoolean,
   IsEnum,
+  IsMongoId,
   IsNotEmpty,
   IsOptional,
   IsString
@@ -101,6 +103,17 @@ export class NoteQueryDto {
   @IsOptional()
   @IsString()
   sortOrder?: 'asc' | 'desc'
+}
+
+export class BulkDeleteNotesDto {
+  @ApiProperty({
+    description: 'Array of note IDs to delete',
+    example: ['507f1f77bcf86cd799439011', '507f1f77bcf86cd799439012'],
+    type: [String]
+  })
+  @IsArray()
+  @IsMongoId({ each: true })
+  ids: string[]
 }
 
 export class DeleteAllNotesDto {

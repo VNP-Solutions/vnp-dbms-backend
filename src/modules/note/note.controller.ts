@@ -20,6 +20,7 @@ import type { IUserWithPermissions } from '../../common/interfaces/permission.in
 import { ModuleType, PermissionAction } from '../../common/interfaces/permission.interface'
 import { CurrentUser } from '../auth/decorators/current-user.decorator'
 import {
+  BulkDeleteNotesDto,
   CreateNoteDto,
   DeleteAllNotesDto,
   NoteQueryDto,
@@ -73,6 +74,15 @@ export class NoteController {
     @CurrentUser() user: IUserWithPermissions
   ) {
     return this.noteService.update(id, dto, user)
+  }
+
+  @Delete('bulk')
+  @ApiOperation({ summary: 'Bulk delete notes by IDs' })
+  @ApiResponse({ status: 200, description: 'Notes deleted successfully' })
+  @ApiResponse({ status: 404, description: 'One or more notes not found' })
+  @ApiResponse({ status: 403, description: 'Forbidden — insufficient permissions' })
+  bulkDelete(@Body() dto: BulkDeleteNotesDto, @CurrentUser() user: IUserWithPermissions) {
+    return this.noteService.bulkDelete(dto, user)
   }
 
   @Delete()
