@@ -458,7 +458,7 @@ export class PropertyRepository implements IPropertyRepository {
    * Bulk-imports properties from pre-parsed, typed rows.
    * Auto-creates portfolios if they don't exist.
    */
-  async importProperties(rows: ImportPropertyRow[]): Promise<ImportPropertiesResult> {
+  async importProperties(rows: ImportPropertyRow[], userId?: string): Promise<ImportPropertiesResult> {
     const logger = new Logger(PropertyRepository.name)
 
     let propertiesCreated = 0
@@ -847,6 +847,24 @@ export class PropertyRepository implements IPropertyRepository {
         createdProperties.push(created)
         propertiesCreated++
         logger.log(`Property "${propertyName}" created`)
+
+        // Create notes if provided (semicolon-separated texts in the Notes column)
+        if (userId && row.notes) {
+          const noteTexts = row.notes
+            .split(';')
+            .map(t => t.trim())
+            .filter(Boolean)
+          if (noteTexts.length > 0) {
+            await this.prisma.note.createMany({
+              data: noteTexts.map(text => ({
+                text,
+                property_id: created.id,
+                user_id: userId,
+                is_done: false
+              }))
+            })
+          }
+        }
 
         // Create credentials if provided
         const credPayload: any = {}

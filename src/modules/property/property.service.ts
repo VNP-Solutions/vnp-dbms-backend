@@ -1687,7 +1687,7 @@ export class PropertyService implements IPropertyService {
    */
   async importFromExcel(
     file: Express.Multer.File,
-    _user: IUserWithPermissions
+    user: IUserWithPermissions
   ): Promise<ImportPropertiesResult> {
     const buffer = file.buffer || (file as any).buffer
     if (!buffer || buffer.length === 0) {
@@ -2077,12 +2077,13 @@ export class PropertyService implements IPropertyService {
           discontinuedEmailIds: r['Discontinued Email IDs'] ? String(r['Discontinued Email IDs']).trim() : undefined,
           cybersourceMid: r['Cybersource MID'] ? String(r['Cybersource MID']).trim() : undefined,
           adyenLocation: r['Adyen Location'] ? String(r['Adyen Location']).trim() : undefined,
-          stripeConnectedEmail: r['Stripe Connected Email'] ? String(r['Stripe Connected Email']).trim() : undefined
+          stripeConnectedEmail: r['Stripe Connected Email'] ? String(r['Stripe Connected Email']).trim() : undefined,
+          notes: r['Notes'] ? String(r['Notes']).trim() : undefined
         } satisfies ImportPropertyRow
       })
       .filter(Boolean) as ImportPropertyRow[]
 
-    const result = await this.repo.importProperties(rows)
+    const result = await this.repo.importProperties(rows, user.id)
     await this.redisService.deleteByPattern(ALL_PATTERN)
     return result
   }
