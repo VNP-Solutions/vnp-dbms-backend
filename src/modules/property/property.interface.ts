@@ -141,6 +141,7 @@ export interface ImportPropertyRow {
   cybersourceMid?: string
   adyenLocation?: string
   stripeConnectedEmail?: string
+  notes?: string                  // semicolon-separated note texts in Excel, each becomes a Note record
 }
 
 export interface ImportPropertiesResult {
@@ -285,7 +286,7 @@ export interface IPropertyRepository {
     portfolios: { id: string; name: string }[]
     subportfolios: { id: string; name: string; portfolio_id: string }[]
   }>
-  importProperties(rows: ImportPropertyRow[]): Promise<ImportPropertiesResult>
+  importProperties(rows: ImportPropertyRow[], userId?: string): Promise<ImportPropertiesResult>
   findIdsByOtaIds(ota: { expedia_id?: number | null; booking_id?: number | null; agoda_id?: number | null }): Promise<string[]>;
 }
 
