@@ -48,6 +48,8 @@ export const PROPERTY_EXCEL_HEADERS = [
   'Booking To',
   'Booking Scheduler',
   'Booking Duration',
+  'Booking Run Date From',
+  'Booking Run Date To',
   'Booking Processor',
   'Booking Username',
   'Booking Password',
@@ -62,6 +64,8 @@ export const PROPERTY_EXCEL_HEADERS = [
   'Agoda To',
   'Agoda Scheduler',
   'Agoda Duration',
+  'Agoda Run Date From',
+  'Agoda Run Date To',
   'Agoda Processor',
   'Agoda Username',
   'Agoda Password',
@@ -83,9 +87,9 @@ export const PROPERTY_EXCEL_HEADERS = [
 const HEADER_BG_RANGES: { from: number; to: number; color: string | null }[] = [
   { from: 0, to: 3, color: null },
   { from: 4, to: 36, color: 'FFFF00' },
-  { from: 37, to: 50, color: 'C1E4F5' },
-  { from: 51, to: 63, color: 'FAE2D5' },
-  { from: 64, to: 74, color: 'C1F0C8' }
+  { from: 37, to: 52, color: 'C1E4F5' },
+  { from: 53, to: 67, color: 'FAE2D5' },
+  { from: 68, to: 78, color: 'C1F0C8' }
 ]
 
 const HEADER_CELL_STYLE = {
@@ -175,6 +179,8 @@ export function mapPropertyToExcelRow(property: any): Record<string, string | nu
     'Booking To': property.booking_to ?? '',
     'Booking Scheduler': formatCell(property.booking_scheduler),
     'Booking Duration': property.booking_duration ?? '',
+    'Booking Run Date From': property.booking_run_date_from ?? '',
+    'Booking Run Date To': property.booking_run_date_to ?? '',
     'Booking Processor': property.booking_processor?.name ?? '',
     'Booking Username': cred.bookingUsername ?? '',
     'Booking Password': cred.bookingPassword ?? '',
@@ -189,6 +195,8 @@ export function mapPropertyToExcelRow(property: any): Record<string, string | nu
     'Agoda To': property.agoda_to ?? '',
     'Agoda Scheduler': formatCell(property.agoda_scheduler),
     'Agoda Duration': property.agoda_duration ?? '',
+    'Agoda Run Date From': property.agoda_run_date_from ?? '',
+    'Agoda Run Date To': property.agoda_run_date_to ?? '',
     'Agoda Processor': property.agoda_processor?.name ?? '',
     'Agoda Username': cred.agodaUsername ?? '',
     'Agoda Password': cred.agodaPassword ?? '',

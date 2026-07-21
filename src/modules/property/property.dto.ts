@@ -654,10 +654,15 @@ export class CreatePropertyDto {
   @IsOptional()
   booking_crs?: string
 
-  @ApiPropertyOptional({ description: 'Booking run date (YYYY-MM-DD)', example: '2024-01-01' })
+  @ApiPropertyOptional({ description: 'Booking Run Date From (YYYY-MM-DD)', example: '2024-01-01' })
   @IsString()
   @IsOptional()
-  booking_run_date?: string
+  booking_run_date_from?: string
+
+  @ApiPropertyOptional({ description: 'Booking Run Date To (YYYY-MM-DD)', example: '2024-12-31' })
+  @IsString()
+  @IsOptional()
+  booking_run_date_to?: string
 
   @ApiPropertyOptional({ description: 'Booking revised date (YYYY-MM-DD)', example: '2024-01-15' })
   @IsString()
@@ -750,10 +755,15 @@ export class CreatePropertyDto {
   @IsOptional()
   agoda_crs?: string
 
-  @ApiPropertyOptional({ description: 'Agoda run date (YYYY-MM-DD)', example: '2024-01-01' })
+  @ApiPropertyOptional({ description: 'Agoda Run Date From (YYYY-MM-DD)', example: '2024-01-01' })
   @IsString()
   @IsOptional()
-  agoda_run_date?: string
+  agoda_run_date_from?: string
+
+  @ApiPropertyOptional({ description: 'Agoda Run Date To (YYYY-MM-DD)', example: '2024-12-31' })
+  @IsString()
+  @IsOptional()
+  agoda_run_date_to?: string
 
   @ApiPropertyOptional({ description: 'Agoda revised date (YYYY-MM-DD)', example: '2024-01-15' })
   @IsString()
@@ -1240,8 +1250,12 @@ export const PROPERTY_FILTER_FIELD_NAMES = [
   'expedia_credential_verified',
   'expedia_otp_number',
   'booking_service_fee',
+  'booking_run_date_from',
+  'booking_run_date_to',
   'booking_credential_verified',
   'agoda_service_fee',
+  'agoda_run_date_from',
+  'agoda_run_date_to',
   'agoda_credential_verified',
   'sales_rep',
   'discontinued_email_ids',
@@ -1309,7 +1323,13 @@ function swaggerExampleForFilterName(name: PropertyFilterFieldName): {
     name === 'agoda_from' ||
     name === 'agoda_to' ||
     name === 'from' ||
-    name === 'to'
+    name === 'to' ||
+    name === 'expedia_run_date_from' ||
+    name === 'expedia_run_date_to' ||
+    name === 'booking_run_date_from' ||
+    name === 'booking_run_date_to' ||
+    name === 'agoda_run_date_from' ||
+    name === 'agoda_run_date_to'
   )
     return { in: ['2024-01-01', '2024-12-31'] }
   return { in: [`example-${name}`] }

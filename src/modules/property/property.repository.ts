@@ -167,13 +167,15 @@ export class PropertyRepository implements IPropertyRepository {
       to_db: data.to_db,
       booking_service_fee: data.booking_service_fee,
       booking_crs: data.booking_crs,
-      booking_run_date: data.booking_run_date,
+      booking_run_date_from: data.booking_run_date_from,
+      booking_run_date_to: data.booking_run_date_to,
       booking_revised_date: data.booking_revised_date,
       booking_credential_verified: data.booking_credential_verified,
       booking_otp_number: data.booking_otp_number,
       agoda_service_fee: data.agoda_service_fee,
       agoda_crs: data.agoda_crs,
-      agoda_run_date: data.agoda_run_date,
+      agoda_run_date_from: data.agoda_run_date_from,
+      agoda_run_date_to: data.agoda_run_date_to,
       agoda_revised_date: data.agoda_revised_date,
       agoda_credential_verified: data.agoda_credential_verified,
       agoda_otp_number: data.agoda_otp_number,
@@ -307,7 +309,8 @@ export class PropertyRepository implements IPropertyRepository {
       booking_duration:                  d.booking_duration,
       booking_service_fee:               d.booking_service_fee,
       booking_crs:                       d.booking_crs,
-      booking_run_date:                  d.booking_run_date,
+      booking_run_date_from:             d.booking_run_date_from,
+      booking_run_date_to:               d.booking_run_date_to,
       booking_revised_date:              d.booking_revised_date,
       booking_credential_verified:       d.booking_credential_verified,
       booking_otp_number:                d.booking_otp_number,
@@ -320,7 +323,8 @@ export class PropertyRepository implements IPropertyRepository {
       agoda_duration:                    d.agoda_duration,
       agoda_service_fee:                 d.agoda_service_fee,
       agoda_crs:                         d.agoda_crs,
-      agoda_run_date:                    d.agoda_run_date,
+      agoda_run_date_from:               d.agoda_run_date_from,
+      agoda_run_date_to:                 d.agoda_run_date_to,
       agoda_revised_date:                d.agoda_revised_date,
       agoda_credential_verified:         d.agoda_credential_verified,
       agoda_otp_number:                  d.agoda_otp_number,
@@ -764,14 +768,16 @@ export class PropertyRepository implements IPropertyRepository {
       // New Booking fields
       if (row.bookingServiceFee) propertyPayload.booking_service_fee = parseInt(row.bookingServiceFee) || undefined
       if (row.bookingCrs) propertyPayload.booking_crs = row.bookingCrs
-      if (row.bookingRunDate) propertyPayload.booking_run_date = row.bookingRunDate
+      if (row.bookingRunDateFrom) propertyPayload.booking_run_date_from = row.bookingRunDateFrom
+      if (row.bookingRunDateTo) propertyPayload.booking_run_date_to = row.bookingRunDateTo
       if (row.bookingRevisedDate) propertyPayload.booking_revised_date = row.bookingRevisedDate
       if (row.bookingCredentialVerified !== undefined) propertyPayload.booking_credential_verified = row.bookingCredentialVerified === 'true'
       if (row.bookingOtpNumber) propertyPayload.booking_otp_number = row.bookingOtpNumber
       // New Agoda fields
       if (row.agodaServiceFee) propertyPayload.agoda_service_fee = parseInt(row.agodaServiceFee) || undefined
       if (row.agodaCrs) propertyPayload.agoda_crs = row.agodaCrs
-      if (row.agodaRunDate) propertyPayload.agoda_run_date = row.agodaRunDate
+      if (row.agodaRunDateFrom) propertyPayload.agoda_run_date_from = row.agodaRunDateFrom
+      if (row.agodaRunDateTo) propertyPayload.agoda_run_date_to = row.agodaRunDateTo
       if (row.agodaRevisedDate) propertyPayload.agoda_revised_date = row.agodaRevisedDate
       if (row.agodaCredentialVerified !== undefined) propertyPayload.agoda_credential_verified = row.agodaCredentialVerified === 'true'
       if (row.agodaOtpNumber) propertyPayload.agoda_otp_number = row.agodaOtpNumber

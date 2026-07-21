@@ -119,14 +119,16 @@ export interface ImportPropertyRow {
   // New Booking fields
   bookingServiceFee?: string
   bookingCrs?: string
-  bookingRunDate?: string
+  bookingRunDateFrom?: string
+  bookingRunDateTo?: string
   bookingRevisedDate?: string
   bookingCredentialVerified?: string
   bookingOtpNumber?: string
   // New Agoda fields
   agodaServiceFee?: string
   agodaCrs?: string
-  agodaRunDate?: string
+  agodaRunDateFrom?: string
+  agodaRunDateTo?: string
   agodaRevisedDate?: string
   agodaCredentialVerified?: string
   agodaOtpNumber?: string
@@ -247,13 +249,15 @@ export interface AllDataForGlobalFilterResponse {
   expedia_otp_number: string[]
   booking_service_fee: string[]
   booking_crs: string[]
-  booking_run_date: string[]
+  booking_run_date_from: string[]
+  booking_run_date_to: string[]
   booking_revised_date: string[]
   booking_credential_verified: string[]
   booking_otp_number: string[]
   agoda_service_fee: string[]
   agoda_crs: string[]
-  agoda_run_date: string[]
+  agoda_run_date_from: string[]
+  agoda_run_date_to: string[]
   agoda_revised_date: string[]
   agoda_credential_verified: string[]
   agoda_otp_number: string[]

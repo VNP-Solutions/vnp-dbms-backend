@@ -243,7 +243,8 @@ export interface ExternalPropertyDto {
   booking_duration: number | null
   booking_service_fee: number | null
   booking_crs: string | null
-  booking_run_date: string | null
+  booking_run_date_from: string | null
+  booking_run_date_to: string | null
   booking_revised_date: string | null
   booking_credential_verified: boolean | null
   booking_otp_number: string | null
@@ -257,7 +258,8 @@ export interface ExternalPropertyDto {
   agoda_duration: number | null
   agoda_service_fee: number | null
   agoda_crs: string | null
-  agoda_run_date: string | null
+  agoda_run_date_from: string | null
+  agoda_run_date_to: string | null
   agoda_revised_date: string | null
   agoda_credential_verified: boolean | null
   agoda_otp_number: string | null

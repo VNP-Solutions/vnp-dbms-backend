@@ -445,7 +445,8 @@ model Property {
   booking_duration          Int?
   booking_service_fee       Int?
   booking_crs               String?
-  booking_run_date          String?
+  booking_run_date_from     String?
+  booking_run_date_to       String?
   booking_revised_date      String?
   booking_credential_verified Boolean?
   booking_otp_number          String?
@@ -464,7 +465,8 @@ model Property {
   agoda_duration          Int?
   agoda_service_fee       Int?
   agoda_crs               String?
-  agoda_run_date          String?
+  agoda_run_date_from     String?
+  agoda_run_date_to       String?
   agoda_revised_date      String?
   agoda_credential_verified Boolean?
   agoda_otp_number          String?
