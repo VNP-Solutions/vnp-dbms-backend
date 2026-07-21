@@ -21,9 +21,7 @@ export type PropertyWithRelations = Property & {
   expedia_processor: Processor | null
   booking_processor: Processor | null
   agoda_processor: Processor | null
-  expedia_priority: Priority | null
-  booking_priority: Priority | null
-  agoda_priority: Priority | null
+  priority: Priority | null
   total_notes: number
   notes: Pick<Note, 'id' | 'text' | 'is_done' | 'user_id' | 'created_at' | 'updated_at'>[]
 }
@@ -101,7 +99,6 @@ export interface ImportPropertyRow {
   currency?: string
   // New Expedia fields
   expediaServiceFee?: string
-  expediaPriority?: string
   expediaCrs?: string
   expediaCrsDb?: string
   expediaRunDateFrom?: string
@@ -121,7 +118,6 @@ export interface ImportPropertyRow {
   toDb?: string
   // New Booking fields
   bookingServiceFee?: string
-  bookingPriority?: string
   bookingCrs?: string
   bookingRunDate?: string
   bookingRevisedDate?: string
@@ -129,13 +125,13 @@ export interface ImportPropertyRow {
   bookingOtpNumber?: string
   // New Agoda fields
   agodaServiceFee?: string
-  agodaPriority?: string
   agodaCrs?: string
   agodaRunDate?: string
   agodaRevisedDate?: string
   agodaCredentialVerified?: string
   agodaOtpNumber?: string
   // Misc new fields
+  priority?: string
   salesRep?: string
   discontinuedEmailIds?: string   // comma-separated in Excel, stored as array
   cybersourceMid?: string
@@ -231,7 +227,7 @@ export interface AllDataForGlobalFilterResponse {
   booking_secondary_username: string[]
   agoda_secondary_username: string[]
   expedia_service_fee: string[]
-  expedia_priority: Priority[]
+  priority: Priority[]
   from_db: string[]
   to_db: string[]
   expedia_revised_date: { min: string | null; max: string | null }
@@ -250,14 +246,12 @@ export interface AllDataForGlobalFilterResponse {
   expedia_credential_verified: string[]
   expedia_otp_number: string[]
   booking_service_fee: string[]
-  booking_priority: Priority[]
   booking_crs: string[]
   booking_run_date: string[]
   booking_revised_date: string[]
   booking_credential_verified: string[]
   booking_otp_number: string[]
   agoda_service_fee: string[]
-  agoda_priority: Priority[]
   agoda_crs: string[]
   agoda_run_date: string[]
   agoda_revised_date: string[]

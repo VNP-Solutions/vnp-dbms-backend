@@ -349,6 +349,8 @@ model Property {
 
   currency_id           String?       @db.ObjectId
   currency              Currency?     @relation("PropertyCurrency", fields: [currency_id], references: [id])
+  priority_id           String?       @db.ObjectId
+  priority              Priority?     @relation("PropertyPriority", fields: [priority_id], references: [id])
   subportfolio_id       String?       @db.ObjectId
   subportfolio          Subportfolio? @relation(fields: [subportfolio_id], references: [id], onDelete: SetNull)
   previous_portfolio_id String?       @db.ObjectId
@@ -411,8 +413,6 @@ model Property {
   expedia_scheduler         Boolean?
   expedia_duration          Int?
   expedia_service_fee       Int?
-  expedia_priority_id       String?   @db.ObjectId
-  expedia_priority          Priority? @relation("PropertyExpediaPriority", fields: [expedia_priority_id], references: [id])
   expedia_crs               String?
   expedia_crs_db            String?
   expedia_run_date_from        String?
@@ -444,8 +444,6 @@ model Property {
   booking_scheduler         Boolean?
   booking_duration          Int?
   booking_service_fee       Int?
-  booking_priority_id       String?   @db.ObjectId
-  booking_priority          Priority? @relation("PropertyBookingPriority", fields: [booking_priority_id], references: [id])
   booking_crs               String?
   booking_run_date          String?
   booking_revised_date      String?
@@ -465,8 +463,6 @@ model Property {
   agoda_scheduler         Boolean?
   agoda_duration          Int?
   agoda_service_fee       Int?
-  agoda_priority_id       String?   @db.ObjectId
-  agoda_priority          Priority? @relation("PropertyAgodaPriority", fields: [agoda_priority_id], references: [id])
   agoda_crs               String?
   agoda_run_date          String?
   agoda_revised_date      String?
@@ -496,9 +492,7 @@ model Property {
   @@index([subportfolio_id])
   @@index([service_type_id])
   @@index([currency_id])
-  @@index([expedia_priority_id])
-  @@index([booking_priority_id])
-  @@index([agoda_priority_id])
+  @@index([priority_id])
   @@index([is_active])
   @@index([next_due_date])
   @@index([portfolio_id, is_active])
@@ -633,9 +627,7 @@ model Priority {
   updated_at DateTime @updatedAt
 
   // Back-relations
-  expedia_properties Property[] @relation("PropertyExpediaPriority")
-  booking_properties Property[] @relation("PropertyBookingPriority")
-  agoda_properties   Property[] @relation("PropertyAgodaPriority")
+  properties Property[] @relation("PropertyPriority")
 
   @@index([is_active])
   @@index([order])

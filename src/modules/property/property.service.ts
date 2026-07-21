@@ -714,14 +714,8 @@ export class PropertyService implements IPropertyService {
           case 'expedia_service_fee':
             whereConditions.push({ expedia_service_fee: { in: values } })
             break
-          case 'expedia_priority_id':
-            whereConditions.push({ expedia_priority_id: { in: values } })
-            break
-          case 'booking_priority_id':
-            whereConditions.push({ booking_priority_id: { in: values } })
-            break
-          case 'agoda_priority_id':
-            whereConditions.push({ agoda_priority_id: { in: values } })
+          case 'priority_id':
+            whereConditions.push({ priority_id: { in: values } })
             break
           case 'expedia_crs':
             whereConditions.push({ expedia_crs: { in: values } })
@@ -1982,9 +1976,6 @@ export class PropertyService implements IPropertyService {
           expediaServiceFee: r['Expedia Service Fee']
             ? String(r['Expedia Service Fee']).trim()
             : undefined,
-          expediaPriority: r['Expedia Priority']
-            ? String(r['Expedia Priority']).trim()
-            : undefined,
           expediaCrs: r['Expedia CRS']
             ? String(r['Expedia CRS']).trim()
             : undefined,
@@ -2036,9 +2027,6 @@ export class PropertyService implements IPropertyService {
           bookingServiceFee: r['Booking Service Fee']
             ? String(r['Booking Service Fee']).trim()
             : undefined,
-          bookingPriority: r['Booking Priority']
-            ? String(r['Booking Priority']).trim()
-            : undefined,
           bookingCrs: r['Booking CRS']
             ? String(r['Booking CRS']).trim()
             : undefined,
@@ -2058,9 +2046,6 @@ export class PropertyService implements IPropertyService {
           agodaServiceFee: r['Agoda Service Fee']
             ? String(r['Agoda Service Fee']).trim()
             : undefined,
-          agodaPriority: r['Agoda Priority']
-            ? String(r['Agoda Priority']).trim()
-            : undefined,
           agodaCrs: r['Agoda CRS'] ? String(r['Agoda CRS']).trim() : undefined,
           agodaRunDate: r['Agoda Run Date']
             ? String(r['Agoda Run Date']).trim()
@@ -2073,6 +2058,11 @@ export class PropertyService implements IPropertyService {
             ? String(r['Agoda OTP Number']).trim()
             : undefined,
           // Misc
+          priority: r['Priority']
+            ? String(r['Priority']).trim()
+            : r['Expedia Priority']
+              ? String(r['Expedia Priority']).trim()
+              : undefined,
           salesRep: r['Sales Rep'] ? String(r['Sales Rep']).trim() : undefined,
           discontinuedEmailIds: r['Discontinued Email IDs'] ? String(r['Discontinued Email IDs']).trim() : undefined,
           cybersourceMid: r['Cybersource MID'] ? String(r['Cybersource MID']).trim() : undefined,
@@ -2902,13 +2892,14 @@ export class PropertyService implements IPropertyService {
           if (expediaFrequency !== undefined)
             updateData.expedia_frequency_id =
               await resolveFrequency(expediaFrequency)
-          const expediaPriority = findValue(row, [
+          const priorityVal = findValue(row, [
+            'Priority',
+            'priority',
             'Expedia Priority',
             'Expedia priority'
           ])
-          if (expediaPriority !== undefined)
-            updateData.expedia_priority_id =
-              await resolvePriority(expediaPriority)
+          if (priorityVal !== undefined)
+            updateData.priority_id = await resolvePriority(priorityVal)
           const expediaAccessLevelBool = parseBoolCell(
             findValue(row, ['Expedia Access Level', 'Expedia access level'])
           )
@@ -3072,13 +3063,6 @@ export class PropertyService implements IPropertyService {
           if (bookingFrequency !== undefined)
             updateData.booking_frequency_id =
               await resolveFrequency(bookingFrequency)
-          const bookingPriority = findValue(row, [
-            'Booking Priority',
-            'Booking priority'
-          ])
-          if (bookingPriority !== undefined)
-            updateData.booking_priority_id =
-              await resolvePriority(bookingPriority)
           const bookingAccessLevelBool = parseBoolCell(
             findValue(row, ['Booking Access Level', 'Booking access level'])
           )
@@ -3173,12 +3157,6 @@ export class PropertyService implements IPropertyService {
           if (agodaFrequency !== undefined)
             updateData.agoda_frequency_id =
               await resolveFrequency(agodaFrequency)
-          const agodaPriority = findValue(row, [
-            'Agoda Priority',
-            'Agoda priority'
-          ])
-          if (agodaPriority !== undefined)
-            updateData.agoda_priority_id = await resolvePriority(agodaPriority)
           const agodaAccessLevelBool = parseBoolCell(
             findValue(row, ['Agoda Access Level', 'Agoda access level'])
           )
@@ -3826,7 +3804,7 @@ export class PropertyService implements IPropertyService {
     ])
 
     const uniqueExpediaServiceFees = new Set<string>()
-    const expediaPriorityMap = new Map<string, Priority>()
+    const priorityMap = new Map<string, Priority>()
     const uniqueFromDb = new Set<string>()
     const uniqueToDb = new Set<string>()
     let revisedDateMin: string | null = null
@@ -3846,14 +3824,12 @@ export class PropertyService implements IPropertyService {
     const uniqueExpediaCredentialVerified = new Set<string>()
     const uniqueExpediaOtpNumbers = new Set<string>()
     const uniqueBookingServiceFees = new Set<string>()
-    const bookingPriorityMap = new Map<string, Priority>()
     const uniqueBookingCrs = new Set<string>()
     const uniqueBookingRunDates = new Set<string>()
     const uniqueBookingRevisedDates = new Set<string>()
     const uniqueBookingCredentialVerified = new Set<string>()
     const uniqueBookingOtpNumbers = new Set<string>()
     const uniqueAgodaServiceFees = new Set<string>()
-    const agodaPriorityMap = new Map<string, Priority>()
     const uniqueAgodaCrs = new Set<string>()
     const uniqueAgodaRunDates = new Set<string>()
     const uniqueAgodaRevisedDates = new Set<string>()
@@ -4112,11 +4088,8 @@ export class PropertyService implements IPropertyService {
         uniqueAgodaSecondaryUsernames.add(cred.agodaSecondaryUsername)
       if (property.expedia_service_fee)
         uniqueExpediaServiceFees.add(property.expedia_service_fee)
-      if (property.expedia_priority)
-        expediaPriorityMap.set(
-          property.expedia_priority.id,
-          property.expedia_priority
-        )
+      if (property.priority)
+        priorityMap.set(property.priority.id, property.priority)
       if (property.from_db) uniqueFromDb.add(property.from_db)
       if (property.to_db) uniqueToDb.add(property.to_db)
       if (property.expedia_revised_date) {
@@ -4170,11 +4143,6 @@ export class PropertyService implements IPropertyService {
         uniqueExpediaOtpNumbers.add(property.expedia_otp_number)
       if (property.booking_service_fee != null)
         uniqueBookingServiceFees.add(String(property.booking_service_fee))
-      if (property.booking_priority)
-        bookingPriorityMap.set(
-          property.booking_priority.id,
-          property.booking_priority
-        )
       if (property.booking_crs) uniqueBookingCrs.add(property.booking_crs)
       if (property.booking_run_date)
         uniqueBookingRunDates.add(property.booking_run_date)
@@ -4188,11 +4156,6 @@ export class PropertyService implements IPropertyService {
         uniqueBookingOtpNumbers.add(property.booking_otp_number)
       if (property.agoda_service_fee != null)
         uniqueAgodaServiceFees.add(String(property.agoda_service_fee))
-      if (property.agoda_priority)
-        agodaPriorityMap.set(
-          property.agoda_priority.id,
-          property.agoda_priority
-        )
       if (property.agoda_crs) uniqueAgodaCrs.add(property.agoda_crs)
       if (property.agoda_run_date)
         uniqueAgodaRunDates.add(property.agoda_run_date)
@@ -4322,7 +4285,7 @@ export class PropertyService implements IPropertyService {
         uniqueAgodaSecondaryUsernames
       ).sort(),
       expedia_service_fee: Array.from(uniqueExpediaServiceFees).sort(),
-      expedia_priority: Array.from(expediaPriorityMap.values()).sort(
+      priority: Array.from(priorityMap.values()).sort(
         (a, b) => (a.order ?? 0) - (b.order ?? 0)
       ),
       from_db: Array.from(uniqueFromDb).sort(),
@@ -4353,9 +4316,6 @@ export class PropertyService implements IPropertyService {
       ).sort(),
       expedia_otp_number: Array.from(uniqueExpediaOtpNumbers).sort(),
       booking_service_fee: Array.from(uniqueBookingServiceFees).sort(),
-      booking_priority: Array.from(bookingPriorityMap.values()).sort(
-        (a, b) => (a.order ?? 0) - (b.order ?? 0)
-      ),
       booking_crs: Array.from(uniqueBookingCrs).sort(),
       booking_run_date: Array.from(uniqueBookingRunDates).sort(),
       booking_revised_date: Array.from(uniqueBookingRevisedDates).sort(),
@@ -4364,9 +4324,6 @@ export class PropertyService implements IPropertyService {
       ).sort(),
       booking_otp_number: Array.from(uniqueBookingOtpNumbers).sort(),
       agoda_service_fee: Array.from(uniqueAgodaServiceFees).sort(),
-      agoda_priority: Array.from(agodaPriorityMap.values()).sort(
-        (a, b) => (a.order ?? 0) - (b.order ?? 0)
-      ),
       agoda_crs: Array.from(uniqueAgodaCrs).sort(),
       agoda_run_date: Array.from(uniqueAgodaRunDates).sort(),
       agoda_revised_date: Array.from(uniqueAgodaRevisedDates).sort(),

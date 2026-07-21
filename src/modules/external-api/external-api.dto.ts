@@ -216,7 +216,7 @@ export interface ExternalPropertyDto {
   expedia_duration: number | null
   expedia_db_duration: number | null
   expedia_service_fee: number | null
-  expedia_priority: string | null
+  priority: string | null
   expedia_crs: string | null
   expedia_crs_db: string | null
   expedia_run_date_from: string | null
@@ -242,7 +242,6 @@ export interface ExternalPropertyDto {
   booking_scheduler: boolean | null
   booking_duration: number | null
   booking_service_fee: number | null
-  booking_priority: string | null
   booking_crs: string | null
   booking_run_date: string | null
   booking_revised_date: string | null
@@ -257,7 +256,6 @@ export interface ExternalPropertyDto {
   agoda_scheduler: boolean | null
   agoda_duration: number | null
   agoda_service_fee: number | null
-  agoda_priority: string | null
   agoda_crs: string | null
   agoda_run_date: string | null
   agoda_revised_date: string | null

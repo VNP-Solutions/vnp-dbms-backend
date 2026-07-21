@@ -17,7 +17,7 @@ const COLUMN_TO_FIELDS: Record<string, string[]> = {
   expedia_id:                  ['expedia_id'],
   expedia_service_type:        ['expedia_service_type_id', 'expedia_service_type'],
   expedia_service_fee:         ['expedia_service_fee'],
-  expedia_priority:            ['expedia_priority_id', 'expedia_priority'],
+  priority:                    ['priority_id', 'priority'],
   expedia_frequency:           ['expedia_frequency_id', 'expedia_frequency'],
   expedia_historical_review:   ['expedia_from', 'expedia_to'],
   expedia_historical_review_db:['from_db', 'to_db'],

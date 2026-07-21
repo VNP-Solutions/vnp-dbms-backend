@@ -21,38 +21,35 @@ export class PriorityService implements IPriorityService {
   }
 
   private async buildCountMap() {
-    const [expCounts, bookCounts, agodaCounts] = await Promise.all([
-      this.prisma.property.groupBy({ by: ['expedia_priority_id'], _count: { id: true }, where: { expedia_priority_id: { not: null } } }),
-      this.prisma.property.groupBy({ by: ['booking_priority_id'], _count: { id: true }, where: { booking_priority_id: { not: null } } }),
-      this.prisma.property.groupBy({ by: ['agoda_priority_id'], _count: { id: true }, where: { agoda_priority_id: { not: null } } })
-    ])
-    const expMap = new Map(expCounts.map(p => [p.expedia_priority_id, p._count.id]))
-    const bookMap = new Map(bookCounts.map(p => [p.booking_priority_id, p._count.id]))
-    const agodaMap = new Map(agodaCounts.map(p => [p.agoda_priority_id, p._count.id]))
-    return { expMap, bookMap, agodaMap }
+    const counts = await this.prisma.property.groupBy({
+      by: ['priority_id'],
+      _count: { id: true },
+      where: { priority_id: { not: null } }
+    })
+    return new Map(counts.map(p => [p.priority_id, p._count.id]))
   }
 
   async findAll(_user: IUserWithPermissions) {
-    const [items, { expMap, bookMap, agodaMap }] = await Promise.all([
+    const [items, countMap] = await Promise.all([
       this.repo.findAll(),
       this.buildCountMap()
     ])
     return items.map(item => ({
       ...item,
-      count: (expMap.get(item.id) ?? 0) + (bookMap.get(item.id) ?? 0) + (agodaMap.get(item.id) ?? 0)
+      count: countMap.get(item.id) ?? 0
     }))
   }
 
   async findAllExcept(id: string, _user: IUserWithPermissions) {
     const item = await this.repo.findById(id)
     if (!item) throw new NotFoundException('Priority not found')
-    const [items, { expMap, bookMap, agodaMap }] = await Promise.all([
+    const [items, countMap] = await Promise.all([
       this.repo.findAllExcept(id),
       this.buildCountMap()
     ])
     return items.map(i => ({
       ...i,
-      count: (expMap.get(i.id) ?? 0) + (bookMap.get(i.id) ?? 0) + (agodaMap.get(i.id) ?? 0)
+      count: countMap.get(i.id) ?? 0
     }))
   }
 
@@ -121,9 +118,7 @@ export class PriorityService implements IPriorityService {
     if (!replacement) throw new NotFoundException('Replacement priority not found')
 
     await this.prisma.$transaction([
-      this.prisma.property.updateMany({ where: { expedia_priority_id: id }, data: { expedia_priority_id: replacementId } }),
-      this.prisma.property.updateMany({ where: { booking_priority_id: id }, data: { booking_priority_id: replacementId } }),
-      this.prisma.property.updateMany({ where: { agoda_priority_id: id }, data: { agoda_priority_id: replacementId } }),
+      this.prisma.property.updateMany({ where: { priority_id: id }, data: { priority_id: replacementId } }),
       this.prisma.priority.delete({ where: { id } })
     ])
 
