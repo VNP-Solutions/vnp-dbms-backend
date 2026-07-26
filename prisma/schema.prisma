@@ -415,10 +415,8 @@ model Property {
   expedia_service_fee       Int?
   expedia_crs               String?
   expedia_crs_db            String?
-  expedia_run_date_from        String?
-  expedia_run_date_to          String?
-  expedia_run_date_db_from     String?
-  expedia_run_date_db_to       String?
+  expedia_run_date          String?
+  expedia_run_date_db       String?
   expedia_revised_date         String?
   expedia_scheduler_review_from    String?
   expedia_scheduler_review_to      String?
@@ -445,8 +443,7 @@ model Property {
   booking_duration          Int?
   booking_service_fee       Int?
   booking_crs               String?
-  booking_run_date_from     String?
-  booking_run_date_to       String?
+  booking_run_date          String?
   booking_revised_date      String?
   booking_credential_verified Boolean?
   booking_otp_number          String?
@@ -465,8 +462,7 @@ model Property {
   agoda_duration          Int?
   agoda_service_fee       Int?
   agoda_crs               String?
-  agoda_run_date_from     String?
-  agoda_run_date_to       String?
+  agoda_run_date          String?
   agoda_revised_date      String?
   agoda_credential_verified Boolean?
   agoda_otp_number          String?

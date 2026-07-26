@@ -219,10 +219,8 @@ export interface ExternalPropertyDto {
   priority: string | null
   expedia_crs: string | null
   expedia_crs_db: string | null
-  expedia_run_date_from: string | null
-  expedia_run_date_to: string | null
-  expedia_run_date_db_from: string | null
-  expedia_run_date_db_to: string | null
+  expedia_run_date: string | null
+  expedia_run_date_db: string | null
   expedia_revised_date: string | null
   expedia_scheduler_review_from: string | null
   expedia_scheduler_review_to: string | null
@@ -243,8 +241,7 @@ export interface ExternalPropertyDto {
   booking_duration: number | null
   booking_service_fee: number | null
   booking_crs: string | null
-  booking_run_date_from: string | null
-  booking_run_date_to: string | null
+  booking_run_date: string | null
   booking_revised_date: string | null
   booking_credential_verified: boolean | null
   booking_otp_number: string | null
@@ -258,8 +255,7 @@ export interface ExternalPropertyDto {
   agoda_duration: number | null
   agoda_service_fee: number | null
   agoda_crs: string | null
-  agoda_run_date_from: string | null
-  agoda_run_date_to: string | null
+  agoda_run_date: string | null
   agoda_revised_date: string | null
   agoda_credential_verified: boolean | null
   agoda_otp_number: string | null
@@ -358,6 +354,30 @@ export class UpdatePropertyCredentialsExternalDto {
   reporting_contact_phone?: string
 }
 
+// ─── Portfolio bulk Booking credential update ─────────────────────────────────
+
+export class BulkUpdatePortfolioBookingCredentialsDto {
+  @ApiProperty({
+    example: 'hotel@booking.com',
+    description:
+      'The Booking.com username to match against. Only properties whose stored ' +
+      'bookingUsername equals this value will have their credentials updated.'
+  })
+  @IsString()
+  @IsNotEmpty()
+  bookingUsername: string
+
+  @ApiProperty({
+    example: 'newP@ssw0rd',
+    description: 'New Booking.com password to set (will be encrypted at rest)',
+    required: false
+  })
+  @IsOptional()
+  @IsString()
+  bookingPassword?: string
+
+}
+
 // ─── OTA ID → QP Username lookup ─────────────────────────────────────────────
 
 export class OtaQpLookupDto {
@@ -421,3 +441,103 @@ export interface OtaQpLookupResultItem {
 }
 
 export type OtaQpLookupResult = OtaQpLookupResultItem[]
+
+// ─── Bulk Create Parser Jobs ──────────────────────────────────────────────────
+
+export type ParserJobOtaType = 'expedia' | 'booking' | 'agoda'
+
+export class BulkCreateParserJobsDto {
+  @ApiProperty({
+    type: [String],
+    example: ['prop-id-1', 'prop-id-2'],
+    description: 'List of DBMS property IDs for which parser jobs will be created.'
+  })
+  @IsArray()
+  @IsString({ each: true })
+  @IsNotEmpty({ each: true })
+  property_ids: string[]
+
+  @ApiProperty({
+    example: 'expedia',
+    enum: ['expedia', 'booking', 'agoda'],
+    description: 'OTA type to create jobs for. One job is created per property for this OTA type.'
+  })
+  @IsString()
+  @IsIn(['expedia', 'booking', 'agoda', 'expedia_db'])
+  ota_type: ParserJobOtaType
+}
+
+/** A single job entry forwarded to the parser backend */
+export interface ParserJobEntryPayload {
+  /** DBMS property ID */
+  parent_id: string
+  /** OTA platform this job targets */
+  ota_type: ParserJobOtaType
+  /** Job window start date (YYYY-MM-DD) — historical_to + 1 day */
+  start_date: string
+  /** Job window end date  (YYYY-MM-DD) — start_date + CRS months [+ 1 yr for booking] */
+  end_date: string
+  /** Billing type name for this OTA, if configured */
+  billing_type: string | null
+}
+
+/** Payload sent to the parser backend's bulk-create endpoint */
+export interface BulkCreateParserJobsPayload {
+  jobs: ParserJobEntryPayload[]
+}
+
+/** Per-property summary returned by the bulk-create service method */
+export interface BulkCreateParserJobsPropertyResult {
+  property_id: string
+  name: string
+  /** Jobs successfully queued for this property */
+  jobs_created: Array<{
+    ota_type: ParserJobOtaType
+    start_date: string
+    end_date: string
+  }>
+  /** OTA types skipped due to missing data */
+  skipped_otas: Array<{
+    ota_type: ParserJobOtaType
+    reason: string
+  }>
+}
+
+// ─── Update Historical To + Run Date ─────────────────────────────────────────
+
+export class UpdateHistoricalAndRunDateDto {
+  @ApiProperty({
+    example: 'prop-id-1',
+    description: 'DBMS property ID (parent_id)'
+  })
+  @IsString()
+  @IsNotEmpty()
+  parent_id: string
+
+  @ApiProperty({
+    example: 'expedia',
+    enum: ['expedia', 'booking', 'agoda'],
+    description: 'OTA platform whose historical-to date and run date will be updated'
+  })
+  @IsString()
+  @IsIn(['expedia', 'booking', 'agoda'])
+  ota_type: ParserJobOtaType
+
+  @ApiProperty({ example: '2025-07-01', description: 'Job start date (YYYY-MM-DD)' })
+  @IsDateString()
+  start_date: string
+
+  @ApiProperty({ example: '2025-10-01', description: 'Job end date (YYYY-MM-DD)' })
+  @IsDateString()
+  end_date: string
+}
+
+/** Response returned after updating historical-to and run date */
+export interface UpdateHistoricalAndRunDateResult {
+  property_id: string
+  ota_type: ParserJobOtaType
+  /** end_date written into {ota}_to */
+  historical_to_updated: string
+  /** Computed run date written into {ota}_run_date_from  (end_date + 1 day + CRS days + 15 days) */
+  run_date: string
+}

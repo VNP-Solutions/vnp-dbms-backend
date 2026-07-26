@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
+import { RunDateCalculatorService } from '../../common/services/run-date-calculator.service'
 import { PortfolioModule } from '../portfolio/portfolio.module'
 import { PrismaService } from '../prisma/prisma.service'
 import { ExternalPortfolioController } from './external-portfolio.controller'
@@ -23,6 +24,7 @@ import { ExternalSubportfolioService } from './external-subportfolio.service'
   ],
   providers: [
     PrismaService,
+    RunDateCalculatorService,
     ExternalPortfolioService,
     ExternalPropertyService,
     ExternalSubportfolioService,

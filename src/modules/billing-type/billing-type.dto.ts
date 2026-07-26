@@ -1,5 +1,6 @@
 import { PartialType } from '@nestjs/mapped-types'
 import { ApiProperty } from '@nestjs/swagger'
+import { Transform } from 'class-transformer'
 import { IsBoolean, IsNotEmpty, IsNumber, IsString } from 'class-validator'
 
 export class CreateBillingTypeDto {
@@ -9,6 +10,11 @@ export class CreateBillingTypeDto {
   name: string
 
   @ApiProperty({ example: true, description: 'Whether billing type is active' })
+  @Transform(({ value }) => {
+    if (value === 'true') return true
+    if (value === 'false') return false
+    return value
+  })
   @IsBoolean()
   @IsNotEmpty()
   is_active: boolean

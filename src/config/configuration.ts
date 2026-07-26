@@ -70,6 +70,12 @@ export interface Configuration {
   scraperServiceToken: string
   syncTimeoutMs: number
   serviceToken: string
+  runDateCapacity: {
+    expedia: number
+    booking: number
+    agoda: number
+    expediaDb: number
+  }
   cookies: {
     accessTokenName: string
     refreshTokenName: string
@@ -185,6 +191,12 @@ export default (): Configuration => {
     scraperServiceToken: process.env.SCRAPER_SERVICE_TOKEN || '',
     syncTimeoutMs: parseInt(process.env.SYNC_TIMEOUT_MS || '15000', 10),
     serviceToken: process.env.SERVICE_TOKEN || '',
+    runDateCapacity: {
+      expedia:   parseInt(process.env.EXPEDIA_CAPACITY    || '5', 10),
+      booking:   parseInt(process.env.BOOKING_CAPACITY    || '5', 10),
+      agoda:     parseInt(process.env.AGODA_CAPACITY      || '5', 10),
+      expediaDb: parseInt(process.env.EXPEDIA_DB_CAPACITY || '5', 10)
+    },
     cookies: {
       accessTokenName: process.env.COOKIE_ACCESS_TOKEN_NAME || 'accessToken',
       refreshTokenName: process.env.COOKIE_REFRESH_TOKEN_NAME || 'refreshToken',

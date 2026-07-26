@@ -14,6 +14,7 @@ import { createHash } from 'crypto'
 import * as XLSX from 'xlsx'
 import type { PaginatedResult } from '../../common/dto/query.dto'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
+import { RunDateCalculatorService } from '../../common/services/run-date-calculator.service'
 import { SyncCommunicationService } from '../../common/services/sync-communication.service'
 import { EmailUtil } from '../../common/utils/email.util'
 import { EncryptionUtil } from '../../common/utils/encryption.util'
@@ -87,7 +88,8 @@ export class PropertyService implements IPropertyService {
     private readonly redisService: RedisService,
     private readonly emailUtil: EmailUtil,
     private readonly config: ConfigService<Configuration>,
-    private readonly syncCommunication: SyncCommunicationService
+    private readonly syncCommunication: SyncCommunicationService,
+    private readonly runDateCalculator: RunDateCalculatorService
   ) {
     const timeout = this.config.get('syncTimeoutMs', { infer: true }) ?? 15000
     const dashUrl =
@@ -189,6 +191,25 @@ export class PropertyService implements IPropertyService {
         await this.repo.delete(property.id)
         throw error
       }
+    }
+
+    // Auto-calculate run dates for any OTA that has a historical "to" date + CRS
+    const runDateUpdates = await this.runDateCalculator.calcRunDatesForProperty(
+      {
+        expedia_to: encryptedData.expedia_to,
+        expedia_crs: encryptedData.expedia_crs,
+        booking_to: encryptedData.booking_to,
+        booking_crs: encryptedData.booking_crs,
+        agoda_to: encryptedData.agoda_to,
+        agoda_crs: encryptedData.agoda_crs
+      },
+      property.id
+    )
+    if (Object.keys(runDateUpdates).length > 0) {
+      await this.prisma.property.update({
+        where: { id: property.id },
+        data: runDateUpdates
+      })
     }
 
     await this.redisService.deleteByPattern(ALL_PATTERN)
@@ -398,139 +419,6 @@ export class PropertyService implements IPropertyService {
             processedFilters.add('to_db')
             continue
           }
-        }
-
-        const applySingleFieldRange = (
-          columnName: string,
-          fromName: string,
-          toName: string
-        ) => {
-          const fromF = filterMap.get(fromName)
-          const toF = filterMap.get(toName)
-          const fromVal =
-            fromF?.in?.[0] != null ? String(fromF.in[0]) : undefined
-          const toVal = toF?.in?.[0] != null ? String(toF.in[0]) : undefined
-          if (fromVal === undefined && toVal === undefined) return false
-
-          const range: Record<string, string> = {}
-          if (fromVal !== undefined) range.gte = fromVal
-          if (toVal !== undefined) range.lte = toVal
-          whereConditions.push({ [columnName]: range })
-          processedFilters.add(fromName)
-          processedFilters.add(toName)
-          return true
-        }
-
-        if (
-          name === 'expedia_scheduler_review_from' ||
-          name === 'expedia_scheduler_review_to'
-        ) {
-          if (!processedFilters.has(name)) {
-            applySingleFieldRange(
-              'expedia_scheduler_review',
-              'expedia_scheduler_review_from',
-              'expedia_scheduler_review_to'
-            )
-          }
-          continue
-        }
-        if (
-          name === 'expedia_scheduler_review_db_from' ||
-          name === 'expedia_scheduler_review_db_to'
-        ) {
-          if (!processedFilters.has(name)) {
-            applySingleFieldRange(
-              'expedia_scheduler_review_db',
-              'expedia_scheduler_review_db_from',
-              'expedia_scheduler_review_db_to'
-            )
-          }
-          continue
-        }
-        if (
-          name === 'expedia_run_date_from' ||
-          name === 'expedia_run_date_to'
-        ) {
-          if (!processedFilters.has(name)) {
-            applySingleFieldRange(
-              'expedia_run_date',
-              'expedia_run_date_from',
-              'expedia_run_date_to'
-            )
-          }
-          continue
-        }
-        if (name === 'booking_run_date_from') {
-          const toFilter = filterMap.get('booking_run_date_to')
-          if (toFilter && toFilter.in && toFilter.in.length > 0) {
-            const fromDate = String(values[0])
-            const toDate = String(toFilter.in[0])
-            whereConditions.push({
-              AND: [
-                { booking_run_date_from: { lte: toDate } },
-                { booking_run_date_to: { gte: fromDate } }
-              ]
-            })
-            processedFilters.add('booking_run_date_from')
-            processedFilters.add('booking_run_date_to')
-            continue
-          }
-        }
-        if (name === 'booking_run_date_to') {
-          const fromFilter = filterMap.get('booking_run_date_from')
-          if (fromFilter && fromFilter.in && fromFilter.in.length > 0) {
-            processedFilters.add('booking_run_date_to')
-            continue
-          }
-        }
-        if (name === 'agoda_run_date_from') {
-          const toFilter = filterMap.get('agoda_run_date_to')
-          if (toFilter && toFilter.in && toFilter.in.length > 0) {
-            const fromDate = String(values[0])
-            const toDate = String(toFilter.in[0])
-            whereConditions.push({
-              AND: [
-                { agoda_run_date_from: { lte: toDate } },
-                { agoda_run_date_to: { gte: fromDate } }
-              ]
-            })
-            processedFilters.add('agoda_run_date_from')
-            processedFilters.add('agoda_run_date_to')
-            continue
-          }
-        }
-        if (name === 'agoda_run_date_to') {
-          const fromFilter = filterMap.get('agoda_run_date_from')
-          if (fromFilter && fromFilter.in && fromFilter.in.length > 0) {
-            processedFilters.add('agoda_run_date_to')
-            continue
-          }
-        }
-        if (
-          name === 'expedia_run_date_db_from' ||
-          name === 'expedia_run_date_db_to'
-        ) {
-          if (!processedFilters.has(name)) {
-            applySingleFieldRange(
-              'expedia_run_date_db',
-              'expedia_run_date_db_from',
-              'expedia_run_date_db_to'
-            )
-          }
-          continue
-        }
-        if (
-          name === 'expedia_revised_date_from' ||
-          name === 'expedia_revised_date_to'
-        ) {
-          if (!processedFilters.has(name)) {
-            applySingleFieldRange(
-              'expedia_revised_date',
-              'expedia_revised_date_from',
-              'expedia_revised_date_to'
-            )
-          }
-          continue
         }
 
         switch (name) {
@@ -810,6 +698,57 @@ export class PropertyService implements IPropertyService {
           }
           case 'sales_rep':
             whereConditions.push({ sales_rep: { in: values } })
+            break
+          case 'expedia_revised_date':
+            whereConditions.push({ expedia_revised_date: { in: values } })
+            break
+          case 'expedia_scheduler_review_from':
+            whereConditions.push({ expedia_scheduler_review_from: { in: values } })
+            break
+          case 'expedia_scheduler_review_to':
+            whereConditions.push({ expedia_scheduler_review_to: { in: values } })
+            break
+          case 'expedia_scheduler_review_db_from':
+            whereConditions.push({ expedia_scheduler_review_db_from: { in: values } })
+            break
+          case 'expedia_scheduler_review_db_to':
+            whereConditions.push({ expedia_scheduler_review_db_to: { in: values } })
+            break
+          case 'expedia_run_date':
+            whereConditions.push({ expedia_run_date: { in: values } })
+            break
+          case 'expedia_run_date_db':
+            whereConditions.push({ expedia_run_date_db: { in: values } })
+            break
+          case 'booking_run_date':
+            whereConditions.push({ booking_run_date: { in: values } })
+            break
+          case 'agoda_run_date':
+            whereConditions.push({ agoda_run_date: { in: values } })
+            break
+          case 'qp_username':
+            whereConditions.push({ qp_username: { in: values } })
+            break
+          case 'cybersource_mid':
+            whereConditions.push({ cybersource_mid: { in: values } })
+            break
+          case 'adyen_location':
+            whereConditions.push({ adyen_location: { in: values } })
+            break
+          case 'stripe_connected_email':
+            whereConditions.push({ stripe_connected_email: { in: values } })
+            break
+          case 'discontinued_email_ids':
+            whereConditions.push({ discontinued_email_ids: { hasSome: values } })
+            break
+          case 'user_name_expedia':
+            whereConditions.push({ credentials: { some: { expediaUsername: { in: values } } } })
+            break
+          case 'user_name_booking':
+            whereConditions.push({ credentials: { some: { bookingUsername: { in: values } } } })
+            break
+          case 'user_name_agoda':
+            whereConditions.push({ credentials: { some: { agodaUsername: { in: values } } } })
             break
         }
       }
@@ -2126,6 +2065,34 @@ export class PropertyService implements IPropertyService {
       .filter(Boolean) as ImportPropertyRow[]
 
     const result = await this.repo.importProperties(rows, user.id)
+
+    // Auto-calculate run dates for every newly created property that has
+    // a historical "to" date and a valid CRS.  Properties are processed
+    // sequentially so each calculation reflects all previous updates,
+    // which is important for correct capacity-check counts.
+    if (result.properties && result.properties.length > 0) {
+      for (const property of result.properties) {
+        const runDateUpdates =
+          await this.runDateCalculator.calcRunDatesForProperty(
+            {
+              expedia_to: property.expedia_to,
+              expedia_crs: property.expedia_crs,
+              booking_to: property.booking_to,
+              booking_crs: property.booking_crs,
+              agoda_to: property.agoda_to,
+              agoda_crs: property.agoda_crs
+            },
+            property.id
+          )
+        if (Object.keys(runDateUpdates).length > 0) {
+          await this.prisma.property.update({
+            where: { id: property.id },
+            data: runDateUpdates
+          })
+        }
+      }
+    }
+
     await this.redisService.deleteByPattern(ALL_PATTERN)
     return result
   }
@@ -2992,28 +2959,20 @@ export class PropertyService implements IPropertyService {
             updateData.expedia_crs_db = expediaCrsDb
           const expediaRunDateFrom = findValue(row, [
             'Expedia Run Date From',
-            'Expedia run date from'
+            'Expedia run date from',
+            'Expedia Run Date',
+            'Expedia run date'
           ])
           if (expediaRunDateFrom !== undefined)
-            updateData.expedia_run_date_from = expediaRunDateFrom
-          const expediaRunDateTo = findValue(row, [
-            'Expedia Run Date To',
-            'Expedia run date to'
-          ])
-          if (expediaRunDateTo !== undefined)
-            updateData.expedia_run_date_to = expediaRunDateTo
+            updateData.expedia_run_date = expediaRunDateFrom
           const expediaRunDateDbFrom = findValue(row, [
             'Expedia Run Date DB From',
-            'Expedia run date db from'
+            'Expedia run date db from',
+            'Expedia Run Date DB',
+            'Expedia run date db'
           ])
           if (expediaRunDateDbFrom !== undefined)
-            updateData.expedia_run_date_db_from = expediaRunDateDbFrom
-          const expediaRunDateDbTo = findValue(row, [
-            'Expedia Run Date DB To',
-            'Expedia run date db to'
-          ])
-          if (expediaRunDateDbTo !== undefined)
-            updateData.expedia_run_date_db_to = expediaRunDateDbTo
+            updateData.expedia_run_date_db = expediaRunDateDbFrom
           const expediaRevisedDate = findValue(row, [
             'Expedia Revised Date',
             'Expedia revised date'
@@ -3149,16 +3108,12 @@ export class PropertyService implements IPropertyService {
           if (bookingCrs !== undefined) updateData.booking_crs = bookingCrs
           const bookingRunDateFrom = findValue(row, [
             'Booking Run Date From',
-            'Booking run date from'
+            'Booking run date from',
+            'Booking Run Date',
+            'Booking run date'
           ])
           if (bookingRunDateFrom !== undefined)
-            updateData.booking_run_date_from = bookingRunDateFrom
-          const bookingRunDateTo = findValue(row, [
-            'Booking Run Date To',
-            'Booking run date to'
-          ])
-          if (bookingRunDateTo !== undefined)
-            updateData.booking_run_date_to = bookingRunDateTo
+            updateData.booking_run_date = bookingRunDateFrom
           const bookingRevisedDate = findValue(row, [
             'Booking Revised Date',
             'Booking revised date'
@@ -3249,16 +3204,12 @@ export class PropertyService implements IPropertyService {
           if (agodaCrs !== undefined) updateData.agoda_crs = agodaCrs
           const agodaRunDateFrom = findValue(row, [
             'Agoda Run Date From',
-            'Agoda run date from'
+            'Agoda run date from',
+            'Agoda Run Date',
+            'Agoda run date'
           ])
           if (agodaRunDateFrom !== undefined)
-            updateData.agoda_run_date_from = agodaRunDateFrom
-          const agodaRunDateTo = findValue(row, [
-            'Agoda Run Date To',
-            'Agoda run date to'
-          ])
-          if (agodaRunDateTo !== undefined)
-            updateData.agoda_run_date_to = agodaRunDateTo
+            updateData.agoda_run_date = agodaRunDateFrom
           const agodaRevisedDate = findValue(row, [
             'Agoda Revised Date',
             'Agoda revised date'
@@ -3871,8 +3822,7 @@ export class PropertyService implements IPropertyService {
     const priorityMap = new Map<string, Priority>()
     const uniqueFromDb = new Set<string>()
     const uniqueToDb = new Set<string>()
-    let revisedDateMin: string | null = null
-    let revisedDateMax: string | null = null
+    const uniqueExpediaRevisedDates = new Set<string>()
     const uniqueExpediaSchedulerReviewFroms = new Set<string>()
     const uniqueExpediaSchedulerReviewTos = new Set<string>()
     const uniqueExpediaSchedulerReviewDbFroms = new Set<string>()
@@ -3880,24 +3830,20 @@ export class PropertyService implements IPropertyService {
     const uniqueExpediaSchedulerDbs = new Set<string>()
     const uniqueExpediaCrs = new Set<string>()
     const uniqueExpediaCrsDbs = new Set<string>()
-    const uniqueExpediaRunDateFroms = new Set<string>()
-    const uniqueExpediaRunDateTos = new Set<string>()
-    const uniqueExpediaRunDateDbFroms = new Set<string>()
-    const uniqueExpediaRunDateDbTos = new Set<string>()
+    const uniqueExpediaRunDates = new Set<string>()
+    const uniqueExpediaRunDateDbs = new Set<string>()
     const uniqueExpediaDbDurations = new Set<string>()
     const uniqueExpediaCredentialVerified = new Set<string>()
     const uniqueExpediaOtpNumbers = new Set<string>()
     const uniqueBookingServiceFees = new Set<string>()
     const uniqueBookingCrs = new Set<string>()
-    const uniqueBookingRunDateFroms = new Set<string>()
-    const uniqueBookingRunDateTos = new Set<string>()
+    const uniqueBookingRunDates = new Set<string>()
     const uniqueBookingRevisedDates = new Set<string>()
     const uniqueBookingCredentialVerified = new Set<string>()
     const uniqueBookingOtpNumbers = new Set<string>()
     const uniqueAgodaServiceFees = new Set<string>()
     const uniqueAgodaCrs = new Set<string>()
-    const uniqueAgodaRunDateFroms = new Set<string>()
-    const uniqueAgodaRunDateTos = new Set<string>()
+    const uniqueAgodaRunDates = new Set<string>()
     const uniqueAgodaRevisedDates = new Set<string>()
     const uniqueAgodaCredentialVerified = new Set<string>()
     const uniqueAgodaOtpNumbers = new Set<string>()
@@ -3972,6 +3918,9 @@ export class PropertyService implements IPropertyService {
     const uniqueExpediaSecondaryUsernames = new Set<string>()
     const uniqueBookingSecondaryUsernames = new Set<string>()
     const uniqueAgodaSecondaryUsernames = new Set<string>()
+    const uniqueExpediaUsernames = new Set<string>()
+    const uniqueBookingUsernames = new Set<string>()
+    const uniqueAgodaUsernames = new Set<string>()
 
     portfolios.forEach((portfolio: any) => {
       if (portfolio.id && portfolio.name) {
@@ -4152,24 +4101,20 @@ export class PropertyService implements IPropertyService {
         uniqueBookingSecondaryUsernames.add(cred.bookingSecondaryUsername)
       if (cred?.agodaSecondaryUsername)
         uniqueAgodaSecondaryUsernames.add(cred.agodaSecondaryUsername)
+      if (cred?.expediaUsername)
+        uniqueExpediaUsernames.add(cred.expediaUsername)
+      if (cred?.bookingUsername)
+        uniqueBookingUsernames.add(cred.bookingUsername)
+      if (cred?.agodaUsername)
+        uniqueAgodaUsernames.add(cred.agodaUsername)
       if (property.expedia_service_fee)
         uniqueExpediaServiceFees.add(property.expedia_service_fee)
       if (property.priority)
         priorityMap.set(property.priority.id, property.priority)
       if (property.from_db) uniqueFromDb.add(property.from_db)
       if (property.to_db) uniqueToDb.add(property.to_db)
-      if (property.expedia_revised_date) {
-        if (
-          revisedDateMin === null ||
-          property.expedia_revised_date < revisedDateMin
-        )
-          revisedDateMin = property.expedia_revised_date
-        if (
-          revisedDateMax === null ||
-          property.expedia_revised_date > revisedDateMax
-        )
-          revisedDateMax = property.expedia_revised_date
-      }
+      if (property.expedia_revised_date)
+        uniqueExpediaRevisedDates.add(property.expedia_revised_date)
       if (property.expedia_scheduler_review_from)
         uniqueExpediaSchedulerReviewFroms.add(
           property.expedia_scheduler_review_from
@@ -4191,14 +4136,10 @@ export class PropertyService implements IPropertyService {
       if (property.expedia_crs) uniqueExpediaCrs.add(property.expedia_crs)
       if (property.expedia_crs_db)
         uniqueExpediaCrsDbs.add(property.expedia_crs_db)
-      if (property.expedia_run_date_from)
-        uniqueExpediaRunDateFroms.add(property.expedia_run_date_from)
-      if (property.expedia_run_date_to)
-        uniqueExpediaRunDateTos.add(property.expedia_run_date_to)
-      if (property.expedia_run_date_db_from)
-        uniqueExpediaRunDateDbFroms.add(property.expedia_run_date_db_from)
-      if (property.expedia_run_date_db_to)
-        uniqueExpediaRunDateDbTos.add(property.expedia_run_date_db_to)
+      if (property.expedia_run_date)
+        uniqueExpediaRunDates.add(property.expedia_run_date)
+      if (property.expedia_run_date_db)
+        uniqueExpediaRunDateDbs.add(property.expedia_run_date_db)
       if (property.expedia_db_duration != null)
         uniqueExpediaDbDurations.add(String(property.expedia_db_duration))
       if (property.expedia_credential_verified != null)
@@ -4210,10 +4151,8 @@ export class PropertyService implements IPropertyService {
       if (property.booking_service_fee != null)
         uniqueBookingServiceFees.add(String(property.booking_service_fee))
       if (property.booking_crs) uniqueBookingCrs.add(property.booking_crs)
-      if (property.booking_run_date_from)
-        uniqueBookingRunDateFroms.add(property.booking_run_date_from)
-      if (property.booking_run_date_to)
-        uniqueBookingRunDateTos.add(property.booking_run_date_to)
+      if (property.booking_run_date)
+        uniqueBookingRunDates.add(property.booking_run_date)
       if (property.booking_revised_date)
         uniqueBookingRevisedDates.add(property.booking_revised_date)
       if (property.booking_credential_verified != null)
@@ -4225,10 +4164,8 @@ export class PropertyService implements IPropertyService {
       if (property.agoda_service_fee != null)
         uniqueAgodaServiceFees.add(String(property.agoda_service_fee))
       if (property.agoda_crs) uniqueAgodaCrs.add(property.agoda_crs)
-      if (property.agoda_run_date_from)
-        uniqueAgodaRunDateFroms.add(property.agoda_run_date_from)
-      if (property.agoda_run_date_to)
-        uniqueAgodaRunDateTos.add(property.agoda_run_date_to)
+      if (property.agoda_run_date)
+        uniqueAgodaRunDates.add(property.agoda_run_date)
       if (property.agoda_revised_date)
         uniqueAgodaRevisedDates.add(property.agoda_revised_date)
       if (property.agoda_credential_verified != null)
@@ -4354,13 +4291,16 @@ export class PropertyService implements IPropertyService {
       agoda_secondary_username: Array.from(
         uniqueAgodaSecondaryUsernames
       ).sort(),
+      user_name_expedia: Array.from(uniqueExpediaUsernames).sort(),
+      user_name_booking: Array.from(uniqueBookingUsernames).sort(),
+      user_name_agoda: Array.from(uniqueAgodaUsernames).sort(),
       expedia_service_fee: Array.from(uniqueExpediaServiceFees).sort(),
       priority: Array.from(priorityMap.values()).sort(
         (a, b) => (a.order ?? 0) - (b.order ?? 0)
       ),
       from_db: Array.from(uniqueFromDb).sort(),
       to_db: Array.from(uniqueToDb).sort(),
-      expedia_revised_date: { min: revisedDateMin, max: revisedDateMax },
+      expedia_revised_date: Array.from(uniqueExpediaRevisedDates).sort(),
       expedia_scheduler_review_from: Array.from(
         uniqueExpediaSchedulerReviewFroms
       ).sort(),
@@ -4376,10 +4316,8 @@ export class PropertyService implements IPropertyService {
       expedia_scheduler_db: Array.from(uniqueExpediaSchedulerDbs).sort(),
       expedia_crs: Array.from(uniqueExpediaCrs).sort(),
       expedia_crs_db: Array.from(uniqueExpediaCrsDbs).sort(),
-      expedia_run_date_from: Array.from(uniqueExpediaRunDateFroms).sort(),
-      expedia_run_date_to: Array.from(uniqueExpediaRunDateTos).sort(),
-      expedia_run_date_db_from: Array.from(uniqueExpediaRunDateDbFroms).sort(),
-      expedia_run_date_db_to: Array.from(uniqueExpediaRunDateDbTos).sort(),
+      expedia_run_date: Array.from(uniqueExpediaRunDates).sort(),
+      expedia_run_date_db: Array.from(uniqueExpediaRunDateDbs).sort(),
       expedia_db_duration: Array.from(uniqueExpediaDbDurations).sort(),
       expedia_credential_verified: Array.from(
         uniqueExpediaCredentialVerified
@@ -4387,8 +4325,7 @@ export class PropertyService implements IPropertyService {
       expedia_otp_number: Array.from(uniqueExpediaOtpNumbers).sort(),
       booking_service_fee: Array.from(uniqueBookingServiceFees).sort(),
       booking_crs: Array.from(uniqueBookingCrs).sort(),
-      booking_run_date_from: Array.from(uniqueBookingRunDateFroms).sort(),
-      booking_run_date_to: Array.from(uniqueBookingRunDateTos).sort(),
+      booking_run_date: Array.from(uniqueBookingRunDates).sort(),
       booking_revised_date: Array.from(uniqueBookingRevisedDates).sort(),
       booking_credential_verified: Array.from(
         uniqueBookingCredentialVerified
@@ -4396,8 +4333,7 @@ export class PropertyService implements IPropertyService {
       booking_otp_number: Array.from(uniqueBookingOtpNumbers).sort(),
       agoda_service_fee: Array.from(uniqueAgodaServiceFees).sort(),
       agoda_crs: Array.from(uniqueAgodaCrs).sort(),
-      agoda_run_date_from: Array.from(uniqueAgodaRunDateFroms).sort(),
-      agoda_run_date_to: Array.from(uniqueAgodaRunDateTos).sort(),
+      agoda_run_date: Array.from(uniqueAgodaRunDates).sort(),
       agoda_revised_date: Array.from(uniqueAgodaRevisedDates).sort(),
       agoda_credential_verified: Array.from(
         uniqueAgodaCredentialVerified

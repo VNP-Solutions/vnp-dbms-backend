@@ -130,6 +130,11 @@ export class CreatePropertyDto {
     example: true,
     description: 'Whether property is active'
   })
+  @Transform(({ value }) => {
+    if (value === 'true') return true
+    if (value === 'false') return false
+    return value
+  })
   @IsBoolean()
   @IsOptional()
   is_active?: boolean
@@ -449,6 +454,11 @@ export class CreatePropertyDto {
     example: true,
     description: 'Expedia access level granted'
   })
+  @Transform(({ value }) => {
+    if (value === 'true') return true
+    if (value === 'false') return false
+    return value
+  })
   @IsBoolean()
   @IsOptional()
   expedia_access_level?: boolean
@@ -472,6 +482,11 @@ export class CreatePropertyDto {
   @ApiPropertyOptional({
     example: false,
     description: 'Expedia scheduler enabled'
+  })
+  @Transform(({ value }) => {
+    if (value === 'true') return true
+    if (value === 'false') return false
+    return value
   })
   @IsBoolean()
   @IsOptional()
@@ -508,25 +523,15 @@ export class CreatePropertyDto {
   @IsOptional()
   expedia_crs_db?: string
 
-  @ApiPropertyOptional({ description: 'Expedia Run Date From (YYYY-MM-DD)', example: '2024-01-01' })
+  @ApiPropertyOptional({ description: 'Expedia Run Date (YYYY-MM-DD)', example: '2024-01-01' })
   @IsString()
   @IsOptional()
-  expedia_run_date_from?: string
+  expedia_run_date?: string
 
-  @ApiPropertyOptional({ description: 'Expedia Run Date To (YYYY-MM-DD)', example: '2024-12-31' })
+  @ApiPropertyOptional({ description: 'Expedia Run Date DB (YYYY-MM-DD)', example: '2024-01-01' })
   @IsString()
   @IsOptional()
-  expedia_run_date_to?: string
-
-  @ApiPropertyOptional({ description: 'Expedia Run Date DB From (YYYY-MM-DD)', example: '2024-01-01' })
-  @IsString()
-  @IsOptional()
-  expedia_run_date_db_from?: string
-
-  @ApiPropertyOptional({ description: 'Expedia Run Date DB To (YYYY-MM-DD)', example: '2024-12-31' })
-  @IsString()
-  @IsOptional()
-  expedia_run_date_db_to?: string
+  expedia_run_date_db?: string
 
   @ApiPropertyOptional({ description: 'Expedia revised date (YYYY-MM-DD)', example: '2024-01-15' })
   @IsString()
@@ -559,6 +564,11 @@ export class CreatePropertyDto {
   expedia_scheduler_review_db_to?: string
 
   @ApiPropertyOptional({ description: 'Expedia credential verified', example: true })
+  @Transform(({ value }) => {
+    if (value === 'true') return true
+    if (value === 'false') return false
+    return value
+  })
   @IsBoolean()
   @IsOptional()
   expedia_credential_verified?: boolean
@@ -606,6 +616,11 @@ export class CreatePropertyDto {
     example: true,
     description: 'Booking.com access level granted'
   })
+  @Transform(({ value }) => {
+    if (value === 'true') return true
+    if (value === 'false') return false
+    return value
+  })
   @IsBoolean()
   @IsOptional()
   booking_access_level?: boolean
@@ -629,6 +644,11 @@ export class CreatePropertyDto {
   @ApiPropertyOptional({
     example: true,
     description: 'Booking.com scheduler enabled'
+  })
+  @Transform(({ value }) => {
+    if (value === 'true') return true
+    if (value === 'false') return false
+    return value
   })
   @IsBoolean()
   @IsOptional()
@@ -654,15 +674,10 @@ export class CreatePropertyDto {
   @IsOptional()
   booking_crs?: string
 
-  @ApiPropertyOptional({ description: 'Booking Run Date From (YYYY-MM-DD)', example: '2024-01-01' })
+  @ApiPropertyOptional({ description: 'Booking Run Date (YYYY-MM-DD)', example: '2024-01-01' })
   @IsString()
   @IsOptional()
-  booking_run_date_from?: string
-
-  @ApiPropertyOptional({ description: 'Booking Run Date To (YYYY-MM-DD)', example: '2024-12-31' })
-  @IsString()
-  @IsOptional()
-  booking_run_date_to?: string
+  booking_run_date?: string
 
   @ApiPropertyOptional({ description: 'Booking revised date (YYYY-MM-DD)', example: '2024-01-15' })
   @IsString()
@@ -670,6 +685,11 @@ export class CreatePropertyDto {
   booking_revised_date?: string
 
   @ApiPropertyOptional({ description: 'Booking credential verified', example: true })
+  @Transform(({ value }) => {
+    if (value === 'true') return true
+    if (value === 'false') return false
+    return value
+  })
   @IsBoolean()
   @IsOptional()
   booking_credential_verified?: boolean
@@ -707,6 +727,11 @@ export class CreatePropertyDto {
     example: false,
     description: 'Agoda access level granted'
   })
+  @Transform(({ value }) => {
+    if (value === 'true') return true
+    if (value === 'false') return false
+    return value
+  })
   @IsBoolean()
   @IsOptional()
   agoda_access_level?: boolean
@@ -730,6 +755,11 @@ export class CreatePropertyDto {
   @ApiPropertyOptional({
     example: true,
     description: 'Agoda scheduler enabled'
+  })
+  @Transform(({ value }) => {
+    if (value === 'true') return true
+    if (value === 'false') return false
+    return value
   })
   @IsBoolean()
   @IsOptional()
@@ -755,15 +785,10 @@ export class CreatePropertyDto {
   @IsOptional()
   agoda_crs?: string
 
-  @ApiPropertyOptional({ description: 'Agoda Run Date From (YYYY-MM-DD)', example: '2024-01-01' })
+  @ApiPropertyOptional({ description: 'Agoda Run Date (YYYY-MM-DD)', example: '2024-01-01' })
   @IsString()
   @IsOptional()
-  agoda_run_date_from?: string
-
-  @ApiPropertyOptional({ description: 'Agoda Run Date To (YYYY-MM-DD)', example: '2024-12-31' })
-  @IsString()
-  @IsOptional()
-  agoda_run_date_to?: string
+  agoda_run_date?: string
 
   @ApiPropertyOptional({ description: 'Agoda revised date (YYYY-MM-DD)', example: '2024-01-15' })
   @IsString()
@@ -771,6 +796,11 @@ export class CreatePropertyDto {
   agoda_revised_date?: string
 
   @ApiPropertyOptional({ description: 'Agoda credential verified', example: true })
+  @Transform(({ value }) => {
+    if (value === 'true') return true
+    if (value === 'false') return false
+    return value
+  })
   @IsBoolean()
   @IsOptional()
   agoda_credential_verified?: boolean
@@ -822,6 +852,11 @@ export class CreatePropertyDto {
   @ApiPropertyOptional({
     example: true,
     description: 'Need another domain for OTA integrations'
+  })
+  @Transform(({ value }) => {
+    if (value === 'true') return true
+    if (value === 'false') return false
+    return value
   })
   @IsBoolean()
   @IsOptional()
@@ -1234,34 +1269,33 @@ export const PROPERTY_FILTER_FIELD_NAMES = [
   'priority_id',
   'from_db',
   'to_db',
-  'expedia_revised_date_from',
-  'expedia_revised_date_to',
+  'expedia_revised_date',
   'expedia_scheduler_review_from',
   'expedia_scheduler_review_to',
   'expedia_scheduler_review_db_from',
   'expedia_scheduler_review_db_to',
   'expedia_crs',
   'expedia_crs_db',
-  'expedia_run_date_from',
-  'expedia_run_date_to',
-  'expedia_run_date_db_from',
-  'expedia_run_date_db_to',
+  'expedia_run_date',
+  'expedia_run_date_db',
   'expedia_db_duration',
   'expedia_credential_verified',
   'expedia_otp_number',
   'booking_service_fee',
-  'booking_run_date_from',
-  'booking_run_date_to',
+  'booking_run_date',
   'booking_credential_verified',
   'agoda_service_fee',
-  'agoda_run_date_from',
-  'agoda_run_date_to',
+  'agoda_run_date',
   'agoda_credential_verified',
   'sales_rep',
   'discontinued_email_ids',
   'cybersource_mid',
   'adyen_location',
-  'stripe_connected_email'
+  'stripe_connected_email',
+  'qp_username',
+  'user_name_expedia',
+  'user_name_booking',
+  'user_name_agoda'
 ] as const
 
 export type PropertyFilterFieldName = (typeof PROPERTY_FILTER_FIELD_NAMES)[number]
@@ -1324,12 +1358,15 @@ function swaggerExampleForFilterName(name: PropertyFilterFieldName): {
     name === 'agoda_to' ||
     name === 'from' ||
     name === 'to' ||
-    name === 'expedia_run_date_from' ||
-    name === 'expedia_run_date_to' ||
-    name === 'booking_run_date_from' ||
-    name === 'booking_run_date_to' ||
-    name === 'agoda_run_date_from' ||
-    name === 'agoda_run_date_to'
+    name === 'expedia_revised_date' ||
+    name === 'expedia_run_date' ||
+    name === 'expedia_run_date_db' ||
+    name === 'booking_run_date' ||
+    name === 'agoda_run_date' ||
+    name === 'expedia_scheduler_review_from' ||
+    name === 'expedia_scheduler_review_to' ||
+    name === 'expedia_scheduler_review_db_from' ||
+    name === 'expedia_scheduler_review_db_to'
   )
     return { in: ['2024-01-01', '2024-12-31'] }
   return { in: [`example-${name}`] }
@@ -1457,6 +1494,11 @@ export class PropertyFilterDto {
   @ApiPropertyOptional({
     description: 'If true (default), credentials are masked. If false, credentials are decrypted. When false, user_name and user_password are required.',
     example: true
+  })
+  @Transform(({ value }) => {
+    if (value === 'true') return true
+    if (value === 'false') return false
+    return value
   })
   @IsOptional()
   @IsBoolean()
@@ -1860,6 +1902,11 @@ export class SyncBulkUpsertItemDto {
   card_descriptor?: string
 
   @ApiPropertyOptional({ example: true })
+  @Transform(({ value }) => {
+    if (value === 'true') return true
+    if (value === 'false') return false
+    return value
+  })
   @IsBoolean()
   @IsOptional()
   is_active?: boolean

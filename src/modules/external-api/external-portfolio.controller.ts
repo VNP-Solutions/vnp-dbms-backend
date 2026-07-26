@@ -1,9 +1,11 @@
 import {
+  Body,
   Controller,
   Get,
   Inject,
   Logger,
   Param,
+  Patch,
   Post,
   Query,
   Req,
@@ -31,6 +33,7 @@ import { hasProjectAccess } from '../../common/utils/project-context.util'
 import { ResponseHandler } from '../../common/utils/response-handler.util'
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
 import type { IPortfolioService } from '../portfolio/portfolio.interface'
+import { BulkUpdatePortfolioBookingCredentialsDto } from './external-api.dto'
 import { ExternalPortfolioService } from './external-portfolio.service'
 
 @ApiTags('External API - Portfolio')
@@ -193,6 +196,38 @@ export class ExternalPortfolioController {
         }
       },
       this.logger
+    )
+  }
+
+  @Patch('property/:propertyId/credentials/booking')
+  @ApiOperation({
+    summary: 'Bulk update Booking.com credentials for matched properties in a portfolio (via property ID)',
+    description:
+      'Resolves the portfolio from the given property ID, then updates Booking.com credentials ' +
+      'for every property in that portfolio whose stored `bookingUsername` matches the one in the request body. ' +
+      'Properties with no credentials record or a different username are skipped.'
+  })
+  @ApiBody({ type: BulkUpdatePortfolioBookingCredentialsDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Booking credentials updated for matching properties',
+    schema: {
+      example: {
+        message: 'Booking credentials updated for 8 properties (4 skipped — username mismatch or no credentials)',
+        updated_count: 8,
+        skipped_count: 4,
+        portfolio_id: '64f1a2b3c4d5e6f7a8b9c0d1'
+      }
+    }
+  })
+  @ApiResponse({ status: 404, description: 'Property or portfolio not found' })
+  async bulkUpdateBookingCredentials(
+    @Param('propertyId') propertyId: string,
+    @Body() dto: BulkUpdatePortfolioBookingCredentialsDto
+  ) {
+    return this.externalPortfolioService.bulkUpdateBookingCredentialsByPortfolio(
+      propertyId,
+      dto
     )
   }
 
