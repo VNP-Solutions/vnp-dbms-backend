@@ -36,6 +36,7 @@ import type {
 const CACHE_TTL_ITEM = 5 * 60 * 1000 // 5 minutes for individual records
 const CACHE_KEY = (id: string) => `portfolio:${id}`
 const ALL_PATTERN = 'portfolio:all:*'
+const GLOBAL_FILTER_PATTERN = 'global-filter:all:*'
 const INTERNAL_PORTFOLIO_NAME = 'Internal Portfolio'
 
 @Injectable()
@@ -150,7 +151,10 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
     if (existing)
       throw new ConflictException('Portfolio with this name already exists')
     const portfolio = await this.portfolioRepository.create(data)
-    await this.redisService.deleteByPattern(ALL_PATTERN)
+    await Promise.all([
+      this.redisService.deleteByPattern(ALL_PATTERN),
+      this.redisService.deleteByPattern(GLOBAL_FILTER_PATTERN)
+    ])
     return portfolio
   }
 
@@ -456,7 +460,8 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
     const updated = await this.portfolioRepository.update(id, data)
     await Promise.all([
       this.redisService.del(CACHE_KEY(id)),
-      this.redisService.deleteByPattern(ALL_PATTERN)
+      this.redisService.deleteByPattern(ALL_PATTERN),
+      this.redisService.deleteByPattern(GLOBAL_FILTER_PATTERN)
     ])
     return updated
   }
@@ -583,7 +588,8 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
     await Promise.all([
       this.redisService.del(CACHE_KEY(id)),
       this.redisService.deleteByPattern(ALL_PATTERN),
-      this.redisService.deleteByPattern('property:all:*')
+      this.redisService.deleteByPattern('property:all:*'),
+      this.redisService.deleteByPattern(GLOBAL_FILTER_PATTERN)
     ])
     try {
       if (this.dashboardClient) {
@@ -917,7 +923,10 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
       }
     }
 
-    await this.redisService.deleteByPattern(ALL_PATTERN)
+    await Promise.all([
+      this.redisService.deleteByPattern(ALL_PATTERN),
+      this.redisService.deleteByPattern(GLOBAL_FILTER_PATTERN)
+    ])
 
     // ── Dashboard & parser bulk-upsert sync ───────────────────────────────────
     if (portfolios.length) {

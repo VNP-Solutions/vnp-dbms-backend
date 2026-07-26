@@ -51,6 +51,7 @@ import {
 } from './property.dto'
 import { applyColumnFilter } from './property-column-filter.util'
 import type {
+  AllDataForGlobalFilterResponse,
   ImportPropertiesResult,
   ImportPropertyRow,
   IPropertyRepository,
@@ -63,10 +64,23 @@ const CACHE_TTL_ITEM = 5 * 60 * 1000 // 5 minutes for individual records
 const CACHE_TTL_ALL = 60 * 60 * 1000 // 1 hour for all properties cache
 const CACHE_KEY = (id: string) => `property:${id}`
 const ALL_PATTERN = 'property:all:*'
+const GLOBAL_FILTER_PATTERN = 'global-filter:all:*'
+const GLOBAL_FILTER_KEY = (userId: string) => `global-filter:all:${userId}`
 
 @Injectable()
 export class PropertyService implements IPropertyService {
   private readonly logger = new Logger(PropertyService.name)
+
+  /**
+   * Invalidates both the per-user property list cache and the global filter
+   * aggregate cache.  Call this wherever property data changes.
+   */
+  private async invalidateCaches(): Promise<void> {
+    await Promise.all([
+      this.redisService.deleteByPattern(ALL_PATTERN),
+      this.redisService.deleteByPattern(GLOBAL_FILTER_PATTERN)
+    ])
+  }
   private readonly dashboardClient: AxiosInstance | null
   private readonly dashboardJwtClient: AxiosInstance | null
   private readonly scraperClient: AxiosInstance | null
@@ -212,7 +226,7 @@ export class PropertyService implements IPropertyService {
       })
     }
 
-    await this.redisService.deleteByPattern(ALL_PATTERN)
+    await this.invalidateCaches()
     return this.repo.findById(property.id) as Promise<PropertyWithRelations>
   }
 
@@ -702,6 +716,12 @@ export class PropertyService implements IPropertyService {
           case 'expedia_revised_date':
             whereConditions.push({ expedia_revised_date: { in: values } })
             break
+          case 'booking_revised_date':
+            whereConditions.push({ booking_revised_date: { in: values } })
+            break
+          case 'agoda_revised_date':
+            whereConditions.push({ agoda_revised_date: { in: values } })
+            break
           case 'expedia_scheduler_review_from':
             whereConditions.push({ expedia_scheduler_review_from: { in: values } })
             break
@@ -1185,7 +1205,7 @@ export class PropertyService implements IPropertyService {
 
     await Promise.all([
       this.redisService.del(CACHE_KEY(id)),
-      this.redisService.deleteByPattern(ALL_PATTERN)
+      this.invalidateCaches()
     ])
     return this.repo.findById(id) as Promise<PropertyWithRelations>
   }
@@ -1269,7 +1289,7 @@ export class PropertyService implements IPropertyService {
         await this.repo.delete(parent_id)
         await Promise.all([
           this.redisService.del(CACHE_KEY(parent_id)),
-          this.redisService.deleteByPattern(ALL_PATTERN)
+          this.invalidateCaches()
         ]).catch(() => undefined)
 
         successfulDeletes.push({ parent_id })
@@ -1309,7 +1329,7 @@ export class PropertyService implements IPropertyService {
     await this.repo.delete(id)
     await Promise.all([
       this.redisService.del(CACHE_KEY(id)),
-      this.redisService.deleteByPattern(ALL_PATTERN)
+      this.invalidateCaches()
     ])
     try {
       if (this.dashboardJwtClient) {
@@ -1371,7 +1391,7 @@ export class PropertyService implements IPropertyService {
     await this.repo.update(id, { portfolio_id: portfolioId })
     await Promise.all([
       this.redisService.del(CACHE_KEY(id)),
-      this.redisService.deleteByPattern(ALL_PATTERN)
+      this.invalidateCaches()
     ])
     return this.repo.findById(id) as Promise<PropertyWithRelations>
   }
@@ -1431,7 +1451,7 @@ export class PropertyService implements IPropertyService {
     }
 
     if (success.length > 0) {
-      await this.redisService.deleteByPattern(ALL_PATTERN)
+      await this.invalidateCaches()
     }
 
     this.logger.log(
@@ -2093,7 +2113,7 @@ export class PropertyService implements IPropertyService {
       }
     }
 
-    await this.redisService.deleteByPattern(ALL_PATTERN)
+    await this.invalidateCaches()
     return result
   }
 
@@ -3497,7 +3517,7 @@ export class PropertyService implements IPropertyService {
           // Invalidate Redis cache for this property and the all-properties list
           await Promise.all([
             this.redisService.del(CACHE_KEY(propertyId)),
-            this.redisService.deleteByPattern(ALL_PATTERN)
+            this.invalidateCaches()
           ])
 
           result.successCount++
@@ -3722,7 +3742,7 @@ export class PropertyService implements IPropertyService {
     if (success.length > 0) {
       await Promise.all([
         ...success.map(({ id }) => this.redisService.del(CACHE_KEY(id))),
-        this.redisService.deleteByPattern(ALL_PATTERN)
+        this.invalidateCaches()
       ])
 
       this.syncBulkDeleteToDashboard(success.map(({ id }) => id)).catch(e =>
@@ -3792,7 +3812,7 @@ export class PropertyService implements IPropertyService {
     )
 
     // Delete all property cache keys (all users and individual items)
-    await this.redisService.deleteByPattern(ALL_PATTERN)
+    await this.invalidateCaches()
     await this.redisService.deleteByPattern('property:*')
 
     // Delete all portfolio cache keys (portfolios are used in global filter)
@@ -3812,6 +3832,18 @@ export class PropertyService implements IPropertyService {
   }
 
   async getAllDataForGlobalFilter(user: IUserWithPermissions) {
+    const cacheKey = GLOBAL_FILTER_KEY(user.id)
+    const cached = await this.redisService.get<AllDataForGlobalFilterResponse>(cacheKey)
+    if (cached) {
+      this.logger.log(
+        `[CACHE HIT] global-filter:getAllDataForGlobalFilter — served from Redis (key: ${cacheKey})`
+      )
+      return cached
+    }
+    this.logger.log(
+      `[CACHE MISS] global-filter:getAllDataForGlobalFilter — computing from source caches (key: ${cacheKey})`
+    )
+
     const [portfolios, properties, subportfolios] = await Promise.all([
       this.portfolioService.findAllCached(user),
       this.findAllCached(user),
@@ -4187,7 +4219,7 @@ export class PropertyService implements IPropertyService {
         uniqueStripeConnectedEmails.add(property.stripe_connected_email)
     })
 
-    return {
+    const result: AllDataForGlobalFilterResponse = {
       expedia_id: Array.from(uniqueExpediaIds).sort(),
       portfolio: Array.from(portfolioMap.values()).sort((a, b) =>
         a.name.localeCompare(b.name)
@@ -4344,7 +4376,11 @@ export class PropertyService implements IPropertyService {
       cybersource_mid: Array.from(uniqueCybersourceMids).sort(),
       adyen_location: Array.from(uniqueAdyenLocations).sort(),
       stripe_connected_email: Array.from(uniqueStripeConnectedEmails).sort(),
-    }
+    } as AllDataForGlobalFilterResponse
+
+    // Cache the aggregated result (same TTL as the property list cache)
+    await this.redisService.set(cacheKey, result, CACHE_TTL_ALL)
+    return result
   }
 
   private hashQuery(query: object): string {
@@ -4767,7 +4803,7 @@ export class PropertyService implements IPropertyService {
     const updated = await this.repo.update(ids[0], patch as UpdatePropertyDto)
     await Promise.all([
       this.redisService.del(CACHE_KEY(updated.id)),
-      this.redisService.deleteByPattern(ALL_PATTERN)
+      this.invalidateCaches()
     ])
     return { status: 'updated', id: updated.id }
   }

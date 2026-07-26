@@ -1270,6 +1270,8 @@ export const PROPERTY_FILTER_FIELD_NAMES = [
   'from_db',
   'to_db',
   'expedia_revised_date',
+  'booking_revised_date',
+  'agoda_revised_date',
   'expedia_scheduler_review_from',
   'expedia_scheduler_review_to',
   'expedia_scheduler_review_db_from',
