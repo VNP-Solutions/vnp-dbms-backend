@@ -73,8 +73,21 @@ export class SubportfolioRepository implements ISubportfolioRepository {
     orderBy?: any
   }): Promise<SubportfolioWithCounts[]> {
     const { where, skip, take, orderBy } = queryOptions
+
+    // Guard against orphaned subportfolios (MongoDB doesn't enforce FK constraints,
+    // so some records may reference a deleted portfolio). Pre-filtering by existing
+    // portfolio IDs prevents Prisma's "required relation returned null" error.
+    const existingPortfolioIds = await this.prisma.portfolio
+      .findMany({ select: { id: true } })
+      .then(rows => rows.map(r => r.id))
+
+    const safeWhere = {
+      ...where,
+      portfolio_id: { in: existingPortfolioIds }
+    }
+
     const list = await this.prisma.subportfolio.findMany({
-      where,
+      where: safeWhere,
       skip,
       take,
       orderBy,
@@ -91,7 +104,14 @@ export class SubportfolioRepository implements ISubportfolioRepository {
   }
 
   async count(where: any): Promise<number> {
-    return this.prisma.subportfolio.count({ where })
+    // Mirror the same orphan guard so the count matches findAll
+    const existingPortfolioIds = await this.prisma.portfolio
+      .findMany({ select: { id: true } })
+      .then(rows => rows.map(r => r.id))
+
+    return this.prisma.subportfolio.count({
+      where: { ...where, portfolio_id: { in: existingPortfolioIds } }
+    })
   }
 
   async findById(id: string): Promise<SubportfolioWithCounts | null> {
