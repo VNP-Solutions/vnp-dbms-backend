@@ -435,6 +435,54 @@ export class PropertyService implements IPropertyService {
           }
         }
 
+        if (name === 'expedia_scheduler_review_from') {
+          const toFilter = filterMap.get('expedia_scheduler_review_to')
+          if (toFilter && toFilter.in && toFilter.in.length > 0) {
+            const fromDate = String(values[0])
+            const toDate = String(toFilter.in[0])
+            whereConditions.push({
+              AND: [
+                { expedia_scheduler_review_from: { lte: toDate } },
+                { expedia_scheduler_review_to: { gte: fromDate } }
+              ]
+            })
+            processedFilters.add('expedia_scheduler_review_from')
+            processedFilters.add('expedia_scheduler_review_to')
+            continue
+          }
+        }
+        if (name === 'expedia_scheduler_review_to') {
+          const fromFilter = filterMap.get('expedia_scheduler_review_from')
+          if (fromFilter && fromFilter.in && fromFilter.in.length > 0) {
+            processedFilters.add('expedia_scheduler_review_to')
+            continue
+          }
+        }
+
+        if (name === 'expedia_scheduler_review_db_from') {
+          const toFilter = filterMap.get('expedia_scheduler_review_db_to')
+          if (toFilter && toFilter.in && toFilter.in.length > 0) {
+            const fromDate = String(values[0])
+            const toDate = String(toFilter.in[0])
+            whereConditions.push({
+              AND: [
+                { expedia_scheduler_review_db_from: { lte: toDate } },
+                { expedia_scheduler_review_db_to: { gte: fromDate } }
+              ]
+            })
+            processedFilters.add('expedia_scheduler_review_db_from')
+            processedFilters.add('expedia_scheduler_review_db_to')
+            continue
+          }
+        }
+        if (name === 'expedia_scheduler_review_db_to') {
+          const fromFilter = filterMap.get('expedia_scheduler_review_db_from')
+          if (fromFilter && fromFilter.in && fromFilter.in.length > 0) {
+            processedFilters.add('expedia_scheduler_review_db_to')
+            continue
+          }
+        }
+
         switch (name) {
           case 'portfolio_id':
             whereConditions.push({
