@@ -199,8 +199,9 @@ export class PropertyRepository implements IPropertyRepository {
     orderBy?: any
   }): Promise<PropertyWithRelations[]> {
     const { where, skip, take, orderBy } = queryOptions
+    const safeWhere = await this.withValidPortfolioFilter(where)
     const rows = await this.prisma.property.findMany({
-      where,
+      where: safeWhere,
       skip,
       take,
       orderBy,
@@ -210,7 +211,21 @@ export class PropertyRepository implements IPropertyRepository {
   }
 
   async count(where: any): Promise<number> {
-    return this.prisma.property.count({ where })
+    const safeWhere = await this.withValidPortfolioFilter(where)
+    return this.prisma.property.count({ where: safeWhere })
+  }
+
+  /**
+   * MongoDB does not enforce referential integrity. Properties whose portfolio_id
+   * references a deleted portfolio cause Prisma to throw
+   * "required relation returned null" when the portfolio is included.
+   * This helper restricts the where clause to only existing portfolio IDs.
+   */
+  private async withValidPortfolioFilter(where: any): Promise<any> {
+    const validIds = await this.prisma.portfolio
+      .findMany({ select: { id: true } })
+      .then(rows => rows.map(r => r.id))
+    return { ...where, portfolio_id: { in: validIds } }
   }
 
   async findById(id: string): Promise<PropertyWithRelations | null> {
