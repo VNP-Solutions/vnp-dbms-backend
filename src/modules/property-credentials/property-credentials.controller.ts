@@ -54,10 +54,23 @@ export class PropertyCredentialsController {
   @Get('property/:propertyId')
   @RequirePermission(ModuleType.PROPERTY, PermissionAction.READ)
   @ApiOperation({ summary: 'Get property credentials by property ID' })
-  @ApiResponse({ status: 200, description: 'Returns property credentials' })
+  @ApiResponse({ status: 200, description: 'Returns property credentials (passwords masked)' })
   @ApiResponse({ status: 404, description: 'Property credentials not found' })
   findByPropertyId(@Param('propertyId') propertyId: string) {
     return this.credentialsService.findByPropertyId(propertyId)
+  }
+
+  @Get('property/:propertyId/unmasked')
+  @RequirePermission(ModuleType.PROPERTY, PermissionAction.READ)
+  @ApiOperation({
+    summary: 'Get unmasked (decrypted) credentials by property ID',
+    description:
+      'Returns the credentials record for the given property with all password fields decrypted. Requires PROPERTY READ permission.'
+  })
+  @ApiResponse({ status: 200, description: 'Returns property credentials with decrypted passwords' })
+  @ApiResponse({ status: 404, description: 'No credentials found for this property' })
+  findByPropertyIdUnmasked(@Param('propertyId') propertyId: string) {
+    return this.credentialsService.findByPropertyIdUnmasked(propertyId)
   }
 
   @Get(':id')

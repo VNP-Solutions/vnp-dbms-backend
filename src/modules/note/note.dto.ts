@@ -1,5 +1,6 @@
 import { PartialType } from '@nestjs/mapped-types'
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
+import { Transform } from 'class-transformer'
 import {
   IsArray,
   IsBoolean,
@@ -29,6 +30,11 @@ export class CreateNoteDto {
     example: false,
     description: 'Whether the note is marked as done',
     default: false
+  })
+  @Transform(({ value }) => {
+    if (value === 'true') return true
+    if (value === 'false') return false
+    return value
   })
   @IsBoolean()
   @IsOptional()

@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import { ProjectType } from '@prisma/client'
+import { Transform } from 'class-transformer'
 import {
   IsArray,
   IsBoolean,
@@ -70,6 +71,11 @@ export class CreateUserProjectRoleDto {
     description: 'Whether the user project role is active',
     default: true
   })
+  @Transform(({ value }) => {
+    if (value === 'true') return true
+    if (value === 'false') return false
+    return value
+  })
   @IsBoolean()
   @IsOptional()
   is_active?: boolean
@@ -117,6 +123,11 @@ export class UpdateUserProjectRoleDto {
   @ApiPropertyOptional({
     example: false,
     description: 'Whether the user project role is active'
+  })
+  @Transform(({ value }) => {
+    if (value === 'true') return true
+    if (value === 'false') return false
+    return value
   })
   @IsBoolean()
   @IsOptional()
@@ -201,6 +212,11 @@ export class GetUserProjectRolesQueryDto {
   @ApiPropertyOptional({
     example: true,
     description: 'Filter by active status'
+  })
+  @Transform(({ value }) => {
+    if (value === 'true') return true
+    if (value === 'false') return false
+    return value
   })
   @IsBoolean()
   @IsOptional()

@@ -12,6 +12,7 @@ import type { IUserWithPermissions } from '../../common/interfaces/permission.in
 import { RedisService } from '../redis/redis.service'
 
 const SUBPORTFOLIO_ALL_PATTERN = 'subportfolio:all:*'
+const GLOBAL_FILTER_PATTERN = 'global-filter:all:*'
 
 @Injectable()
 export class SubportfolioService implements ISubportfolioService {
@@ -24,7 +25,10 @@ export class SubportfolioService implements ISubportfolioService {
   ) {}
 
   private async invalidateSubportfolioCache(): Promise<void> {
-    await this.redisService.deleteByPattern(SUBPORTFOLIO_ALL_PATTERN)
+    await Promise.all([
+      this.redisService.deleteByPattern(SUBPORTFOLIO_ALL_PATTERN),
+      this.redisService.deleteByPattern(GLOBAL_FILTER_PATTERN)
+    ])
   }
 
   async findAllCachedForGlobalFilter(

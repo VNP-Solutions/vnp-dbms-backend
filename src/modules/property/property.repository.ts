@@ -150,10 +150,8 @@ export class PropertyRepository implements IPropertyRepository {
       priority_id: data.priority_id,
       expedia_crs: data.expedia_crs,
       expedia_crs_db: data.expedia_crs_db,
-      expedia_run_date_from: data.expedia_run_date_from,
-      expedia_run_date_to: data.expedia_run_date_to,
-      expedia_run_date_db_from: data.expedia_run_date_db_from,
-      expedia_run_date_db_to: data.expedia_run_date_db_to,
+      expedia_run_date: data.expedia_run_date,
+      expedia_run_date_db: data.expedia_run_date_db,
       expedia_revised_date: data.expedia_revised_date,
       expedia_scheduler_review_from: data.expedia_scheduler_review_from,
       expedia_scheduler_review_to: data.expedia_scheduler_review_to,
@@ -167,15 +165,13 @@ export class PropertyRepository implements IPropertyRepository {
       to_db: data.to_db,
       booking_service_fee: data.booking_service_fee,
       booking_crs: data.booking_crs,
-      booking_run_date_from: data.booking_run_date_from,
-      booking_run_date_to: data.booking_run_date_to,
+      booking_run_date: data.booking_run_date,
       booking_revised_date: data.booking_revised_date,
       booking_credential_verified: data.booking_credential_verified,
       booking_otp_number: data.booking_otp_number,
       agoda_service_fee: data.agoda_service_fee,
       agoda_crs: data.agoda_crs,
-      agoda_run_date_from: data.agoda_run_date_from,
-      agoda_run_date_to: data.agoda_run_date_to,
+      agoda_run_date: data.agoda_run_date,
       agoda_revised_date: data.agoda_revised_date,
       agoda_credential_verified: data.agoda_credential_verified,
       agoda_otp_number: data.agoda_otp_number,
@@ -203,8 +199,9 @@ export class PropertyRepository implements IPropertyRepository {
     orderBy?: any
   }): Promise<PropertyWithRelations[]> {
     const { where, skip, take, orderBy } = queryOptions
+    const safeWhere = await this.withValidPortfolioFilter(where)
     const rows = await this.prisma.property.findMany({
-      where,
+      where: safeWhere,
       skip,
       take,
       orderBy,
@@ -214,7 +211,21 @@ export class PropertyRepository implements IPropertyRepository {
   }
 
   async count(where: any): Promise<number> {
-    return this.prisma.property.count({ where })
+    const safeWhere = await this.withValidPortfolioFilter(where)
+    return this.prisma.property.count({ where: safeWhere })
+  }
+
+  /**
+   * MongoDB does not enforce referential integrity. Properties whose portfolio_id
+   * references a deleted portfolio cause Prisma to throw
+   * "required relation returned null" when the portfolio is included.
+   * This helper restricts the where clause to only existing portfolio IDs.
+   */
+  private async withValidPortfolioFilter(where: any): Promise<any> {
+    const validIds = await this.prisma.portfolio
+      .findMany({ select: { id: true } })
+      .then(rows => rows.map(r => r.id))
+    return { ...where, portfolio_id: { in: validIds } }
   }
 
   async findById(id: string): Promise<PropertyWithRelations | null> {
@@ -288,10 +299,8 @@ export class PropertyRepository implements IPropertyRepository {
       expedia_service_fee:               d.expedia_service_fee,
       expedia_crs:                       d.expedia_crs,
       expedia_crs_db:                    d.expedia_crs_db,
-      expedia_run_date_from:             d.expedia_run_date_from,
-      expedia_run_date_to:               d.expedia_run_date_to,
-      expedia_run_date_db_from:          d.expedia_run_date_db_from,
-      expedia_run_date_db_to:            d.expedia_run_date_db_to,
+      expedia_run_date:                  d.expedia_run_date,
+      expedia_run_date_db:               d.expedia_run_date_db,
       expedia_revised_date:              d.expedia_revised_date,
       expedia_scheduler_review_from:     d.expedia_scheduler_review_from,
       expedia_scheduler_review_to:       d.expedia_scheduler_review_to,
@@ -309,8 +318,7 @@ export class PropertyRepository implements IPropertyRepository {
       booking_duration:                  d.booking_duration,
       booking_service_fee:               d.booking_service_fee,
       booking_crs:                       d.booking_crs,
-      booking_run_date_from:             d.booking_run_date_from,
-      booking_run_date_to:               d.booking_run_date_to,
+      booking_run_date:                  d.booking_run_date,
       booking_revised_date:              d.booking_revised_date,
       booking_credential_verified:       d.booking_credential_verified,
       booking_otp_number:                d.booking_otp_number,
@@ -323,8 +331,7 @@ export class PropertyRepository implements IPropertyRepository {
       agoda_duration:                    d.agoda_duration,
       agoda_service_fee:                 d.agoda_service_fee,
       agoda_crs:                         d.agoda_crs,
-      agoda_run_date_from:               d.agoda_run_date_from,
-      agoda_run_date_to:                 d.agoda_run_date_to,
+      agoda_run_date:                    d.agoda_run_date,
       agoda_revised_date:                d.agoda_revised_date,
       agoda_credential_verified:         d.agoda_credential_verified,
       agoda_otp_number:                  d.agoda_otp_number,
@@ -750,10 +757,8 @@ export class PropertyRepository implements IPropertyRepository {
       if (row.expediaServiceFee) propertyPayload.expedia_service_fee = parseInt(row.expediaServiceFee) || undefined
       if (row.expediaCrs) propertyPayload.expedia_crs = row.expediaCrs
       if (row.expediaCrsDb) propertyPayload.expedia_crs_db = row.expediaCrsDb
-      if (row.expediaRunDateFrom) propertyPayload.expedia_run_date_from = row.expediaRunDateFrom
-      if (row.expediaRunDateTo) propertyPayload.expedia_run_date_to = row.expediaRunDateTo
-      if (row.expediaRunDateDbFrom) propertyPayload.expedia_run_date_db_from = row.expediaRunDateDbFrom
-      if (row.expediaRunDateDbTo) propertyPayload.expedia_run_date_db_to = row.expediaRunDateDbTo
+      if (row.expediaRunDateFrom) propertyPayload.expedia_run_date = row.expediaRunDateFrom
+      if (row.expediaRunDateDbFrom) propertyPayload.expedia_run_date_db = row.expediaRunDateDbFrom
       if (row.expediaRevisedDate) propertyPayload.expedia_revised_date = row.expediaRevisedDate
       if (row.expediaSchedulerReviewFrom) propertyPayload.expedia_scheduler_review_from = row.expediaSchedulerReviewFrom
       if (row.expediaSchedulerReviewTo) propertyPayload.expedia_scheduler_review_to = row.expediaSchedulerReviewTo
@@ -768,16 +773,14 @@ export class PropertyRepository implements IPropertyRepository {
       // New Booking fields
       if (row.bookingServiceFee) propertyPayload.booking_service_fee = parseInt(row.bookingServiceFee) || undefined
       if (row.bookingCrs) propertyPayload.booking_crs = row.bookingCrs
-      if (row.bookingRunDateFrom) propertyPayload.booking_run_date_from = row.bookingRunDateFrom
-      if (row.bookingRunDateTo) propertyPayload.booking_run_date_to = row.bookingRunDateTo
+      if (row.bookingRunDateFrom) propertyPayload.booking_run_date = row.bookingRunDateFrom
       if (row.bookingRevisedDate) propertyPayload.booking_revised_date = row.bookingRevisedDate
       if (row.bookingCredentialVerified !== undefined) propertyPayload.booking_credential_verified = row.bookingCredentialVerified === 'true'
       if (row.bookingOtpNumber) propertyPayload.booking_otp_number = row.bookingOtpNumber
       // New Agoda fields
       if (row.agodaServiceFee) propertyPayload.agoda_service_fee = parseInt(row.agodaServiceFee) || undefined
       if (row.agodaCrs) propertyPayload.agoda_crs = row.agodaCrs
-      if (row.agodaRunDateFrom) propertyPayload.agoda_run_date_from = row.agodaRunDateFrom
-      if (row.agodaRunDateTo) propertyPayload.agoda_run_date_to = row.agodaRunDateTo
+      if (row.agodaRunDateFrom) propertyPayload.agoda_run_date = row.agodaRunDateFrom
       if (row.agodaRevisedDate) propertyPayload.agoda_revised_date = row.agodaRevisedDate
       if (row.agodaCredentialVerified !== undefined) propertyPayload.agoda_credential_verified = row.agodaCredentialVerified === 'true'
       if (row.agodaOtpNumber) propertyPayload.agoda_otp_number = row.agodaOtpNumber

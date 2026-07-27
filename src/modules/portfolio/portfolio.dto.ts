@@ -31,6 +31,11 @@ export class CreatePortfolioDto {
   currency_id?: string
 
   @ApiProperty({ example: true, description: 'Whether portfolio is active' })
+  @Transform(({ value }) => {
+    if (value === 'true') return true
+    if (value === 'false') return false
+    return value
+  })
   @IsBoolean()
   @IsNotEmpty()
   is_active: boolean
@@ -58,6 +63,11 @@ export class CreatePortfolioDto {
   portfolio_contact_phone?: string
 
   @ApiProperty({ example: true, description: 'Whether portfolio is commissionable' })
+  @Transform(({ value }) => {
+    if (value === 'true') return true
+    if (value === 'false') return false
+    return value
+  })
   @IsBoolean()
   @IsNotEmpty()
   is_commissionable: boolean
@@ -83,6 +93,11 @@ export class CreatePortfolioDto {
   attachments?: string[]
 
   @ApiPropertyOptional({ example: true, description: 'Whether contract has been signed' })
+  @Transform(({ value }) => {
+    if (value === 'true') return true
+    if (value === 'false') return false
+    return value
+  })
   @IsBoolean()
   @IsOptional()
   contract_signed?: boolean

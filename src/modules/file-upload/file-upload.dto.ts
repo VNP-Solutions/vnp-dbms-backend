@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger'
 import { PartialType } from '@nestjs/mapped-types'
 import { ApiPropertyOptional } from '@nestjs/swagger'
+import { Transform } from 'class-transformer'
 import { IsBoolean, IsNotEmpty, IsOptional, IsString, IsUrl } from 'class-validator'
 import { QueryDto } from '../../common/dto/query.dto'
 
@@ -95,6 +96,11 @@ export class CreateFileDto {
   portfolio_id?: string
 
   @ApiPropertyOptional({ example: true })
+  @Transform(({ value }) => {
+    if (value === 'true') return true
+    if (value === 'false') return false
+    return value
+  })
   @IsBoolean()
   @IsOptional()
   is_active?: boolean

@@ -149,10 +149,8 @@ export class ExternalPropertyService {
       priority: property.priority?.name ?? null,
       expedia_crs: property.expedia_crs ?? null,
       expedia_crs_db: property.expedia_crs_db ?? null,
-      expedia_run_date_from: property.expedia_run_date_from ?? null,
-      expedia_run_date_to: property.expedia_run_date_to ?? null,
-      expedia_run_date_db_from: property.expedia_run_date_db_from ?? null,
-      expedia_run_date_db_to: property.expedia_run_date_db_to ?? null,
+      expedia_run_date: property.expedia_run_date ?? null,
+      expedia_run_date_db: property.expedia_run_date_db ?? null,
       expedia_revised_date: property.expedia_revised_date ?? null,
       expedia_scheduler_review_from: property.expedia_scheduler_review_from ?? null,
       expedia_scheduler_review_to: property.expedia_scheduler_review_to ?? null,
@@ -173,8 +171,7 @@ export class ExternalPropertyService {
       booking_duration: property.booking_duration ?? null,
       booking_service_fee: property.booking_service_fee ?? null,
       booking_crs: property.booking_crs ?? null,
-      booking_run_date_from: property.booking_run_date_from ?? null,
-      booking_run_date_to: property.booking_run_date_to ?? null,
+      booking_run_date: property.booking_run_date ?? null,
       booking_revised_date: property.booking_revised_date ?? null,
       booking_credential_verified: property.booking_credential_verified ?? null,
       booking_otp_number: property.booking_otp_number ?? null,
@@ -188,8 +185,7 @@ export class ExternalPropertyService {
       agoda_duration: property.agoda_duration ?? null,
       agoda_service_fee: property.agoda_service_fee ?? null,
       agoda_crs: property.agoda_crs ?? null,
-      agoda_run_date_from: property.agoda_run_date_from ?? null,
-      agoda_run_date_to: property.agoda_run_date_to ?? null,
+      agoda_run_date: property.agoda_run_date ?? null,
       agoda_revised_date: property.agoda_revised_date ?? null,
       agoda_credential_verified: property.agoda_credential_verified ?? null,
       agoda_otp_number: property.agoda_otp_number ?? null,
@@ -526,6 +522,29 @@ export class ExternalPropertyService {
       message: 'Credentials updated successfully',
       credentials: this.decryptCredentials(updatedCredentials)
     }
+  }
+
+  async getCredentialsUnmaskedByPropertyId(
+    propertyId: string
+  ): Promise<DecryptedPropertyCredential> {
+    const credentials = await this.prisma.propertyCredentials.findFirst({
+      where: { property_id: propertyId }
+    })
+
+    if (!credentials) {
+      throw new NotFoundException(
+        `No credentials found for property "${propertyId}"`
+      )
+    }
+
+    const decrypted = this.decryptCredentials(credentials)
+    if (!decrypted) {
+      throw new NotFoundException(
+        `No credentials found for property "${propertyId}"`
+      )
+    }
+
+    return decrypted
   }
 
   async getQpUsernameByOtaIds(dto: OtaQpLookupDto): Promise<OtaQpLookupResult> {

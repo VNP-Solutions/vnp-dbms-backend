@@ -9,7 +9,7 @@ import {
   IsUrl,
   ValidateNested
 } from 'class-validator'
-import { Type } from 'class-transformer'
+import { Transform, Type } from 'class-transformer'
 
 export class AttachmentUrlDto {
   @ApiProperty({
@@ -61,6 +61,11 @@ export class SendEmailDto {
     example: true,
     description:
       'Whether to include sender information at the end of the email body (defaults to true)'
+  })
+  @Transform(({ value }) => {
+    if (value === 'true') return true
+    if (value === 'false') return false
+    return value
   })
   @IsBoolean()
   @IsOptional()

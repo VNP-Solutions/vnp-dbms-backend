@@ -1,5 +1,6 @@
 import { PartialType } from '@nestjs/mapped-types'
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
+import { Transform } from 'class-transformer'
 import { IsBoolean, IsNotEmpty, IsOptional, IsString } from 'class-validator'
 
 export class CurrencyQueryDto {
@@ -38,6 +39,11 @@ export class CreateCurrencyDto {
   symbol?: string
 
   @ApiProperty({ example: true, description: 'Whether currency is active' })
+  @Transform(({ value }) => {
+    if (value === 'true') return true
+    if (value === 'false') return false
+    return value
+  })
   @IsBoolean()
   @IsNotEmpty()
   is_active: boolean

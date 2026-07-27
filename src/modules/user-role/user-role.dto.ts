@@ -1,6 +1,6 @@
 import { PartialType } from '@nestjs/mapped-types'
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
-import { Type } from 'class-transformer'
+import { Transform, Type } from 'class-transformer'
 import {
   IsBoolean,
   IsEnum,
@@ -43,6 +43,11 @@ export class CreateUserRoleDto {
     example: false,
     description: 'Whether the role is for external users'
   })
+  @Transform(({ value }) => {
+    if (value === 'true') return true
+    if (value === 'false') return false
+    return value
+  })
   @IsBoolean()
   @IsNotEmpty()
   is_external: boolean
@@ -52,6 +57,11 @@ export class CreateUserRoleDto {
     description: 'Whether the role can access global reports',
     default: false
   })
+  @Transform(({ value }) => {
+    if (value === 'true') return true
+    if (value === 'false') return false
+    return value
+  })
   @IsBoolean()
   @IsOptional()
   can_access_mis?: boolean
@@ -60,6 +70,11 @@ export class CreateUserRoleDto {
     example: true,
     description: 'Whether the role is active',
     default: true
+  })
+  @Transform(({ value }) => {
+    if (value === 'true') return true
+    if (value === 'false') return false
+    return value
   })
   @IsBoolean()
   @IsOptional()
