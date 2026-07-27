@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config'
 import type { Configuration } from '../../config/configuration'
 import {
   calcPreliminaryRunDate,
+  lastDayOfLastMonth,
   parseCrsDays
 } from '../utils/parser-job-date.util'
 import { PrismaService } from '../../modules/prisma/prisma.service'
@@ -90,6 +91,15 @@ export class RunDateCalculatorService {
    * Calculates run dates for every OTA where the property has both a
    * historical "to" date and a valid CRS value.
    *
+   * Priority rules (per OTA):
+   *  - `REGULAR` + `_to` provided  → standard run-date formula
+   *  - `HIGH`                       → uses the last day of last month as the
+   *                                   effective historical "to" date; no `_to`
+   *                                   value is required
+   *  - `REGULAR` without `_to`      → run date is skipped (kept empty)
+   *  - no priority provided         → existing behaviour: calculate whenever
+   *                                   both `_to` and a valid `_crs` are present
+   *
    * Returns a partial DB update payload — only fields that were successfully
    * calculated are included. Fields are omitted when CRS is missing/invalid.
    *
@@ -103,10 +113,13 @@ export class RunDateCalculatorService {
     property: {
       expedia_to?: string | null
       expedia_crs?: string | null
+      expedia_priority?: string | null
       booking_to?: string | null
       booking_crs?: string | null
+      booking_priority?: string | null
       agoda_to?: string | null
       agoda_crs?: string | null
+      agoda_priority?: string | null
     },
     excludeId?: string
   ): Promise<{
@@ -120,42 +133,53 @@ export class RunDateCalculatorService {
       agoda_run_date?: string
     } = {}
 
-    if (property.expedia_to) {
-      const d = await this.calcRunDate(
-        property.expedia_to,
-        property.expedia_crs,
-        'expedia',
-        excludeId
-      )
+    const effectiveTo = (
+      to: string | null | undefined,
+      priority: string | null | undefined
+    ): string | null => {
+      if (priority === 'HIGH') return lastDayOfLastMonth()
+      if (priority === 'REGULAR') return to ?? null
+      // no priority → legacy behaviour: use to if present
+      return to ?? null
+    }
+
+    const shouldCalc = (
+      to: string | null | undefined,
+      priority: string | null | undefined
+    ): boolean => {
+      if (priority === 'HIGH') return true
+      if (priority === 'REGULAR') return !!to
+      // no priority → legacy behaviour
+      return !!to
+    }
+
+    // Expedia
+    if (shouldCalc(property.expedia_to, property.expedia_priority)) {
+      const historicalTo = effectiveTo(property.expedia_to, property.expedia_priority)!
+      const d = await this.calcRunDate(historicalTo, property.expedia_crs, 'expedia', excludeId)
       if (d) {
         updates.expedia_run_date = d
-        this.logger.debug(`expedia run_date → ${d}`)
+        this.logger.debug(`expedia run_date → ${d} (priority: ${property.expedia_priority ?? 'none'})`)
       }
     }
 
-    if (property.booking_to) {
-      const d = await this.calcRunDate(
-        property.booking_to,
-        property.booking_crs,
-        'booking',
-        excludeId
-      )
+    // Booking
+    if (shouldCalc(property.booking_to, property.booking_priority)) {
+      const historicalTo = effectiveTo(property.booking_to, property.booking_priority)!
+      const d = await this.calcRunDate(historicalTo, property.booking_crs, 'booking', excludeId)
       if (d) {
         updates.booking_run_date = d
-        this.logger.debug(`booking run_date → ${d}`)
+        this.logger.debug(`booking run_date → ${d} (priority: ${property.booking_priority ?? 'none'})`)
       }
     }
 
-    if (property.agoda_to) {
-      const d = await this.calcRunDate(
-        property.agoda_to,
-        property.agoda_crs,
-        'agoda',
-        excludeId
-      )
+    // Agoda
+    if (shouldCalc(property.agoda_to, property.agoda_priority)) {
+      const historicalTo = effectiveTo(property.agoda_to, property.agoda_priority)!
+      const d = await this.calcRunDate(historicalTo, property.agoda_crs, 'agoda', excludeId)
       if (d) {
         updates.agoda_run_date = d
-        this.logger.debug(`agoda run_date → ${d}`)
+        this.logger.debug(`agoda run_date → ${d} (priority: ${property.agoda_priority ?? 'none'})`)
       }
     }
 

@@ -480,6 +480,17 @@ export class CreatePropertyDto {
   expedia_to?: string
 
   @ApiPropertyOptional({
+    example: 'REGULAR',
+    description:
+      'Expedia run-date priority. REGULAR: calculates run date when expedia_to is provided. HIGH: uses last day of last month as the effective end date and always calculates a run date.',
+    enum: ['REGULAR', 'HIGH']
+  })
+  @IsString()
+  @IsIn(['REGULAR', 'HIGH'])
+  @IsOptional()
+  expedia_priority?: string
+
+  @ApiPropertyOptional({
     example: false,
     description: 'Expedia scheduler enabled'
   })
@@ -642,6 +653,17 @@ export class CreatePropertyDto {
   booking_to?: string
 
   @ApiPropertyOptional({
+    example: 'REGULAR',
+    description:
+      'Booking run-date priority. REGULAR: calculates run date when booking_to is provided. HIGH: uses last day of last month as the effective end date and always calculates a run date.',
+    enum: ['REGULAR', 'HIGH']
+  })
+  @IsString()
+  @IsIn(['REGULAR', 'HIGH'])
+  @IsOptional()
+  booking_priority?: string
+
+  @ApiPropertyOptional({
     example: true,
     description: 'Booking.com scheduler enabled'
   })
@@ -751,6 +773,17 @@ export class CreatePropertyDto {
   @IsString()
   @IsOptional()
   agoda_to?: string
+
+  @ApiPropertyOptional({
+    example: 'REGULAR',
+    description:
+      'Agoda run-date priority. REGULAR: calculates run date when agoda_to is provided. HIGH: uses last day of last month as the effective end date and always calculates a run date.',
+    enum: ['REGULAR', 'HIGH']
+  })
+  @IsString()
+  @IsIn(['REGULAR', 'HIGH'])
+  @IsOptional()
+  agoda_priority?: string
 
   @ApiPropertyOptional({
     example: true,

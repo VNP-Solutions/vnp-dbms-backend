@@ -475,6 +475,11 @@ model Property {
   adyen_location         String?
   stripe_connected_email String?
 
+  // OTA-level run-date priority (REGULAR | HIGH)
+  expedia_priority String?
+  booking_priority String?
+  agoda_priority   String?
+
   // OTA Configuration
   need_another_domain Boolean?
   booking_otp_phone   String?

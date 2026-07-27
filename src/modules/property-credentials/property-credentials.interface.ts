@@ -22,6 +22,7 @@ export interface IPropertyCredentialsService {
   findAll(): Promise<PropertyCredentials[]>
   findOne(id: string): Promise<PropertyCredentials>
   findByPropertyId(propertyId: string): Promise<PropertyCredentials | null>
+  findByPropertyIdUnmasked(propertyId: string): Promise<PropertyCredentials>
   update(id: string, data: UpdatePropertyCredentialsDto): Promise<PropertyCredentials>
   remove(id: string): Promise<{ message: string }>
   bulkUpdate(

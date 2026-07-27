@@ -89,6 +89,20 @@ export function calcAgodaParserJobEndDate(
 }
 
 /**
+ * Returns the last calendar day of the previous month in YYYY-MM-DD format
+ * (UTC).  Used for HIGH-priority run-date calculation where no historical
+ * "to" date is available.
+ *
+ * Example: if today is 2026-07-26, returns "2026-06-30".
+ */
+export function lastDayOfLastMonth(): string {
+  const now = new Date()
+  // Day 0 of the current month = last day of the previous month
+  const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 0))
+  return d.toISOString().slice(0, 10)
+}
+
+/**
  * Calculates the preliminary run date as:
  *   preliminary_run_date = end_date + 1 day + crs_days + 15 days
  *

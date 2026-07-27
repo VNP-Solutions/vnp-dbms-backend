@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common'
 import type { PropertyCredentials } from '@prisma/client'
+import { EncryptionUtil } from '../../common/utils/encryption.util'
 import type {
   BulkUpdatePropertyCredentialsDto,
   CreatePropertyCredentialsDto,
@@ -10,11 +11,21 @@ import type {
   IPropertyCredentialsService
 } from './property-credentials.interface'
 
+const PASSWORD_FIELDS = [
+  'expediaPassword',
+  'agodaPassword',
+  'bookingPassword',
+  'expediaSecondaryPassword',
+  'bookingSecondaryPassword',
+  'agodaSecondaryPassword'
+] as const
+
 @Injectable()
 export class PropertyCredentialsService implements IPropertyCredentialsService {
   constructor(
     @Inject('IPropertyCredentialsRepository')
     private readonly repository: IPropertyCredentialsRepository,
+    private readonly encryptionUtil: EncryptionUtil,
     private readonly logger: Logger
   ) {}
 
@@ -59,6 +70,25 @@ export class PropertyCredentialsService implements IPropertyCredentialsService {
       )
       throw error
     }
+  }
+
+  async findByPropertyIdUnmasked(propertyId: string): Promise<PropertyCredentials> {
+    const creds = await this.repository.findByPropertyId(propertyId)
+    if (!creds) {
+      throw new NotFoundException(`No credentials found for property "${propertyId}"`)
+    }
+
+    const result: any = { ...creds }
+    for (const field of PASSWORD_FIELDS) {
+      if (creds[field]) {
+        try {
+          result[field] = this.encryptionUtil.decrypt(creds[field] as string)
+        } catch {
+          result[field] = creds[field]
+        }
+      }
+    }
+    return result as PropertyCredentials
   }
 
   async update(id: string, data: UpdatePropertyCredentialsDto): Promise<PropertyCredentials> {

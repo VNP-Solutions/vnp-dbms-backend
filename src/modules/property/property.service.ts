@@ -207,15 +207,21 @@ export class PropertyService implements IPropertyService {
       }
     }
 
-    // Auto-calculate run dates for any OTA that has a historical "to" date + CRS
+    // Auto-calculate run dates respecting per-OTA priority:
+    //   REGULAR + _to  → standard formula
+    //   HIGH           → last day of last month as effective end date
+    //   no priority    → legacy: calculate if _to + _crs present
     const runDateUpdates = await this.runDateCalculator.calcRunDatesForProperty(
       {
-        expedia_to: encryptedData.expedia_to,
-        expedia_crs: encryptedData.expedia_crs,
-        booking_to: encryptedData.booking_to,
-        booking_crs: encryptedData.booking_crs,
-        agoda_to: encryptedData.agoda_to,
-        agoda_crs: encryptedData.agoda_crs
+        expedia_to:       encryptedData.expedia_to,
+        expedia_crs:      encryptedData.expedia_crs,
+        expedia_priority: encryptedData.expedia_priority,
+        booking_to:       encryptedData.booking_to,
+        booking_crs:      encryptedData.booking_crs,
+        booking_priority: encryptedData.booking_priority,
+        agoda_to:         encryptedData.agoda_to,
+        agoda_crs:        encryptedData.agoda_crs,
+        agoda_priority:   encryptedData.agoda_priority
       },
       property.id
     )

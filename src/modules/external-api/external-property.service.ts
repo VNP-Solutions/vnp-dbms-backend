@@ -524,6 +524,29 @@ export class ExternalPropertyService {
     }
   }
 
+  async getCredentialsUnmaskedByPropertyId(
+    propertyId: string
+  ): Promise<DecryptedPropertyCredential> {
+    const credentials = await this.prisma.propertyCredentials.findFirst({
+      where: { property_id: propertyId }
+    })
+
+    if (!credentials) {
+      throw new NotFoundException(
+        `No credentials found for property "${propertyId}"`
+      )
+    }
+
+    const decrypted = this.decryptCredentials(credentials)
+    if (!decrypted) {
+      throw new NotFoundException(
+        `No credentials found for property "${propertyId}"`
+      )
+    }
+
+    return decrypted
+  }
+
   async getQpUsernameByOtaIds(dto: OtaQpLookupDto): Promise<OtaQpLookupResult> {
     const expediaIds = dto.expedia_ids ?? []
     const bookingIds = dto.booking_ids ?? []
