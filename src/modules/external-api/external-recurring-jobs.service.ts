@@ -2,6 +2,7 @@ import { BadGatewayException, BadRequestException, Injectable, Logger, NotFoundE
 import { ConfigService } from '@nestjs/config'
 import axios from 'axios'
 import type { Configuration } from '../../config/configuration'
+import { EmailUtil } from '../../common/utils/email.util'
 import {
   calcAgodaParserJobEndDate,
   calcAgodaParserJobStartDate,
@@ -10,6 +11,7 @@ import {
   parseCrsDays
 } from '../../common/utils/parser-job-date.util'
 import { RunDateCalculatorService } from '../../common/services/run-date-calculator.service'
+import { SyncCommunicationService } from '../../common/services/sync-communication.service'
 import { PrismaService } from '../prisma/prisma.service'
 import type {
   BulkCreateParserJobsDto,
@@ -27,6 +29,12 @@ export interface ScraperRelayResult {
   body: unknown
 }
 
+type ParserJobAssignmentFailure = {
+  name?: string
+  property_id?: string
+  error: string
+}
+
 @Injectable()
 export class ExternalRecurringJobsService {
   private readonly logger = new Logger(ExternalRecurringJobsService.name)
@@ -35,10 +43,211 @@ export class ExternalRecurringJobsService {
   constructor(
     private readonly configService: ConfigService<Configuration, true>,
     private readonly prisma: PrismaService,
-    private readonly runDateCalculator: RunDateCalculatorService
+    private readonly runDateCalculator: RunDateCalculatorService,
+    private readonly emailUtil: EmailUtil,
+    private readonly syncCommunication: SyncCommunicationService
   ) {
     this.scraperBackendUrl =
       this.configService.get('scraperBackendUrl', { infer: true }) ?? ''
+  }
+
+  private scraperRequestConfig(): { timeout: number; headers: Record<string, string> } {
+    if (!this.syncCommunication.isConfigured()) {
+      throw new BadGatewayException(
+        'JWT_COMMUNICATION_SECRET is not configured. Cannot authenticate with scraper backend.'
+      )
+    }
+
+    return {
+      timeout: 30_000,
+      headers: this.syncCommunication.createAuthHeaders()
+    }
+  }
+
+  private collectLocalSkippedFailures(
+    summary: BulkCreateParserJobsPropertyResult[]
+  ): ParserJobAssignmentFailure[] {
+    return summary.flatMap(item =>
+      item.skipped_otas.map(skip => ({
+        name: item.name,
+        property_id: item.property_id,
+        error: `${skip.ota_type}: ${skip.reason}`
+      }))
+    )
+  }
+
+  private collectScraperFailures(body: unknown): ParserJobAssignmentFailure[] {
+    if (!body || typeof body !== 'object') return []
+
+    const failures: ParserJobAssignmentFailure[] = []
+    const root = body as Record<string, unknown>
+    const data =
+      root.data && typeof root.data === 'object'
+        ? (root.data as Record<string, unknown>)
+        : root
+
+    const pushFailure = (item: unknown) => {
+      if (!item || typeof item !== 'object') return
+      const row = item as Record<string, unknown>
+      const error =
+        row.error_message ??
+        row.error ??
+        row.message ??
+        row.reason ??
+        row.description
+
+      if (error == null) return
+
+      const errorText =
+        typeof error === 'string'
+          ? error
+          : typeof error === 'number' || typeof error === 'boolean'
+            ? String(error)
+            : JSON.stringify(error)
+
+      failures.push({
+        name:
+          typeof row.name === 'string'
+            ? row.name
+            : typeof row.property_name === 'string'
+              ? row.property_name
+              : undefined,
+        property_id:
+          typeof row.property_id === 'string'
+            ? row.property_id
+            : typeof row.parent_id === 'string'
+              ? row.parent_id
+              : undefined,
+        error: errorText
+      })
+    }
+
+    if (Array.isArray(data.descriptions)) {
+      data.descriptions.forEach(pushFailure)
+    }
+
+    for (const key of ['failed', 'failures', 'errors', 'items']) {
+      if (Array.isArray(data[key])) {
+        data[key].forEach(pushFailure)
+      }
+    }
+
+    if (Array.isArray(root.descriptions)) {
+      root.descriptions.forEach(pushFailure)
+    }
+
+    for (const key of ['failed', 'failures', 'errors']) {
+      if (Array.isArray(root[key])) {
+        root[key].forEach(pushFailure)
+      }
+    }
+
+    return failures
+  }
+
+  private collectParserJobAssignmentFailures(result: {
+    relay: ScraperRelayResult
+    summary: BulkCreateParserJobsPropertyResult[]
+  }): ParserJobAssignmentFailure[] {
+    const failures = [
+      ...this.collectLocalSkippedFailures(result.summary),
+      ...this.collectScraperFailures(result.relay.body)
+    ]
+
+    if (result.relay.status !== 200) {
+      failures.unshift({
+        error: `Scraper backend responded with HTTP ${result.relay.status}`
+      })
+    }
+
+    return failures
+  }
+
+  private extractScraperMessage(body: unknown): string | undefined {
+    if (!body || typeof body !== 'object') return undefined
+    const message = (body as Record<string, unknown>).message
+    return typeof message === 'string' ? message : undefined
+  }
+
+  private buildParserJobAssignmentReport(
+    summary: BulkCreateParserJobsPropertyResult[],
+    scraperFailures: ParserJobAssignmentFailure[],
+    httpStatus?: number
+  ): Array<{
+    name: string
+    property_id: string
+    dbms_ok: boolean
+    parser_ok: boolean
+    reason: string
+  }> {
+    const propertyFailures = scraperFailures.filter(
+      failure => failure.property_id || failure.name
+    )
+    const failureByPropertyId = new Map(
+      propertyFailures
+        .filter(failure => failure.property_id)
+        .map(failure => [failure.property_id!, failure.error])
+    )
+    const failureByName = new Map(
+      propertyFailures
+        .filter(failure => failure.name)
+        .map(failure => [failure.name!, failure.error])
+    )
+    const globalFailure = scraperFailures.find(
+      failure => !failure.property_id && !failure.name
+    )?.error
+    const parserFallbackReason =
+      globalFailure ??
+      (httpStatus != null && httpStatus !== 200
+        ? `Parser backend responded with HTTP ${httpStatus}`
+        : undefined)
+
+    return summary.map(item => {
+      const localSkip = item.skipped_otas[0]
+      const dbmsOk = item.jobs_created.length > 0
+
+      if (!dbmsOk) {
+        return {
+          name: item.name,
+          property_id: item.property_id,
+          dbms_ok: false,
+          parser_ok: false,
+          reason: localSkip?.reason ?? 'Skipped during DBMS validation'
+        }
+      }
+
+      const scraperError =
+        failureByPropertyId.get(item.property_id) ??
+        failureByName.get(item.name)
+
+      if (scraperError) {
+        return {
+          name: item.name,
+          property_id: item.property_id,
+          dbms_ok: true,
+          parser_ok: false,
+          reason: scraperError
+        }
+      }
+
+      if (parserFallbackReason) {
+        return {
+          name: item.name,
+          property_id: item.property_id,
+          dbms_ok: true,
+          parser_ok: false,
+          reason: parserFallbackReason
+        }
+      }
+
+      return {
+        name: item.name,
+        property_id: item.property_id,
+        dbms_ok: true,
+        parser_ok: true,
+        reason: '-'
+      }
+    })
   }
 
   // ─── DBMS Pre-Check ──────────────────────────────────────────────────────────
@@ -63,7 +272,7 @@ export class ExternalRecurringJobsService {
     this.logger.log(`Forwarding pre-check to scraper: POST ${targetUrl}`)
 
     try {
-      await axios.post(targetUrl, payload, { timeout: 30_000 })
+      await axios.post(targetUrl, payload, this.scraperRequestConfig())
       return { status: 200, body: { message: 'Processing', data: null } }
     } catch (error) {
       if (axios.isAxiosError(error)) {
@@ -87,6 +296,49 @@ export class ExternalRecurringJobsService {
   }
 
   // ─── Bulk Create Parser Jobs ──────────────────────────────────────────────────
+
+  /**
+   * Runs parser job assignment in the background. On scraper-backend failure or
+   * any thrown error, sends an email notification to the requesting user.
+   */
+  async processAssignParserJobsInBackground(
+    dto: BulkCreateParserJobsDto,
+    recipientEmail: string
+  ): Promise<void> {
+    try {
+      const result = await this.bulkCreateParserJobs(dto)
+      const failures = this.collectParserJobAssignmentFailures(result)
+
+      if (failures.length > 0) {
+        await this.emailUtil.sendParserJobAssignmentErrorEmail(recipientEmail, {
+          ota_type: dto.ota_type,
+          property_count: dto.property_ids.length,
+          message: this.extractScraperMessage(result.relay.body),
+          rows: this.buildParserJobAssignmentReport(
+            result.summary,
+            failures,
+            result.relay.status
+          )
+        })
+      }
+    } catch (error: any) {
+      this.logger.error(
+        `[assign-parser-jobs] failed for ${dto.property_ids.length} properties: ${error?.message ?? error}`
+      )
+
+      await this.emailUtil
+        .sendParserJobAssignmentErrorEmail(recipientEmail, {
+          ota_type: dto.ota_type,
+          property_count: dto.property_ids.length,
+          message: error?.message ?? 'Request failed before job assignment completed'
+        })
+        .catch(emailError =>
+          this.logger.error(
+            `[assign-parser-jobs] error email failed: ${emailError?.message ?? emailError}`
+          )
+        )
+    }
+  }
 
   /**
    * For each property ID in the request:
@@ -219,7 +471,7 @@ export class ExternalRecurringJobsService {
 
     // 3. Forward to parser backend
     const payload: BulkCreateParserJobsPayload = { jobs }
-    const targetUrl = `${this.scraperBackendUrl}/api/jobs/bulk-create-from-dbms`
+    const targetUrl = `${this.scraperBackendUrl}/jobs/bulk-create-from-dbms`
     this.logger.log(
       `Forwarding ${jobs.length} parser job(s) to: POST ${targetUrl}`
     )
@@ -229,26 +481,35 @@ export class ExternalRecurringJobsService {
       body: { message: 'Processing', data: null }
     }
 
-    try {
-      await axios.post(targetUrl, payload, { timeout: 30_000 })
-      // relay already holds the success default assigned above
-    } catch (error) {
-      if (axios.isAxiosError(error)) {
-        if (error.response) {
-          this.logger.warn(
-            `Parser backend responded ${error.response.status} for bulk-create-parser-jobs`
-          )
-          relay = { status: error.response.status, body: error.response.data }
-        } else {
-          this.logger.error(
-            `Parser backend unreachable (${error.code ?? 'NETWORK_ERROR'}): ${error.message}`
-          )
-          throw new BadGatewayException(
-            'Parser backend is unreachable. Please try again later.'
-          )
+    if (jobs.length > 0) {
+      try {
+        const response = await axios.post(
+          targetUrl,
+          payload,
+          this.scraperRequestConfig()
+        )
+        relay = {
+          status: response.status,
+          body: response.data ?? { message: 'Processing', data: null }
         }
-      } else {
-        throw error
+      } catch (error) {
+        if (axios.isAxiosError(error)) {
+          if (error.response) {
+            this.logger.warn(
+              `Parser backend responded ${error.response.status} for bulk-create-parser-jobs`
+            )
+            relay = { status: error.response.status, body: error.response.data }
+          } else {
+            this.logger.error(
+              `Parser backend unreachable (${error.code ?? 'NETWORK_ERROR'}): ${error.message}`
+            )
+            throw new BadGatewayException(
+              'Parser backend is unreachable. Please try again later.'
+            )
+          }
+        } else {
+          throw error
+        }
       }
     }
 

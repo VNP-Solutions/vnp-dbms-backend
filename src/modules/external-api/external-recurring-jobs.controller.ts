@@ -1,4 +1,4 @@
-import { Body, Controller, Post, Res, UseGuards } from '@nestjs/common'
+import { Body, Controller, Logger, Post, Res, UseGuards } from '@nestjs/common'
 import {
   ApiBearerAuth,
   ApiBody,
@@ -7,8 +7,9 @@ import {
   ApiTags
 } from '@nestjs/swagger'
 import type { Response } from 'express'
+import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
+import { CurrentUser } from '../auth/decorators/current-user.decorator'
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
-import { Public } from '../auth/decorators/public.decorator'
 import {
   BulkCreateParserJobsDto,
   DbmsPreCheckDto,
@@ -21,6 +22,8 @@ import { ExternalRecurringJobsService } from './external-recurring-jobs.service'
 @Controller('external/recurring-jobs')
 @UseGuards(JwtAuthGuard)
 export class ExternalRecurringJobsController {
+  private readonly logger = new Logger(ExternalRecurringJobsController.name)
+
   constructor(
     private readonly externalRecurringJobsService: ExternalRecurringJobsService
   ) {}
@@ -75,61 +78,36 @@ export class ExternalRecurringJobsController {
   // ─── Bulk Create Parser Jobs ──────────────────────────────────────────────
 
   @Post('assign-parser-jobs')
-  @Public()
   @ApiOperation({
     summary: 'Auto-calculate date ranges and create parser jobs (DBMS → Parser bridge)',
     description:
-      'Accepts a list of DBMS property IDs and an OTA type. For each property, ' +
-      'creates one job for the specified OTA type if it has both a historical "to" date and a CRS value. ' +
-      'Calculates: start_date = historical_to + 1 day; ' +
-      'end_date = start_date + CRS days (Booking adds +365 days). ' +
-      'All generated jobs are forwarded in a single POST to the parser backend ' +
-      '(POST /api/jobs/bulk-create-from-dbms). ' +
-      '200 = parser backend accepted the payload; ' +
-      '404 = one or more property IDs were not found; ' +
-      '502 = parser backend is unreachable or not configured.'
+      'Accepts a list of DBMS property IDs and an OTA type. Returns immediately with ' +
+      '`{ message: "Processing", data: null }` while job assignment runs in the background. ' +
+      'If the scraper backend returns an error, the requesting user is notified by email. ' +
+      'For each property, creates one job for the specified OTA type when historical "to" date ' +
+      'and CRS are configured. Jobs are forwarded to POST /api/jobs/bulk-create-from-dbms.'
   })
   @ApiBody({ type: BulkCreateParserJobsDto })
   @ApiResponse({
     status: 200,
-    description: 'Parser backend accepted the payload',
+    description: 'Request accepted — parser job assignment is processing in the background',
     schema: {
-      example: {
-        relay: { status: 200, body: { message: 'Processing', data: null } },
-        summary: [
-          {
-            property_id: 'prop-id-1',
-            name: 'Hotel Grandeur',
-            jobs_created: [
-              { ota_type: 'expedia', start_date: '2025-07-01', end_date: '2025-10-01' },
-              { ota_type: 'booking', start_date: '2025-07-01', end_date: '2026-10-01' }
-            ],
-            skipped_otas: [
-              { ota_type: 'agoda', reason: 'No agoda_id configured' }
-            ]
-          }
-        ]
-      }
+      example: { message: 'Processing', data: null }
     }
   })
-  @ApiResponse({
-    status: 404,
-    description: 'One or more property IDs were not found in the database'
-  })
-  @ApiResponse({
-    status: 502,
-    description: 'Parser backend is unreachable or not configured'
-  })
-  async bulkCreateParserJobs(
+  assignParserJobs(
     @Body() dto: BulkCreateParserJobsDto,
-    @Res() res: Response
-  ): Promise<void> {
-    const result =
-      await this.externalRecurringJobsService.bulkCreateParserJobs(dto)
-    res.status(result.relay.status).json({
-      relay: result.relay,
-      summary: result.summary
-    })
+    @CurrentUser() user: IUserWithPermissions
+  ) {
+    void this.externalRecurringJobsService
+      .processAssignParserJobsInBackground(dto, user.email)
+      .catch(error =>
+        this.logger.error(
+          `[assign-parser-jobs] background processing failed: ${error?.message ?? error}`
+        )
+      )
+
+    return { message: 'Processing', data: null }
   }
 
   // ─── Update Historical To + Run Date ────────────────────────────────────────

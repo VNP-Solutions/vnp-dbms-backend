@@ -1158,4 +1158,104 @@ VNP Solutions Team`
       }
     }
   }
+
+  async sendParserJobAssignmentErrorEmail(
+    recipientEmail: string,
+    details: {
+      ota_type: string
+      property_count: number
+      message?: string
+      rows?: Array<{
+        name: string
+        property_id: string
+        dbms_ok: boolean
+        parser_ok: boolean
+        reason: string
+      }>
+    }
+  ): Promise<void> {
+    const fmt = (ok: boolean) => (ok ? 'YES' : 'NO')
+    const rows = details.rows ?? []
+    const successCount = rows.filter(row => row.dbms_ok && row.parser_ok).length
+    const issueCount = rows.length - successCount
+    const headline =
+      details.message ??
+      (issueCount > 0
+        ? 'Some properties could not be assigned parser jobs'
+        : 'Parser job assignment failed')
+
+    const tableRows = rows
+      .map(row => {
+        const allOk = row.dbms_ok && row.parser_ok
+        return `
+        <tr>
+          <td style="padding:6px 10px;border:1px solid #ddd;">${row.name}</td>
+          <td style="padding:6px 10px;border:1px solid #ddd;">${row.property_id}</td>
+          <td style="padding:6px 10px;border:1px solid #ddd;text-align:center;color:${row.dbms_ok ? '#28a745' : '#dc3545'}"><strong>${fmt(row.dbms_ok)}</strong></td>
+          <td style="padding:6px 10px;border:1px solid #ddd;text-align:center;color:${row.parser_ok ? '#28a745' : '#dc3545'}"><strong>${fmt(row.parser_ok)}</strong></td>
+          <td style="padding:6px 10px;border:1px solid #ddd;font-size:12px;color:${allOk ? '#666' : '#c0392b'};">${row.reason}</td>
+        </tr>`
+      })
+      .join('')
+
+    const textLines = rows
+      .map(
+        row =>
+          `${row.name} | ${row.property_id} | DBMS - ${fmt(row.dbms_ok)} | PARSER - ${fmt(row.parser_ok)} | REASON: ${row.reason}`
+      )
+      .join('\n')
+
+    const mailOptions = {
+      from: this.configService.get('smtp.email', { infer: true }),
+      to: recipientEmail,
+      subject: `Parser Job Assignment Report – ${details.ota_type.toUpperCase()} (${issueCount || details.property_count} issues)`,
+      html: `
+        <div style="font-family:Arial,sans-serif;padding:20px;max-width:900px;margin:0 auto;">
+          <h3 style="margin-bottom:4px;">Parser Job Assignment Report</h3>
+          <p style="margin-top:0;color:#555;">
+            OTA: <strong>${details.ota_type}</strong> &nbsp;|&nbsp;
+            Requested: <strong>${details.property_count}</strong> &nbsp;|&nbsp;
+            Successful: <strong style="color:#28a745">${successCount}</strong> &nbsp;|&nbsp;
+            Issues: <strong style="color:${issueCount ? '#dc3545' : '#28a745'}">${issueCount || details.property_count}</strong>
+          </p>
+          <div style="background:#fff3cd;border-left:4px solid #ffc107;padding:12px 16px;border-radius:4px;margin:16px 0;">
+            <strong>${headline}</strong>
+          </div>
+          ${
+            rows.length
+              ? `<table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:16px;">
+            <tr style="background:#f4f4f4;">
+              <th style="padding:8px 10px;border:1px solid #ddd;text-align:left;">Property</th>
+              <th style="padding:8px 10px;border:1px solid #ddd;text-align:left;">Property ID</th>
+              <th style="padding:8px 10px;border:1px solid #ddd;text-align:center;">DBMS</th>
+              <th style="padding:8px 10px;border:1px solid #ddd;text-align:center;">Parser</th>
+              <th style="padding:8px 10px;border:1px solid #ddd;text-align:left;">Reason</th>
+            </tr>
+            ${tableRows}
+          </table>`
+              : ''
+          }
+          <p style="margin-top:20px;font-size:12px;color:#888;">VNP Solutions DBMS</p>
+        </div>
+      `,
+      text: [
+        `Parser Job Assignment Report for OTA ${details.ota_type}.`,
+        `Requested: ${details.property_count} | Successful: ${successCount} | Issues: ${issueCount || details.property_count}`,
+        headline,
+        textLines
+      ]
+        .filter(Boolean)
+        .join('\n\n')
+    }
+
+    try {
+      const info = await this.transporter.sendMail(mailOptions)
+      console.log('✓ Parser job assignment error email sent:', {
+        to: recipientEmail,
+        messageId: info.messageId
+      })
+    } catch (error) {
+      console.error('✗ Failed to send parser job assignment error email:', error)
+    }
+  }
 }

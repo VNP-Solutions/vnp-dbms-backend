@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common'
 import { ConfigModule } from '@nestjs/config'
 import { JwtModule } from '@nestjs/jwt'
 import { RunDateCalculatorService } from '../../common/services/run-date-calculator.service'
+import { SyncCommunicationService } from '../../common/services/sync-communication.service'
+import { EmailUtil } from '../../common/utils/email.util'
 import { ExternalJwtGuard } from '../../common/guards/external-jwt.guard'
 import { PortfolioModule } from '../portfolio/portfolio.module'
 import { PrismaService } from '../prisma/prisma.service'
@@ -29,6 +31,8 @@ import { ExternalSubportfolioService } from './external-subportfolio.service'
   providers: [
     PrismaService,
     RunDateCalculatorService,
+    SyncCommunicationService,
+    EmailUtil,
     ExternalJwtGuard,
     ExternalPortfolioService,
     ExternalPropertyService,
