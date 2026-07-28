@@ -9,6 +9,7 @@ import {
 import type { Response } from 'express'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
 import { CurrentUser } from '../auth/decorators/current-user.decorator'
+import { Public } from '../auth/decorators/public.decorator'
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
 import {
   BulkCreateParserJobsDto,
@@ -113,9 +114,11 @@ export class ExternalRecurringJobsController {
   // ─── Update Historical To + Run Date ────────────────────────────────────────
 
   @Post('update-historical-run-date')
+  @Public()
   @ApiOperation({
-    summary: 'Update OTA historical-to date and persist capacity-adjusted run date',
+    summary: 'Update OTA historical-to date and persist capacity-adjusted run date (public)',
     description:
+      'Public endpoint — no authentication required. Intended for scraper/parser callbacks after job completion. ' +
       'Given a completed job property ID, OTA type, start date, and end date: ' +
       '(1) Writes end_date into the OTA historical "to" field ({ota}_to). ' +
       '(2) Computes the run date: end_date + 1 day + CRS days + 15 days. ' +
