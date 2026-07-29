@@ -140,11 +140,25 @@ export function normalizeParserJobDate(
   const str = String(value).trim()
   if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str
 
-  const ddMmYyyy = str.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/)
-  if (ddMmYyyy) {
-    const day = Number(ddMmYyyy[1])
-    const month = Number(ddMmYyyy[2])
-    const year = Number(ddMmYyyy[3])
+  const slashDate = str.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/)
+  if (slashDate) {
+    const first = Number(slashDate[1])
+    const second = Number(slashDate[2])
+    const year = Number(slashDate[3])
+
+    let month: number
+    let day: number
+
+    if (first > 12) {
+      // e.g. 31/01/2024 — day > 12, so first segment must be the day
+      day = first
+      month = second
+    } else {
+      // MM/DD/YYYY — e.g. 01/15/2024
+      month = first
+      day = second
+    }
+
     const parsed = new Date(Date.UTC(year, month - 1, day))
     if (
       parsed.getUTCFullYear() === year &&

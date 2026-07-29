@@ -528,9 +528,9 @@ export class UpdateHistoricalAndRunDateDto {
   ota_type: ParserJobOtaType
 
   @ApiPropertyOptional({
-    example: '01/07/2025',
+    example: '01/15/2024',
     description:
-      'Job start date (DD/MM/YYYY or YYYY-MM-DD). Accepted for parser compatibility; not persisted.'
+      'Job start date (MM/DD/YYYY or YYYY-MM-DD). Accepted for parser compatibility; not persisted.'
   })
   @Transform(({ obj }) =>
     normalizeParserJobDate(
@@ -542,8 +542,8 @@ export class UpdateHistoricalAndRunDateDto {
   start_date?: string
 
   @ApiProperty({
-    example: '01/10/2025',
-    description: 'Job end date (DD/MM/YYYY or YYYY-MM-DD)'
+    example: '01/31/2024',
+    description: 'Job end date (MM/DD/YYYY or YYYY-MM-DD)'
   })
   @Transform(({ obj }) =>
     normalizeParserJobDate(
