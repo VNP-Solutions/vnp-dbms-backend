@@ -121,3 +121,47 @@ export function calcPreliminaryRunDate(
   d.setUTCDate(d.getUTCDate() + 1 + crsDays + 15)  // +1 day + CRS days + 15 days
   return d.toISOString().slice(0, 10)
 }
+
+/** Normalizes parser/DBMS date payloads to YYYY-MM-DD for validation and storage. */
+export function normalizeParserJobDate(
+  value: unknown
+): string | undefined {
+  if (value == null || value === '') return undefined
+  if (value instanceof Date) {
+    return value.toISOString().slice(0, 10)
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const fromNumber = new Date(value)
+    if (!Number.isNaN(fromNumber.getTime())) {
+      return fromNumber.toISOString().slice(0, 10)
+    }
+  }
+
+  const str = String(value).trim()
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str
+
+  const ddMmYyyy = str.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/)
+  if (ddMmYyyy) {
+    const day = Number(ddMmYyyy[1])
+    const month = Number(ddMmYyyy[2])
+    const year = Number(ddMmYyyy[3])
+    const parsed = new Date(Date.UTC(year, month - 1, day))
+    if (
+      parsed.getUTCFullYear() === year &&
+      parsed.getUTCMonth() === month - 1 &&
+      parsed.getUTCDate() === day
+    ) {
+      return parsed.toISOString().slice(0, 10)
+    }
+    return undefined
+  }
+
+  if (str.includes('T') || /^\d{4}-\d{2}-\d{2}/.test(str)) {
+    const parsed = new Date(str)
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toISOString().slice(0, 10)
+    }
+  }
+
+  return undefined
+}

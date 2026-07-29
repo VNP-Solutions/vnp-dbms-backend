@@ -1,7 +1,8 @@
-import { ApiProperty } from '@nestjs/swagger'
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import { ProjectType } from '@prisma/client'
-import { Type } from 'class-transformer'
+import { Transform, Type } from 'class-transformer'
 import {
+  Allow,
   IsArray,
   IsDateString,
   IsIn,
@@ -14,6 +15,7 @@ import {
   Min,
   ValidateNested
 } from 'class-validator'
+import { normalizeParserJobDate } from '../../common/utils/parser-job-date.util'
 
 // ─── Recurring Jobs: DBMS Pre-Check ──────────────────────────────────────────
 
@@ -510,6 +512,7 @@ export class UpdateHistoricalAndRunDateDto {
     example: 'prop-id-1',
     description: 'DBMS property ID (parent_id)'
   })
+  @Transform(({ obj }) => obj.parent_id ?? obj.parentId)
   @IsString()
   @IsNotEmpty()
   parent_id: string
@@ -519,17 +522,53 @@ export class UpdateHistoricalAndRunDateDto {
     enum: ['expedia', 'booking', 'agoda'],
     description: 'OTA platform whose historical-to date and run date will be updated'
   })
+  @Transform(({ obj }) => obj.ota_type ?? obj.otaType)
   @IsString()
   @IsIn(['expedia', 'booking', 'agoda'])
   ota_type: ParserJobOtaType
 
-  @ApiProperty({ example: '2025-07-01', description: 'Job start date (YYYY-MM-DD)' })
+  @ApiPropertyOptional({
+    example: '01/07/2025',
+    description:
+      'Job start date (DD/MM/YYYY or YYYY-MM-DD). Accepted for parser compatibility; not persisted.'
+  })
+  @Transform(({ obj }) =>
+    normalizeParserJobDate(
+      obj.start_date ?? obj.startDate ?? obj.job_start_date ?? obj.jobStartDate
+    )
+  )
+  @IsOptional()
   @IsDateString()
-  start_date: string
+  start_date?: string
 
-  @ApiProperty({ example: '2025-10-01', description: 'Job end date (YYYY-MM-DD)' })
+  @ApiProperty({
+    example: '01/10/2025',
+    description: 'Job end date (DD/MM/YYYY or YYYY-MM-DD)'
+  })
+  @Transform(({ obj }) =>
+    normalizeParserJobDate(
+      obj.end_date ?? obj.endDate ?? obj.job_end_date ?? obj.jobEndDate
+    )
+  )
   @IsDateString()
   end_date: string
+
+  /** Parser may send camelCase aliases — accepted and mapped above. */
+  @Allow()
+  @IsOptional()
+  parentId?: string
+
+  @Allow()
+  @IsOptional()
+  otaType?: string
+
+  @Allow()
+  @IsOptional()
+  startDate?: string
+
+  @Allow()
+  @IsOptional()
+  endDate?: string
 }
 
 /** Response returned after updating historical-to and run date */
