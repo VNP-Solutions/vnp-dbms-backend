@@ -1,12 +1,14 @@
-import { Body, Controller, Logger, Post, Res, UseGuards } from '@nestjs/common'
+import { BadRequestException, Body, Controller, HttpCode, Logger, Post, Res, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common'
 import {
   ApiBearerAuth,
   ApiBody,
+  ApiConsumes,
   ApiOperation,
   ApiResponse,
   ApiTags
 } from '@nestjs/swagger'
 import type { Response } from 'express'
+import { ExcelFileInterceptor } from '../../common/interceptors/excel-file.interceptor'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
 import { CurrentUser } from '../auth/decorators/current-user.decorator'
 import { Public } from '../auth/decorators/public.decorator'
@@ -105,6 +107,59 @@ export class ExternalRecurringJobsController {
       .catch(error =>
         this.logger.error(
           `[assign-parser-jobs] background processing failed: ${error?.message ?? error}`
+        )
+      )
+
+    return { message: 'Processing', data: null }
+  }
+
+  // ─── Bulk Upload Retrieval Jobs ─────────────────────────────────────────────
+
+  @Post('upload-retrieval-jobs')
+  @HttpCode(200)
+  @UseInterceptors(ExcelFileInterceptor)
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({
+    summary: 'Upload Excel file and create retrieval jobs (DBMS → Scraper bridge)',
+    description:
+      'Accepts a retrieval Excel file (same format as scraper POST /retrieval/upload). Returns immediately with ' +
+      '`{ message: "Processing", data: null }` while retrieval job creation runs in the background. ' +
+      'Rows are grouped by Hotel ID / Property ID, then forwarded to POST /retrieval/bulk-create-from-dbms. ' +
+      'If any hotels fail, the requesting user is notified by email.'
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+          description: 'Retrieval Excel file (.xlsx, .xls, .csv)'
+        }
+      },
+      required: ['file']
+    }
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Request accepted — retrieval job upload is processing in the background',
+    schema: {
+      example: { message: 'Processing', data: null }
+    }
+  })
+  uploadRetrievalJobs(
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() user: IUserWithPermissions
+  ) {
+    if (!file) {
+      throw new BadRequestException('Excel file is required')
+    }
+
+    void this.externalRecurringJobsService
+      .processUploadRetrievalJobsInBackground(file, user.email)
+      .catch(error =>
+        this.logger.error(
+          `[upload-retrieval-jobs] background processing failed: ${error?.message ?? error}`
         )
       )
 

@@ -17,12 +17,19 @@ import type {
   BulkCreateParserJobsDto,
   BulkCreateParserJobsPayload,
   BulkCreateParserJobsPropertyResult,
+  BulkUploadRetrievalJobsPayload,
+  BulkUploadRetrievalJobsResult,
+  BulkUploadRetrievalJobsSummaryItem,
   DbmsPreCheckDto,
   ParserJobEntryPayload,
   ScraperIngestPayload,
   UpdateHistoricalAndRunDateDto,
   UpdateHistoricalAndRunDateResult
 } from './external-api.dto'
+import {
+  getRetrievalGroupDisplayName,
+  parseRetrievalExcelBuffer
+} from '../../common/utils/retrieval-excel.util'
 
 export interface ScraperRelayResult {
   status: number
@@ -32,6 +39,12 @@ export interface ScraperRelayResult {
 type ParserJobAssignmentFailure = {
   name?: string
   property_id?: string
+  error: string
+}
+
+type RetrievalJobAssignmentFailure = {
+  name?: string
+  hotel_id?: string
   error: string
 }
 
@@ -514,6 +527,254 @@ export class ExternalRecurringJobsService {
     }
 
     return { relay, summary }
+  }
+
+  // ─── Bulk Upload Retrieval Jobs ─────────────────────────────────────────────
+
+  /**
+   * Runs retrieval job upload in the background. On scraper-backend failure or
+   * any thrown error, sends an email notification to the requesting user.
+   */
+  async processUploadRetrievalJobsInBackground(
+    file: Express.Multer.File,
+    recipientEmail: string
+  ): Promise<void> {
+    try {
+      const payload = parseRetrievalExcelBuffer(file.originalname, file.buffer)
+      const result = await this.uploadRetrievalJobs(payload)
+      const failures = this.collectRetrievalJobAssignmentFailures(result)
+
+      if (failures.length > 0) {
+        await this.emailUtil.sendRetrievalJobAssignmentErrorEmail(recipientEmail, {
+          hotel_count: payload.groups.length,
+          file_name: file.originalname,
+          message: this.extractScraperMessage(result.relay.body),
+          rows: this.buildRetrievalJobAssignmentReport(result, failures)
+        })
+      }
+    } catch (error: any) {
+      this.logger.error(
+        `[upload-retrieval-jobs] failed for file ${file?.originalname ?? 'unknown'}: ${error?.message ?? error}`
+      )
+
+      await this.emailUtil
+        .sendRetrievalJobAssignmentErrorEmail(recipientEmail, {
+          hotel_count: 0,
+          file_name: file?.originalname ?? 'unknown',
+          message:
+            error?.message ?? 'Request failed before retrieval job upload completed'
+        })
+        .catch(emailError =>
+          this.logger.error(
+            `[upload-retrieval-jobs] error email failed: ${emailError?.message ?? emailError}`
+          )
+        )
+    }
+  }
+
+  /**
+   * Parses grouped Excel rows and forwards them to the scraper backend
+   * POST /retrieval/bulk-create-from-dbms endpoint.
+   */
+  async uploadRetrievalJobs(
+    payload: BulkUploadRetrievalJobsPayload
+  ): Promise<BulkUploadRetrievalJobsResult> {
+    if (!this.scraperBackendUrl) {
+      this.logger.error(
+        'SCRAPER_BACKEND_URL is not configured — cannot create retrieval jobs'
+      )
+      throw new BadGatewayException(
+        'Scraper backend URL is not configured. Contact the administrator.'
+      )
+    }
+
+    const summary: BulkUploadRetrievalJobsSummaryItem[] = payload.groups.map(
+      group => ({
+        hotel_id: group.hotel_id,
+        name: getRetrievalGroupDisplayName(group)
+      })
+    )
+
+    const targetUrl = `${this.scraperBackendUrl}/retrieval/bulk-create-from-dbms`
+    this.logger.log(
+      `Forwarding ${payload.groups.length} retrieval group(s) to: POST ${targetUrl}`
+    )
+
+    let relay: ScraperRelayResult = {
+      status: 200,
+      body: { message: 'Processing', data: null }
+    }
+
+    try {
+      const response = await axios.post(
+        targetUrl,
+        payload,
+        this.scraperRequestConfig()
+      )
+      relay = {
+        status: response.status,
+        body: response.data ?? { message: 'Processing', data: null }
+      }
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        if (error.response) {
+          this.logger.warn(
+            `Scraper backend responded ${error.response.status} for bulk-create-retrievals`
+          )
+          relay = { status: error.response.status, body: error.response.data }
+        } else {
+          this.logger.error(
+            `Scraper backend unreachable (${error.code ?? 'NETWORK_ERROR'}): ${error.message}`
+          )
+          throw new BadGatewayException(
+            'Scraper backend is unreachable. Please try again later.'
+          )
+        }
+      } else {
+        throw error
+      }
+    }
+
+    return { relay, summary, payload }
+  }
+
+  private collectRetrievalScraperFailures(
+    body: unknown
+  ): RetrievalJobAssignmentFailure[] {
+    if (!body || typeof body !== 'object') return []
+
+    const failures: RetrievalJobAssignmentFailure[] = []
+    const root = body as Record<string, unknown>
+    const data =
+      root.data && typeof root.data === 'object'
+        ? (root.data as Record<string, unknown>)
+        : root
+
+    const pushFailure = (item: unknown) => {
+      if (!item || typeof item !== 'object') return
+      const row = item as Record<string, unknown>
+      const error =
+        row.error_message ??
+        row.error ??
+        row.message ??
+        row.reason ??
+        row.description
+
+      if (error == null) return
+
+      failures.push({
+        name:
+          typeof row.name === 'string'
+            ? row.name
+            : typeof row.property_name === 'string'
+              ? row.property_name
+              : undefined,
+        hotel_id:
+          typeof row.hotel_id === 'string'
+            ? row.hotel_id
+            : typeof row.hotelId === 'string'
+              ? row.hotelId
+              : undefined,
+        error:
+          typeof error === 'string'
+            ? error
+            : typeof error === 'number' || typeof error === 'boolean'
+              ? String(error)
+              : JSON.stringify(error)
+      })
+    }
+
+    if (Array.isArray(data.errors)) {
+      data.errors.forEach(pushFailure)
+    }
+
+    for (const key of ['failed', 'failures', 'items']) {
+      if (Array.isArray(data[key])) {
+        data[key].forEach(pushFailure)
+      }
+    }
+
+    return failures
+  }
+
+  private collectRetrievalJobAssignmentFailures(
+    result: BulkUploadRetrievalJobsResult
+  ): RetrievalJobAssignmentFailure[] {
+    const failures = this.collectRetrievalScraperFailures(result.relay.body)
+
+    if (result.relay.status !== 200) {
+      failures.unshift({
+        error: `Scraper backend responded with HTTP ${result.relay.status}`
+      })
+    }
+
+    return failures
+  }
+
+  private buildRetrievalJobAssignmentReport(
+    result: BulkUploadRetrievalJobsResult,
+    scraperFailures: RetrievalJobAssignmentFailure[]
+  ): Array<{
+    name: string
+    hotel_id: string
+    dbms_ok: boolean
+    scraper_ok: boolean
+    reason: string
+  }> {
+    const hotelFailures = scraperFailures.filter(
+      failure => failure.hotel_id || failure.name
+    )
+    const failureByHotelId = new Map(
+      hotelFailures
+        .filter(failure => failure.hotel_id)
+        .map(failure => [failure.hotel_id!, failure.error])
+    )
+    const failureByName = new Map(
+      hotelFailures
+        .filter(failure => failure.name)
+        .map(failure => [failure.name!, failure.error])
+    )
+    const globalFailure = scraperFailures.find(
+      failure => !failure.hotel_id && !failure.name
+    )?.error
+    const scraperFallbackReason =
+      globalFailure ??
+      (result.relay.status !== 200
+        ? `Scraper backend responded with HTTP ${result.relay.status}`
+        : undefined)
+
+    return result.summary.map(item => {
+      const scraperError =
+        failureByHotelId.get(item.hotel_id) ?? failureByName.get(item.name)
+
+      if (scraperError) {
+        return {
+          name: item.name,
+          hotel_id: item.hotel_id,
+          dbms_ok: true,
+          scraper_ok: false,
+          reason: scraperError
+        }
+      }
+
+      if (scraperFallbackReason) {
+        return {
+          name: item.name,
+          hotel_id: item.hotel_id,
+          dbms_ok: true,
+          scraper_ok: false,
+          reason: scraperFallbackReason
+        }
+      }
+
+      return {
+        name: item.name,
+        hotel_id: item.hotel_id,
+        dbms_ok: true,
+        scraper_ok: true,
+        reason: '-'
+      }
+    })
   }
 
   // ─── Update Historical To + Run Date ─────────────────────────────────────────
