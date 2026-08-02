@@ -29,6 +29,7 @@ export type PropertyWithRelations = Property & {
 export interface ImportPropertyRow {
   propertyName: string
   portfolioName: string
+  subportfolioName?: string
   propertyAddress?: string
   cardDescriptor?: string
   description?: string
@@ -134,6 +135,9 @@ export interface ImportPropertyRow {
   agodaOtpNumber?: string
   // Misc new fields
   priority?: string
+  expediaPriority?: string
+  bookingPriority?: string
+  agodaPriority?: string
   salesRep?: string
   discontinuedEmailIds?: string   // comma-separated in Excel, stored as array
   cybersourceMid?: string
@@ -230,6 +234,9 @@ export interface AllDataForGlobalFilterResponse {
   agoda_secondary_username: string[]
   expedia_service_fee: string[]
   priority: Priority[]
+  expedia_priority: string[]
+  booking_priority: string[]
+  agoda_priority: string[]
   from_db: string[]
   to_db: string[]
   expedia_revised_date: string[]

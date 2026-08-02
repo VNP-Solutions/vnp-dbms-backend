@@ -19,6 +19,7 @@ import type { Configuration } from '../../config/configuration'
 import type { UploadAndCreateFileDto } from '../file-upload/file-upload.dto'
 import type { IFileUploadService } from '../file-upload/file-upload.interface'
 import { PrismaService } from '../prisma/prisma.service'
+import { GlobalFilterCacheService } from '../../common/services/global-filter-cache.service'
 import { RedisService } from '../redis/redis.service'
 import {
   CreatePortfolioDto,
@@ -36,7 +37,6 @@ import type {
 const CACHE_TTL_ITEM = 5 * 60 * 1000 // 5 minutes for individual records
 const CACHE_KEY = (id: string) => `portfolio:${id}`
 const ALL_PATTERN = 'portfolio:all:*'
-const GLOBAL_FILTER_PATTERN = 'global-filter:all:*'
 const INTERNAL_PORTFOLIO_NAME = 'Internal Portfolio'
 
 @Injectable()
@@ -52,6 +52,7 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
     private readonly fileUploadService: IFileUploadService,
     private readonly prisma: PrismaService,
     private readonly redisService: RedisService,
+    private readonly globalFilterCache: GlobalFilterCacheService,
     private readonly config: ConfigService<Configuration, true>,
     private readonly syncCommunication: SyncCommunicationService
   ) {
@@ -151,10 +152,7 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
     if (existing)
       throw new ConflictException('Portfolio with this name already exists')
     const portfolio = await this.portfolioRepository.create(data)
-    await Promise.all([
-      this.redisService.deleteByPattern(ALL_PATTERN),
-      this.redisService.deleteByPattern(GLOBAL_FILTER_PATTERN)
-    ])
+    await this.globalFilterCache.invalidateAll()
     return portfolio
   }
 
@@ -460,8 +458,7 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
     const updated = await this.portfolioRepository.update(id, data)
     await Promise.all([
       this.redisService.del(CACHE_KEY(id)),
-      this.redisService.deleteByPattern(ALL_PATTERN),
-      this.redisService.deleteByPattern(GLOBAL_FILTER_PATTERN)
+      this.globalFilterCache.invalidateAll()
     ])
     return updated
   }
@@ -587,9 +584,7 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
     await this.portfolioRepository.delete(id)
     await Promise.all([
       this.redisService.del(CACHE_KEY(id)),
-      this.redisService.deleteByPattern(ALL_PATTERN),
-      this.redisService.deleteByPattern('property:all:*'),
-      this.redisService.deleteByPattern(GLOBAL_FILTER_PATTERN)
+      this.globalFilterCache.invalidateAllIncludingPropertyItems()
     ])
     try {
       if (this.dashboardClient) {
@@ -923,10 +918,7 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
       }
     }
 
-    await Promise.all([
-      this.redisService.deleteByPattern(ALL_PATTERN),
-      this.redisService.deleteByPattern(GLOBAL_FILTER_PATTERN)
-    ])
+    await this.globalFilterCache.invalidateAll()
 
     // ── Dashboard & parser bulk-upsert sync ───────────────────────────────────
     if (portfolios.length) {

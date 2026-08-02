@@ -11,6 +11,7 @@ import {
   parseCrsDays
 } from '../../common/utils/parser-job-date.util'
 import { RunDateCalculatorService } from '../../common/services/run-date-calculator.service'
+import { GlobalFilterCacheService } from '../../common/services/global-filter-cache.service'
 import { SyncCommunicationService } from '../../common/services/sync-communication.service'
 import { PrismaService } from '../prisma/prisma.service'
 import type {
@@ -45,7 +46,8 @@ export class ExternalRecurringJobsService {
     private readonly prisma: PrismaService,
     private readonly runDateCalculator: RunDateCalculatorService,
     private readonly emailUtil: EmailUtil,
-    private readonly syncCommunication: SyncCommunicationService
+    private readonly syncCommunication: SyncCommunicationService,
+    private readonly globalFilterCache: GlobalFilterCacheService
   ) {
     this.scraperBackendUrl =
       this.configService.get('scraperBackendUrl', { infer: true }) ?? ''
@@ -593,6 +595,8 @@ export class ExternalRecurringJobsService {
         [runDateField]: runDate
       }
     })
+
+    await this.globalFilterCache.invalidateAll()
 
     this.logger.log(
       `[updateHistoricalAndRunDate] property=${dto.parent_id} ota=${dto.ota_type} ` +

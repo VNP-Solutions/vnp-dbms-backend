@@ -1,8 +1,85 @@
 import * as XLSX from 'xlsx-js-style'
+import { normalizeParserJobDate } from './parser-job-date.util'
+
+/** Preferred Excel headers with legacy aliases for import/bulk-update. */
+export const EXCEL_HISTORICAL_DATE_HEADERS = {
+  expediaFrom: ['Expedia Historical From', 'Expedia From'],
+  expediaTo: ['Expedia Historical To', 'Expedia To'],
+  expediaDbFrom: [
+    'DB Historical From',
+    'Expedia Historical DB From',
+    'From DB'
+  ],
+  expediaDbTo: ['DB Historical To', 'Expedia Historical DB To', 'To DB'],
+  bookingFrom: ['Booking Historical From', 'Booking From'],
+  bookingTo: ['Booking Historical To', 'Booking To'],
+  agodaFrom: ['Agoda Historical From', 'Agoda From'],
+  agodaTo: ['Agoda Historical To', 'Agoda To']
+} as const
+
+export function findExcelCellValue(
+  row: Record<string, unknown>,
+  names: readonly string[]
+): string | undefined {
+  for (const name of names) {
+    const val = row[name]
+    if (val !== undefined && val !== null && val !== '') {
+      const trimmed = String(val).trim()
+      if (trimmed !== '') return trimmed
+    }
+  }
+  const rowKeys = Object.keys(row)
+  for (const name of names) {
+    for (const key of rowKeys) {
+      const cleanKey = key.replace(/\s*\*+\s*$/, '').trim()
+      if (cleanKey.toLowerCase() === name.toLowerCase()) {
+        const val = row[key]
+        if (val !== undefined && val !== null && val !== '') {
+          const trimmed = String(val).trim()
+          if (trimmed !== '') return trimmed
+        }
+      }
+    }
+  }
+  return undefined
+}
+
+/** Normalizes Excel date cells (MM/DD/YYYY, YYYY-MM-DD, serial numbers) to YYYY-MM-DD. */
+export function normalizeExcelDate(value: unknown): string | undefined {
+  return normalizeParserJobDate(value)
+}
+
+export function findExcelDateValue(
+  row: Record<string, unknown>,
+  names: readonly string[]
+): string | undefined {
+  for (const name of names) {
+    const val = row[name]
+    if (val !== undefined && val !== null && val !== '') {
+      const normalized = normalizeParserJobDate(val)
+      if (normalized) return normalized
+    }
+  }
+  const rowKeys = Object.keys(row)
+  for (const name of names) {
+    for (const key of rowKeys) {
+      const cleanKey = key.replace(/\s*\*+\s*$/, '').trim()
+      if (cleanKey.toLowerCase() === name.toLowerCase()) {
+        const val = row[key]
+        if (val !== undefined && val !== null && val !== '') {
+          const normalized = normalizeParserJobDate(val)
+          if (normalized) return normalized
+        }
+      }
+    }
+  }
+  return undefined
+}
 
 /** Column order matches templates/property-import-template.xlsx (DBMS Templates). */
 export const PROPERTY_EXCEL_HEADERS = [
   'Portfolio',
+  'Sub Portfolio',
   'Service Type',
   'Property Name',
   'Property Identifier',
@@ -13,10 +90,10 @@ export const PROPERTY_EXCEL_HEADERS = [
   'Expedia Frequency',
   'Priority',
   'Expedia Access Level',
-  'Expedia From',
-  'Expedia To',
-  'From DB',
-  'To DB',
+  'Expedia Historical From',
+  'Expedia Historical To',
+  'DB Historical From',
+  'DB Historical To',
   'Expedia Revised Date',
   'Expedia Scheduler Review From',
   'Expedia Scheduler Review To',
@@ -44,8 +121,8 @@ export const PROPERTY_EXCEL_HEADERS = [
   'Booking Service Type',
   'Booking Frequency',
   'Booking Access Level',
-  'Booking From',
-  'Booking To',
+  'Booking Historical From',
+  'Booking Historical To',
   'Booking Scheduler',
   'Booking Duration',
   'Booking Run Date From',
@@ -60,8 +137,8 @@ export const PROPERTY_EXCEL_HEADERS = [
   'Agoda Service Type',
   'Agoda Frequency',
   'Agoda Access Level',
-  'Agoda From',
-  'Agoda To',
+  'Agoda Historical From',
+  'Agoda Historical To',
   'Agoda Scheduler',
   'Agoda Duration',
   'Agoda Run Date From',
@@ -134,6 +211,7 @@ export function mapPropertyToExcelRow(property: any): Record<string, string | nu
 
   return {
     Portfolio: property.portfolio?.name ?? '',
+    'Sub Portfolio': property.subportfolio?.name ?? '',
     'Service Type': property.service_type?.type ?? '',
     'Property Name': property.name ?? '',
     'Property Identifier': property.property_identifier ?? '',
@@ -144,10 +222,10 @@ export function mapPropertyToExcelRow(property: any): Record<string, string | nu
     'Expedia Frequency': property.expedia_frequency?.name ?? '',
     'Priority': property.priority?.name ?? '',
     'Expedia Access Level': formatCell(property.expedia_access_level),
-    'Expedia From': property.expedia_from ?? '',
-    'Expedia To': property.expedia_to ?? '',
-    'From DB': property.from_db ?? '',
-    'To DB': property.to_db ?? '',
+    'Expedia Historical From': property.expedia_from ?? '',
+    'Expedia Historical To': property.expedia_to ?? '',
+    'DB Historical From': property.from_db ?? '',
+    'DB Historical To': property.to_db ?? '',
     'Expedia Revised Date': property.expedia_revised_date ?? '',
     'Expedia Scheduler Review From': property.expedia_scheduler_review_from ?? '',
     'Expedia Scheduler Review To': property.expedia_scheduler_review_to ?? '',
@@ -173,8 +251,8 @@ export function mapPropertyToExcelRow(property: any): Record<string, string | nu
     'Booking Service Type': property.booking_service_type?.type ?? '',
     'Booking Frequency': property.booking_frequency?.name ?? '',
     'Booking Access Level': formatCell(property.booking_access_level),
-    'Booking From': property.booking_from ?? '',
-    'Booking To': property.booking_to ?? '',
+    'Booking Historical From': property.booking_from ?? '',
+    'Booking Historical To': property.booking_to ?? '',
     'Booking Scheduler': formatCell(property.booking_scheduler),
     'Booking Duration': property.booking_duration ?? '',
     'Booking Run Date From': property.booking_run_date ?? '',
@@ -188,8 +266,8 @@ export function mapPropertyToExcelRow(property: any): Record<string, string | nu
     'Agoda Service Type': property.agoda_service_type?.type ?? '',
     'Agoda Frequency': property.agoda_frequency?.name ?? '',
     'Agoda Access Level': formatCell(property.agoda_access_level),
-    'Agoda From': property.agoda_from ?? '',
-    'Agoda To': property.agoda_to ?? '',
+    'Agoda Historical From': property.agoda_from ?? '',
+    'Agoda Historical To': property.agoda_to ?? '',
     'Agoda Scheduler': formatCell(property.agoda_scheduler),
     'Agoda Duration': property.agoda_duration ?? '',
     'Agoda Run Date From': property.agoda_run_date ?? '',

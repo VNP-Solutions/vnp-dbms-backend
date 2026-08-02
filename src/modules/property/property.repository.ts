@@ -483,6 +483,18 @@ export class PropertyRepository implements IPropertyRepository {
     for (const row of rows) {
       const { propertyName, portfolioName } = row
 
+      const normalizedIdentifier = normalizePropertyIdentifier(
+        row.propertyIdentifier
+      )
+      if (!normalizedIdentifier) {
+        skippedProperties.push({
+          name: propertyName,
+          reason: 'Property Identifier is required'
+        })
+        propertiesSkipped++
+        continue
+      }
+
       // Find or create portfolio by name
       let portfolio = await this.prisma.portfolio.findUnique({
         where: { name: portfolioName },
@@ -536,6 +548,24 @@ export class PropertyRepository implements IPropertyRepository {
         }
       }
 
+      let subportfolioId: string | undefined
+      if (row.subportfolioName) {
+        const subResult = await this.resolveOrCreateSubportfolio(
+          row.subportfolioName,
+          portfolio.id,
+          logger
+        )
+        if ('error' in subResult) {
+          skippedProperties.push({
+            name: propertyName,
+            reason: subResult.error
+          })
+          propertiesSkipped++
+          continue
+        }
+        subportfolioId = subResult.id
+      }
+
       // Check if property already exists
       const existingProp = await this.findByName(propertyName)
       if (existingProp) {
@@ -575,10 +605,27 @@ export class PropertyRepository implements IPropertyRepository {
           logger.debug(`Property "${propertyName}" already exists and no credentials provided — skipping`)
         }
 
+        if (subportfolioId) {
+          await this.prisma.property.update({
+            where: { id: existingProp.id },
+            data: { subportfolio_id: subportfolioId }
+          })
+          logger.log(
+            `Subportfolio assigned to existing property "${propertyName}"`
+          )
+        }
+
+        const linkedSubportfolio = subportfolioId
+          ? await this.prisma.subportfolio.findUnique({
+              where: { id: subportfolioId },
+              select: { id: true, name: true, portfolio_id: true }
+            })
+          : null
+
         existingProperties.push({
           ...existingProp,
           portfolio: { id: portfolio.id, name: portfolio.name },
-          subportfolio: null,
+          subportfolio: linkedSubportfolio,
         })
         
         skippedProperties.push({
@@ -596,13 +643,12 @@ export class PropertyRepository implements IPropertyRepository {
         is_active: true
       }
 
+      if (subportfolioId) propertyPayload.subportfolio_id = subportfolioId
+
       if (row.propertyAddress) propertyPayload.hotel_address = row.propertyAddress
       if (row.cardDescriptor) propertyPayload.card_descriptor = row.cardDescriptor
       if (row.description) propertyPayload.description = row.description
-      const normalizedIdentifier = normalizePropertyIdentifier(row.propertyIdentifier)
-      if (normalizedIdentifier) {
-        propertyPayload.property_identifier = normalizedIdentifier
-      }
+      propertyPayload.property_identifier = normalizedIdentifier
       if (row.portfolioContact)
         propertyPayload.portfolio_contact = row.portfolioContact
       if (row.expediaId) propertyPayload.expedia_id = parseInt(row.expediaId) || undefined
@@ -716,6 +762,9 @@ export class PropertyRepository implements IPropertyRepository {
         propertyPayload.expedia_service_type_id = await resolveServiceType(row.expediaServiceType)
       if (row.expediaFrequency)
         propertyPayload.expedia_frequency_id = await resolveFrequency(row.expediaFrequency)
+      if (row.expediaPriority) propertyPayload.expedia_priority = row.expediaPriority
+      if (row.bookingPriority) propertyPayload.booking_priority = row.bookingPriority
+      if (row.agodaPriority) propertyPayload.agoda_priority = row.agodaPriority
       if (row.expediaAccessLevel)
         propertyPayload.expedia_access_level = row.expediaAccessLevel === 'true'
       if (row.expediaFrom) propertyPayload.expedia_from = row.expediaFrom
@@ -959,5 +1008,34 @@ export class PropertyRepository implements IPropertyRepository {
       successCount: success.length,
       skippedCount: skipped.length
     }
+  }
+
+  private async resolveOrCreateSubportfolio(
+    subName: string,
+    portfolioId: string,
+    logger: Logger
+  ): Promise<{ id: string } | { error: string }> {
+    const trimmed = subName.trim()
+    if (!trimmed) return { error: 'Subportfolio name is empty' }
+
+    let subportfolio = await this.prisma.subportfolio.findUnique({
+      where: { name: trimmed }
+    })
+    if (!subportfolio) {
+      try {
+        subportfolio = await this.prisma.subportfolio.create({
+          data: { name: trimmed, portfolio_id: portfolioId }
+        })
+        logger.log(`Subportfolio "${trimmed}" created during import`)
+      } catch (err: any) {
+        logger.error(`Error creating subportfolio "${trimmed}": ${err.message}`)
+        return { error: `Error creating subportfolio: ${err.message}` }
+      }
+    } else if (subportfolio.portfolio_id !== portfolioId) {
+      return {
+        error: `Subportfolio "${trimmed}" belongs to a different portfolio`
+      }
+    }
+    return { id: subportfolio.id }
   }
 }

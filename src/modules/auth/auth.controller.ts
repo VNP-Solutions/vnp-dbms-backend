@@ -68,7 +68,7 @@ export class AuthController {
   @ApiOperation({
     summary: 'Verify OTP and login',
     description:
-      'Sets accessToken and refreshToken as HTTP-only cookies. Returns user profile only. Pass keep_sign_in=false for a shorter browser session (2h for both cookies).'
+      'Sets accessToken and refreshToken as HTTP-only cookies. In development (NODE_ENV=development), also returns access_token in the response body. Pass keep_sign_in=false for a shorter browser session (2h for both cookies).'
   })
   @ApiResponse({
     status: 200,
@@ -83,9 +83,16 @@ export class AuthController {
     this.authCookieService.setAuthCookies(res, session.tokens, {
       keepSignIn: body.keep_sign_in !== false
     })
+    const isDevelopment =
+      this.configService.get('nodeEnv', { infer: true }) === 'development'
     return {
       message: 'Login successful',
-      data: { user: session.user }
+      data: {
+        ...(isDevelopment
+          ? { access_token: session.tokens.accessToken }
+          : {}),
+        user: session.user
+      }
     }
   }
 

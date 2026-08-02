@@ -1300,6 +1300,9 @@ export const PROPERTY_FILTER_FIELD_NAMES = [
   'updated_at',
   'expedia_service_fee',
   'priority_id',
+  'expedia_priority',
+  'booking_priority',
+  'agoda_priority',
   'from_db',
   'to_db',
   'expedia_revised_date',
@@ -1355,6 +1358,12 @@ function swaggerExampleForFilterName(name: PropertyFilterFieldName): {
     return { in: ['507f1f77bcf86cd799439099'] }
   if (name === 'priority_id')
     return { in: ['507f1f77bcf86cd799439099'] }
+  if (
+    name === 'expedia_priority' ||
+    name === 'booking_priority' ||
+    name === 'agoda_priority'
+  )
+    return { in: ['HIGH', 'REGULAR'] }
   if (
     name === 'expedia_id' ||
     name === 'booking_id' ||
@@ -1422,7 +1431,7 @@ const PROPERTY_FILTER_DTO_FILTERS_DESCRIPTION = `Each item: name (required, one 
 
 /** Full narrative for POST /property/filter Swagger operation text. */
 export const PROPERTY_FILTER_OPERATION_DESCRIPTION =
-  `Returns properties with optional pagination. filters[].name must be one of: ${PROPERTY_FILTER_FIELD_NAMES_LIST}. Each filter row: in = array of values (OR match); use in: [] only with sort_by for created_at or updated_at. Boolean fields (expedia_access_level, expedia_scheduler, booking_access_level, booking_scheduler, agoda_access_level, agoda_scheduler) accept true/false or "true"/"false". Numeric in values: expedia_id, booking_id, agoda_id, expedia_duration, booking_duration, agoda_duration. OTA date range filtering: *_from and *_to filters MUST be provided together as pairs (e.g., expedia_from + expedia_to). When both are present, they automatically create a range filter that finds properties where their OTA date ranges overlap with the provided range. Individual *_from or *_to filters without their pair are ignored. Enum strings: billing types VCC, DB, EBS; frequencies REGULAR, ONE_TIME, STOP; processors QuantumPay, Stripe, FreedomPay. currency_id accepts MongoDB ObjectId strings. Root body (outside filters): page, limit, search, start_date, end_date, is_active, masked, user_name, user_password (when masked=false).`
+  `Returns properties with optional pagination. filters[].name must be one of: ${PROPERTY_FILTER_FIELD_NAMES_LIST}. Each filter row: in = array of values (OR match); use in: [] only with sort_by for created_at or updated_at. Boolean fields (expedia_access_level, expedia_scheduler, booking_access_level, booking_scheduler, agoda_access_level, agoda_scheduler) accept true/false or "true"/"false". Numeric in values: expedia_id, booking_id, agoda_id, expedia_duration, booking_duration, agoda_duration. OTA date range filtering: *_from and *_to filters MUST be provided together as pairs (e.g., expedia_from + expedia_to). When both are present, they automatically create a range filter that finds properties where their OTA date ranges overlap with the provided range. Individual *_from or *_to filters without their pair are ignored. Enum strings: billing types VCC, DB, EBS; frequencies REGULAR, ONE_TIME, STOP; processors QuantumPay, Stripe, FreedomPay; OTA run-date priorities expedia_priority, booking_priority, agoda_priority accept REGULAR or HIGH (case-insensitive). currency_id accepts MongoDB ObjectId strings. Root body (outside filters): page, limit, search, start_date, end_date, is_active, masked, user_name, user_password (when masked=false).`
 
 export class PropertyFilterItem {
   @ApiProperty({
@@ -1804,6 +1813,24 @@ export class AllDataForGlobalFilterResponseDto {
 
   @ApiProperty({ type: [Object], description: 'Unique Priority objects used across accessible properties' })
   priority: object[]
+
+  @ApiProperty({
+    type: [String],
+    description: 'Unique Expedia run-date priority values (REGULAR, HIGH)'
+  })
+  expedia_priority: string[]
+
+  @ApiProperty({
+    type: [String],
+    description: 'Unique Booking run-date priority values (REGULAR, HIGH)'
+  })
+  booking_priority: string[]
+
+  @ApiProperty({
+    type: [String],
+    description: 'Unique Agoda run-date priority values (REGULAR, HIGH)'
+  })
+  agoda_priority: string[]
 }
 
 export class ExportPropertyExcelDto extends PropertyFilterDto {

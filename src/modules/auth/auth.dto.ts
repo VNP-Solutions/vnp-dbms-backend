@@ -337,6 +337,13 @@ export interface AuthResponseUserDto {
 }
 
 export class AuthResponseDto {
+  @ApiPropertyOptional({
+    example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+    description:
+      'JWT access token — included in the response body only when NODE_ENV=development (also set as an HTTP-only cookie for browser clients)'
+  })
+  access_token?: string
+
   @ApiProperty({
     example: {
       id: '507f1f77bcf86cd799439011',
@@ -351,7 +358,7 @@ export class AuthResponseDto {
         user_permission: { permission_level: 'all', access_level: 'all' }
       }
     },
-    description: 'Authenticated user information (tokens are set as HTTP-only cookies)'
+    description: 'Authenticated user information'
   })
   user: AuthResponseUserDto
 }

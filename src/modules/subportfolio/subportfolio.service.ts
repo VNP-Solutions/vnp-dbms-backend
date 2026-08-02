@@ -9,10 +9,10 @@ import type {
   SubportfolioWithPortfolio
 } from './subportfolio.interface'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
+import { GlobalFilterCacheService } from '../../common/services/global-filter-cache.service'
 import { RedisService } from '../redis/redis.service'
 
 const SUBPORTFOLIO_ALL_PATTERN = 'subportfolio:all:*'
-const GLOBAL_FILTER_PATTERN = 'global-filter:all:*'
 
 @Injectable()
 export class SubportfolioService implements ISubportfolioService {
@@ -21,14 +21,12 @@ export class SubportfolioService implements ISubportfolioService {
   constructor(
     @Inject('ISubportfolioRepository')
     private readonly repo: ISubportfolioRepository,
-    private readonly redisService: RedisService
+    private readonly redisService: RedisService,
+    private readonly globalFilterCache: GlobalFilterCacheService
   ) {}
 
   private async invalidateSubportfolioCache(): Promise<void> {
-    await Promise.all([
-      this.redisService.deleteByPattern(SUBPORTFOLIO_ALL_PATTERN),
-      this.redisService.deleteByPattern(GLOBAL_FILTER_PATTERN)
-    ])
+    await this.globalFilterCache.invalidateAll()
   }
 
   async findAllCachedForGlobalFilter(

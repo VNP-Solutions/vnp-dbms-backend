@@ -3,6 +3,7 @@ import { Global, Module, OnModuleDestroy } from '@nestjs/common'
 import { ConfigModule, ConfigService } from '@nestjs/config'
 import KeyvRedis, { Keyv } from '@keyv/redis'
 import { createClient, type RedisClientType } from 'redis'
+import { GlobalFilterCacheService } from '../../common/services/global-filter-cache.service'
 import { RedisService, CACHE_NAMESPACE } from './redis.service'
 
 let redisClient: RedisClientType
@@ -81,8 +82,8 @@ let redisClient: RedisClientType
       }
     })
   ],
-  providers: [RedisService],
-  exports: [RedisService]
+  providers: [RedisService, GlobalFilterCacheService],
+  exports: [RedisService, GlobalFilterCacheService]
 })
 export class RedisModule implements OnModuleDestroy {
   async onModuleDestroy() {
