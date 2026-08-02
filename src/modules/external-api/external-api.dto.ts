@@ -580,3 +580,30 @@ export interface UpdateHistoricalAndRunDateResult {
   /** Computed run date written into {ota}_run_date_from  (end_date + 1 day + CRS days + 15 days) */
   run_date: string
 }
+
+// ─── Bulk Upload Retrieval Jobs ─────────────────────────────────────────────
+
+export interface BulkUploadRetrievalJobsGroup {
+  hotel_id: string
+  rows: Record<string, unknown>[]
+}
+
+/** Payload sent to the scraper backend's bulk-create-from-dbms endpoint */
+export interface BulkUploadRetrievalJobsPayload {
+  parent_retrieval_name: string
+  groups: BulkUploadRetrievalJobsGroup[]
+}
+
+export interface BulkUploadRetrievalJobsSummaryItem {
+  hotel_id: string
+  name: string
+}
+
+export interface BulkUploadRetrievalJobsResult {
+  relay: {
+    status: number
+    body: unknown
+  }
+  summary: BulkUploadRetrievalJobsSummaryItem[]
+  payload: BulkUploadRetrievalJobsPayload
+}

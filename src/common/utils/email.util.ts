@@ -1258,4 +1258,104 @@ VNP Solutions Team`
       console.error('✗ Failed to send parser job assignment error email:', error)
     }
   }
+
+  async sendRetrievalJobAssignmentErrorEmail(
+    recipientEmail: string,
+    details: {
+      file_name: string
+      hotel_count: number
+      message?: string
+      rows?: Array<{
+        name: string
+        hotel_id: string
+        dbms_ok: boolean
+        scraper_ok: boolean
+        reason: string
+      }>
+    }
+  ): Promise<void> {
+    const fmt = (ok: boolean) => (ok ? 'YES' : 'NO')
+    const rows = details.rows ?? []
+    const successCount = rows.filter(row => row.dbms_ok && row.scraper_ok).length
+    const issueCount = rows.length - successCount
+    const headline =
+      details.message ??
+      (issueCount > 0
+        ? 'Some hotels could not be assigned retrieval jobs'
+        : 'Retrieval job upload failed')
+
+    const tableRows = rows
+      .map(row => {
+        const allOk = row.dbms_ok && row.scraper_ok
+        return `
+        <tr>
+          <td style="padding:6px 10px;border:1px solid #ddd;">${row.name}</td>
+          <td style="padding:6px 10px;border:1px solid #ddd;">${row.hotel_id}</td>
+          <td style="padding:6px 10px;border:1px solid #ddd;text-align:center;color:${row.dbms_ok ? '#28a745' : '#dc3545'}"><strong>${fmt(row.dbms_ok)}</strong></td>
+          <td style="padding:6px 10px;border:1px solid #ddd;text-align:center;color:${row.scraper_ok ? '#28a745' : '#dc3545'}"><strong>${fmt(row.scraper_ok)}</strong></td>
+          <td style="padding:6px 10px;border:1px solid #ddd;font-size:12px;color:${allOk ? '#666' : '#c0392b'};">${row.reason}</td>
+        </tr>`
+      })
+      .join('')
+
+    const textLines = rows
+      .map(
+        row =>
+          `${row.name} | ${row.hotel_id} | DBMS - ${fmt(row.dbms_ok)} | SCRAPER - ${fmt(row.scraper_ok)} | REASON: ${row.reason}`
+      )
+      .join('\n')
+
+    const mailOptions = {
+      from: this.configService.get('smtp.email', { infer: true }),
+      to: recipientEmail,
+      subject: `Retrieval Job Upload Report – ${details.file_name} (${issueCount || details.hotel_count} issues)`,
+      html: `
+        <div style="font-family:Arial,sans-serif;padding:20px;max-width:900px;margin:0 auto;">
+          <h3 style="margin-bottom:4px;">Retrieval Job Upload Report</h3>
+          <p style="margin-top:0;color:#555;">
+            File: <strong>${details.file_name}</strong> &nbsp;|&nbsp;
+            Hotels: <strong>${details.hotel_count}</strong> &nbsp;|&nbsp;
+            Successful: <strong style="color:#28a745">${successCount}</strong> &nbsp;|&nbsp;
+            Issues: <strong style="color:${issueCount ? '#dc3545' : '#28a745'}">${issueCount || details.hotel_count}</strong>
+          </p>
+          <div style="background:#fff3cd;border-left:4px solid #ffc107;padding:12px 16px;border-radius:4px;margin:16px 0;">
+            <strong>${headline}</strong>
+          </div>
+          ${
+            rows.length
+              ? `<table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:16px;">
+            <tr style="background:#f4f4f4;">
+              <th style="padding:8px 10px;border:1px solid #ddd;text-align:left;">Hotel Name</th>
+              <th style="padding:8px 10px;border:1px solid #ddd;text-align:left;">Hotel ID</th>
+              <th style="padding:8px 10px;border:1px solid #ddd;text-align:center;">DBMS</th>
+              <th style="padding:8px 10px;border:1px solid #ddd;text-align:center;">Scraper</th>
+              <th style="padding:8px 10px;border:1px solid #ddd;text-align:left;">Reason</th>
+            </tr>
+            ${tableRows}
+          </table>`
+              : ''
+          }
+          <p style="margin-top:20px;font-size:12px;color:#888;">VNP Solutions DBMS</p>
+        </div>
+      `,
+      text: [
+        `Retrieval Job Upload Report for file ${details.file_name}.`,
+        `Hotels: ${details.hotel_count} | Successful: ${successCount} | Issues: ${issueCount || details.hotel_count}`,
+        headline,
+        textLines
+      ]
+        .filter(Boolean)
+        .join('\n\n')
+    }
+
+    try {
+      const info = await this.transporter.sendMail(mailOptions)
+      console.log('✓ Retrieval job assignment error email sent:', {
+        to: recipientEmail,
+        messageId: info.messageId
+      })
+    } catch (error) {
+      console.error('✗ Failed to send retrieval job assignment error email:', error)
+    }
+  }
 }
