@@ -3,7 +3,6 @@ import { ConfigService } from '@nestjs/config'
 import type { Configuration } from '../../config/configuration'
 import {
   calcPreliminaryRunDate,
-  lastDayOfLastMonth,
   parseCrsDays
 } from '../utils/parser-job-date.util'
 import { PrismaService } from '../../modules/prisma/prisma.service'
@@ -88,29 +87,26 @@ export class RunDateCalculatorService {
   }
 
   /**
-   * Calculates run dates for every OTA where the property has both a
-   * historical "to" date and a valid CRS value.
+   * Calculates run dates for every OTA where calculation rules are met.
    *
    * Priority rules (per OTA):
-   *  - `REGULAR` + `_to` provided  → standard run-date formula
-   *  - `HIGH`                       → uses the last day of last month as the
-   *                                   effective historical "to" date; no `_to`
-   *                                   value is required
-   *  - `REGULAR` without `_to`      → run date is skipped (kept empty)
-   *  - no priority provided         → existing behaviour: calculate whenever
-   *                                   both `_to` and a valid `_crs` are present
+   *  - `REGULAR` + `_to` + CRS → standard formula
+   *      run_date = historical_to + 1 day + CRS + 15 days (capacity-adjusted)
+   *  - `HIGH` + `_to`          → run_date = property creation date + 1 day
+   *      (`_to` is required; CRS is not used for the HIGH run date)
+   *  - `REGULAR` without `_to` → run date skipped
+   *  - `HIGH` without `_to`    → run date skipped
+   *  - no priority             → legacy: calculate when `_to` + valid CRS present
    *
    * Returns a partial DB update payload — only fields that were successfully
-   * calculated are included. Fields are omitted when CRS is missing/invalid.
-   *
-   * OTAs are processed sequentially so that each calculation reflects the
-   * state after the previous update (important for batch imports).
+   * calculated are included.
    *
    * @param property  - Subset of property fields needed for the calculation
    * @param excludeId - Property ID to exclude from capacity counts (for updates)
    */
   async calcRunDatesForProperty(
     property: {
+      created_at?: Date | string | null
       expedia_to?: string | null
       expedia_crs?: string | null
       expedia_priority?: string | null
@@ -133,53 +129,96 @@ export class RunDateCalculatorService {
       agoda_run_date?: string
     } = {}
 
-    const effectiveTo = (
-      to: string | null | undefined,
-      priority: string | null | undefined
-    ): string | null => {
-      if (priority === 'HIGH') return lastDayOfLastMonth()
-      if (priority === 'REGULAR') return to ?? null
-      // no priority → legacy behaviour: use to if present
-      return to ?? null
-    }
+    // HIGH and REGULAR both require *_to; legacy (no priority) also requires *_to
+    const shouldCalc = (to: string | null | undefined): boolean => !!to
 
-    const shouldCalc = (
-      to: string | null | undefined,
-      priority: string | null | undefined
-    ): boolean => {
-      if (priority === 'HIGH') return true
-      if (priority === 'REGULAR') return !!to
-      // no priority → legacy behaviour
-      return !!to
+    const highRunDate = (): string | null => {
+      const base = property.created_at
+        ? new Date(property.created_at)
+        : new Date()
+      if (Number.isNaN(base.getTime())) return null
+      const d = new Date(
+        Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), base.getUTCDate())
+      )
+      d.setUTCDate(d.getUTCDate() + 1)
+      return d.toISOString().slice(0, 10)
     }
 
     // Expedia
-    if (shouldCalc(property.expedia_to, property.expedia_priority)) {
-      const historicalTo = effectiveTo(property.expedia_to, property.expedia_priority)!
-      const d = await this.calcRunDate(historicalTo, property.expedia_crs, 'expedia', excludeId)
-      if (d) {
-        updates.expedia_run_date = d
-        this.logger.debug(`expedia run_date → ${d} (priority: ${property.expedia_priority ?? 'none'})`)
+    if (shouldCalc(property.expedia_to)) {
+      if (property.expedia_priority === 'HIGH') {
+        const d = highRunDate()
+        if (d) {
+          updates.expedia_run_date = d
+          this.logger.debug(
+            `expedia run_date → ${d} (priority: HIGH, created_at+1)`
+          )
+        }
+      } else {
+        const d = await this.calcRunDate(
+          property.expedia_to!,
+          property.expedia_crs,
+          'expedia',
+          excludeId
+        )
+        if (d) {
+          updates.expedia_run_date = d
+          this.logger.debug(
+            `expedia run_date → ${d} (priority: ${property.expedia_priority ?? 'none'})`
+          )
+        }
       }
     }
 
     // Booking
-    if (shouldCalc(property.booking_to, property.booking_priority)) {
-      const historicalTo = effectiveTo(property.booking_to, property.booking_priority)!
-      const d = await this.calcRunDate(historicalTo, property.booking_crs, 'booking', excludeId)
-      if (d) {
-        updates.booking_run_date = d
-        this.logger.debug(`booking run_date → ${d} (priority: ${property.booking_priority ?? 'none'})`)
+    if (shouldCalc(property.booking_to)) {
+      if (property.booking_priority === 'HIGH') {
+        const d = highRunDate()
+        if (d) {
+          updates.booking_run_date = d
+          this.logger.debug(
+            `booking run_date → ${d} (priority: HIGH, created_at+1)`
+          )
+        }
+      } else {
+        const d = await this.calcRunDate(
+          property.booking_to!,
+          property.booking_crs,
+          'booking',
+          excludeId
+        )
+        if (d) {
+          updates.booking_run_date = d
+          this.logger.debug(
+            `booking run_date → ${d} (priority: ${property.booking_priority ?? 'none'})`
+          )
+        }
       }
     }
 
     // Agoda
-    if (shouldCalc(property.agoda_to, property.agoda_priority)) {
-      const historicalTo = effectiveTo(property.agoda_to, property.agoda_priority)!
-      const d = await this.calcRunDate(historicalTo, property.agoda_crs, 'agoda', excludeId)
-      if (d) {
-        updates.agoda_run_date = d
-        this.logger.debug(`agoda run_date → ${d} (priority: ${property.agoda_priority ?? 'none'})`)
+    if (shouldCalc(property.agoda_to)) {
+      if (property.agoda_priority === 'HIGH') {
+        const d = highRunDate()
+        if (d) {
+          updates.agoda_run_date = d
+          this.logger.debug(
+            `agoda run_date → ${d} (priority: HIGH, created_at+1)`
+          )
+        }
+      } else {
+        const d = await this.calcRunDate(
+          property.agoda_to!,
+          property.agoda_crs,
+          'agoda',
+          excludeId
+        )
+        if (d) {
+          updates.agoda_run_date = d
+          this.logger.debug(
+            `agoda run_date → ${d} (priority: ${property.agoda_priority ?? 'none'})`
+          )
+        }
       }
     }
 

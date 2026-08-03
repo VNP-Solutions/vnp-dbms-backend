@@ -175,13 +175,14 @@ export class ExternalRecurringJobsController {
     description:
       'Public endpoint — no authentication required. Intended for scraper/parser callbacks after job completion. ' +
       'Given a completed job property ID, OTA type, start date, and end date: ' +
-      '(1) Writes end_date into the OTA historical "to" field ({ota}_to). ' +
-      '(2) Computes the run date: end_date + 1 day + CRS days + 15 days. ' +
-      '(3) Persists the run date into the OTA run-date field ' +
+      '(1) If the OTA priority is HIGH, converts it to REGULAR and sets that OTA CRS to 30. ' +
+      '(2) Writes end_date into the OTA historical "to" field ({ota}_to). ' +
+      '(3) Computes the run date: end_date + 1 day + CRS days + 15 days (uses CRS 30 after HIGH→REGULAR). ' +
+      '(4) Persists the run date into the OTA run-date field ' +
       '(expedia_run_date / booking_run_date / agoda_run_date). ' +
-      'Both fields are written in a single DB update. ' +
+      'All fields are written in a single DB update. ' +
       '200 = updates applied successfully; ' +
-      '400 = CRS value is missing or invalid; ' +
+      '400 = CRS value is missing or invalid (REGULAR only); ' +
       '404 = property not found.'
   })
   @ApiBody({ type: UpdateHistoricalAndRunDateDto })

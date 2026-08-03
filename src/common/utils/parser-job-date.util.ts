@@ -90,8 +90,7 @@ export function calcAgodaParserJobEndDate(
 
 /**
  * Returns the last calendar day of the previous month in YYYY-MM-DD format
- * (UTC).  Used for HIGH-priority run-date calculation where no historical
- * "to" date is available.
+ * (UTC).
  *
  * Example: if today is 2026-07-26, returns "2026-06-30".
  */

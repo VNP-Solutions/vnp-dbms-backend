@@ -227,11 +227,12 @@ export class PropertyService implements IPropertyService {
     }
 
     // Auto-calculate run dates respecting per-OTA priority:
-    //   REGULAR + _to  → standard formula
-    //   HIGH           → last day of last month as effective end date
-    //   no priority    → legacy: calculate if _to + _crs present
+    //   REGULAR + _to + CRS → standard formula (capacity-adjusted)
+    //   HIGH + _to          → run_date = created_at + 1 day
+    //   no priority         → legacy: calculate if _to + _crs present
     const runDateUpdates = await this.runDateCalculator.calcRunDatesForProperty(
       {
+        created_at:       property.created_at,
         expedia_to:       encryptedData.expedia_to,
         expedia_crs:      encryptedData.expedia_crs,
         expedia_priority: encryptedData.expedia_priority,
@@ -2199,6 +2200,7 @@ export class PropertyService implements IPropertyService {
         const runDateUpdates =
           await this.runDateCalculator.calcRunDatesForProperty(
             {
+              created_at: property.created_at,
               expedia_to: property.expedia_to,
               expedia_crs: property.expedia_crs,
               expedia_priority: property.expedia_priority,

@@ -412,6 +412,18 @@ export class ExternalRecurringJobsService {
       }
 
       const ota = dto.ota_type
+      const otaPriorityRaw =
+        ota === 'expedia'
+          ? property.expedia_priority
+          : ota === 'booking'
+            ? property.booking_priority
+            : property.agoda_priority
+      const jobPriority =
+        String(otaPriorityRaw ?? '')
+          .trim()
+          .toUpperCase() === 'HIGH'
+          ? 1
+          : 0
       const otaConfig = {
         ota_id:
           ota === 'expedia'
@@ -474,7 +486,8 @@ export class ExternalRecurringJobsService {
             ota_type: ota,
             start_date: startDate,
             end_date: endDate,
-            billing_type: otaConfig.billing_type
+            billing_type: otaConfig.billing_type,
+            priority: jobPriority
           })
 
           result.jobs_created.push({ ota_type: ota, start_date: startDate, end_date: endDate })
@@ -785,10 +798,11 @@ export class ExternalRecurringJobsService {
    * Given a completed job's `parent_id`, `ota_type`, `start_date`, and `end_date`:
    *
    *  1. Fetches the property from the database.
-   *  2. Writes `end_date` into the OTA's historical "to" field  ({ota}_to).
-   *  3. Calculates the run date:
+   *  2. If the OTA priority is HIGH, converts it to REGULAR and sets CRS to 30.
+   *  3. Writes `end_date` into the OTA's historical "to" field  ({ota}_to).
+   *  4. Calculates the run date:
    *       run_date = end_date + 1 day + CRS days + 15 days
-   *  4. Writes the run date into the OTA's run-date field:
+   *  5. Writes the run date into the OTA's run-date field:
    *       expedia → expedia_run_date
    *       booking → booking_run_date
    *       agoda   → agoda_run_date
@@ -806,26 +820,47 @@ export class ExternalRecurringJobsService {
       )
     }
 
-    // 2. Resolve CRS for the requested OTA
-    const crsRaw =
+    const otaFields =
       dto.ota_type === 'expedia'
-        ? property.expedia_crs
+        ? {
+            priority: property.expedia_priority,
+            crs: property.expedia_crs,
+            priorityKey: 'expedia_priority' as const,
+            crsKey: 'expedia_crs' as const,
+            toKey: 'expedia_to' as const,
+            runDateKey: 'expedia_run_date' as const
+          }
         : dto.ota_type === 'booking'
-          ? property.booking_crs
-          : property.agoda_crs
+          ? {
+              priority: property.booking_priority,
+              crs: property.booking_crs,
+              priorityKey: 'booking_priority' as const,
+              crsKey: 'booking_crs' as const,
+              toKey: 'booking_to' as const,
+              runDateKey: 'booking_run_date' as const
+            }
+          : {
+              priority: property.agoda_priority,
+              crs: property.agoda_crs,
+              priorityKey: 'agoda_priority' as const,
+              crsKey: 'agoda_crs' as const,
+              toKey: 'agoda_to' as const,
+              runDateKey: 'agoda_run_date' as const
+            }
+
+    const isHighPriority =
+      String(otaFields.priority ?? '')
+        .trim()
+        .toUpperCase() === 'HIGH'
+
+    // 2. HIGH → REGULAR + CRS 30; otherwise keep existing CRS
+    const crsRaw = isHighPriority ? '30' : otaFields.crs
 
     if (!parseCrsDays(crsRaw)) {
       throw new BadRequestException(
         `CRS value "${crsRaw}" for ${dto.ota_type} is missing or not a valid positive integer`
       )
     }
-
-    const historicalToField =
-      dto.ota_type === 'expedia'
-        ? 'expedia_to'
-        : dto.ota_type === 'booking'
-          ? 'booking_to'
-          : 'agoda_to'
 
     // 3. Calculate capacity-checked run date via shared service
     const runDate = await this.runDateCalculator.calcRunDate(
@@ -841,27 +876,27 @@ export class ExternalRecurringJobsService {
       )
     }
 
-    const runDateField =
-      dto.ota_type === 'expedia'
-        ? 'expedia_run_date'
-        : dto.ota_type === 'booking'
-          ? 'booking_run_date'
-          : 'agoda_run_date'
+    // 4. Persist historical-to, run date, and HIGH→REGULAR conversion
+    const updateData: Record<string, string> = {
+      [otaFields.toKey]: dto.end_date,
+      [otaFields.runDateKey]: runDate
+    }
+    if (isHighPriority) {
+      updateData[otaFields.priorityKey] = 'REGULAR'
+      updateData[otaFields.crsKey] = '30'
+    }
 
-    // 4. Persist both fields in a single update
     await this.prisma.property.update({
       where: { id: dto.parent_id },
-      data: {
-        [historicalToField]: dto.end_date,
-        [runDateField]: runDate
-      }
+      data: updateData
     })
 
     await this.globalFilterCache.invalidateAll()
 
     this.logger.log(
       `[updateHistoricalAndRunDate] property=${dto.parent_id} ota=${dto.ota_type} ` +
-        `historical_to=${dto.end_date} run_date=${runDate}`
+        `historical_to=${dto.end_date} run_date=${runDate}` +
+        (isHighPriority ? ' priority HIGH→REGULAR crs→30' : '')
     )
 
     return {
