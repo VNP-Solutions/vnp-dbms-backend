@@ -481,6 +481,8 @@ export interface ParserJobEntryPayload {
   end_date: string
   /** Billing type name for this OTA, if configured */
   billing_type: string | null
+  /** 1 when OTA priority is HIGH, otherwise 0 */
+  priority: number
 }
 
 /** Payload sent to the parser backend's bulk-create endpoint */

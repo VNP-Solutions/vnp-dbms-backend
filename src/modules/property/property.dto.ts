@@ -482,7 +482,7 @@ export class CreatePropertyDto {
   @ApiPropertyOptional({
     example: 'REGULAR',
     description:
-      'Expedia run-date priority. REGULAR: calculates run date when expedia_to is provided. HIGH: uses last day of last month as the effective end date and always calculates a run date.',
+      'Expedia run-date priority. REGULAR: when expedia_to + CRS are set, run_date = expedia_to + 1 day + CRS + 15 days (capacity-adjusted). HIGH: expedia_to is required; run_date = property creation date + 1 day. Job start/end dates use the same formulas as REGULAR for both priorities.',
     enum: ['REGULAR', 'HIGH']
   })
   @IsString()
@@ -655,7 +655,7 @@ export class CreatePropertyDto {
   @ApiPropertyOptional({
     example: 'REGULAR',
     description:
-      'Booking run-date priority. REGULAR: calculates run date when booking_to is provided. HIGH: uses last day of last month as the effective end date and always calculates a run date.',
+      'Booking run-date priority. REGULAR: when booking_to + CRS are set, run_date = booking_to + 1 day + CRS + 15 days (capacity-adjusted). HIGH: booking_to is required; run_date = property creation date + 1 day. Job start/end dates use the same formulas as REGULAR for both priorities.',
     enum: ['REGULAR', 'HIGH']
   })
   @IsString()
@@ -777,7 +777,7 @@ export class CreatePropertyDto {
   @ApiPropertyOptional({
     example: 'REGULAR',
     description:
-      'Agoda run-date priority. REGULAR: calculates run date when agoda_to is provided. HIGH: uses last day of last month as the effective end date and always calculates a run date.',
+      'Agoda run-date priority. REGULAR: when agoda_to + CRS are set, run_date = agoda_to + 1 day + CRS + 15 days (capacity-adjusted). HIGH: agoda_to is required; run_date = property creation date + 1 day. Job start/end dates use the same formulas as REGULAR for both priorities.',
     enum: ['REGULAR', 'HIGH']
   })
   @IsString()
