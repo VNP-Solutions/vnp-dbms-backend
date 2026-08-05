@@ -41,6 +41,7 @@ import { OtaAccessNotificationModule } from './modules/ota-access-notification/o
 import { OtpStatusModule } from './modules/otp-status/otp-status.module'
 import { ColumnTemplateModule } from './modules/column-template/column-template.module'
 import { NoteModule } from './modules/note/note.module'
+import { GoogleOAuthModule } from './modules/google-oauth/google-oauth.module'
 
 @Module({
   imports: [
@@ -78,7 +79,8 @@ import { NoteModule } from './modules/note/note.module'
     OtaAccessNotificationModule,
     OtpStatusModule,
     ColumnTemplateModule,
-    NoteModule
+    NoteModule,
+    GoogleOAuthModule
   ],
   controllers: [AppController],
   providers: [
