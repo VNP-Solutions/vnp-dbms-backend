@@ -22,7 +22,7 @@ export class GoogleOAuthSchedulerService {
 
       if (!tokenData) {
         this.logger.warn(
-          'No Google OAuth token found in S3. Please authenticate first by visiting /api/google-oauth/auth'
+          'No Google OAuth token found in S3. Please authenticate first by visiting /auth'
         )
         return
       }

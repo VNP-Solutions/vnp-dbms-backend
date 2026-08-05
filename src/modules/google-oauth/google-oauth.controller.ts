@@ -6,7 +6,7 @@ import { GoogleOAuthService } from './google-oauth.service'
 
 @ApiTags('Google OAuth')
 @Public()
-@Controller('google-oauth')
+@Controller()
 export class GoogleOAuthController {
   constructor(private readonly googleOAuthService: GoogleOAuthService) {}
 
@@ -17,10 +17,10 @@ export class GoogleOAuthController {
     return res.redirect(authUrl)
   }
 
-  @Get('callback')
+  @Get('oauth2callback')
   @ApiOperation({ summary: 'Handle Google OAuth callback' })
   @ApiQuery({ name: 'code', required: true, description: 'Authorization code' })
-  async callback(@Query('code') code: string, @Res() res: Response) {
+  async oauth2callback(@Query('code') code: string, @Res() res: Response) {
     try {
       await this.googleOAuthService.handleCallback(code)
       return res.send(
@@ -32,6 +32,13 @@ export class GoogleOAuthController {
       )
     }
   }
+}
+
+@ApiTags('Google OAuth')
+@Public()
+@Controller('google-oauth')
+export class GoogleOAuthStatusController {
+  constructor(private readonly googleOAuthService: GoogleOAuthService) {}
 
   @Get('status')
   @ApiOperation({ summary: 'Check Google OAuth authentication status' })
@@ -41,7 +48,7 @@ export class GoogleOAuthController {
       authenticated: isAuthenticated,
       message: isAuthenticated
         ? 'Google OAuth is authenticated'
-        : 'Google OAuth is not authenticated. Please visit /api/google-oauth/auth to authenticate.'
+        : 'Google OAuth is not authenticated. Please visit /auth to authenticate.'
     })
   }
 }
