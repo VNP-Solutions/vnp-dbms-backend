@@ -144,23 +144,54 @@ export type PropertyExportColumnCode =
   | 'stripe_connected_email'
   | 'currency'
 
-type PropertyExportColumnDef = {
-  code: PropertyExportColumnCode
+type ExportHeaderGroup = 'general' | 'expedia' | 'booking' | 'agoda' | 'contact'
+
+/** One physical Excel column produced from a request column code. */
+type PropertyExportSheetColumn = {
   header: string
-  /** Header background color group (null = no fill). */
-  group: 'general' | 'expedia' | 'booking' | 'agoda' | 'contact'
+  group: ExportHeaderGroup
   getValue: (property: any) => string | number
 }
 
-const HEADER_GROUP_COLORS: Record<
-  PropertyExportColumnDef['group'],
-  string | null
-> = {
+/**
+ * A request `columns` code. Most codes map 1→1 sheet column;
+ * composites (e.g. ota_access_levels) expand into multiple sheet columns.
+ */
+type PropertyExportColumnDef = {
+  code: PropertyExportColumnCode
+  columns: PropertyExportSheetColumn[]
+}
+
+const HEADER_GROUP_COLORS: Record<ExportHeaderGroup, string | null> = {
   general: null,
   expedia: 'FFFF00',
   booking: 'C1E4F5',
   agoda: 'FAE2D5',
   contact: 'C1F0C8'
+}
+
+function sheetCol(
+  header: string,
+  group: ExportHeaderGroup,
+  getValue: (property: any) => string | number
+): PropertyExportSheetColumn {
+  return { header, group, getValue }
+}
+
+function singleCol(
+  code: PropertyExportColumnCode,
+  header: string,
+  group: ExportHeaderGroup,
+  getValue: (property: any) => string | number
+): PropertyExportColumnDef {
+  return { code, columns: [sheetCol(header, group, getValue)] }
+}
+
+function multiCol(
+  code: PropertyExportColumnCode,
+  columns: PropertyExportSheetColumn[]
+): PropertyExportColumnDef {
+  return { code, columns }
 }
 
 const HEADER_CELL_STYLE = {
@@ -197,434 +228,313 @@ function formatExportDate(value: unknown): string {
   return `${month}/${day}/${year}`
 }
 
-function formatDateRange(from: unknown, to: unknown): string {
-  const fromStr = formatExportDate(from)
-  const toStr = formatExportDate(to)
-  if (!fromStr && !toStr) return ''
-  if (fromStr && toStr) return `${fromStr} - ${toStr}`
-  return fromStr || toStr
-}
-
-function formatYesNoTriple(a: unknown, b: unknown, c: unknown): string {
-  return [formatYesNo(a), formatYesNo(b), formatYesNo(c)].join(' / ')
-}
-
 function cred(property: any) {
   return property.credentials?.[0] || {}
 }
 
-/** Canonical export columns — order is the default “all columns” order. */
+/** Canonical export column codes — order is the default “all columns” order. */
 export const PROPERTY_EXPORT_COLUMNS: readonly PropertyExportColumnDef[] = [
-  {
-    code: 'portfolio_id',
-    header: 'Portfolio',
-    group: 'general',
-    getValue: p => p.portfolio?.name ?? ''
-  },
-  {
-    code: 'subportfolio_id',
-    header: 'Sub-Portfolio',
-    group: 'general',
-    getValue: p => p.subportfolio?.name ?? ''
-  },
-  {
-    code: 'service_type',
-    header: 'Service Type',
-    group: 'general',
-    getValue: p => p.service_type?.type ?? ''
-  },
-  {
-    code: 'name',
-    header: 'Property Name',
-    group: 'general',
-    getValue: p => p.name ?? ''
-  },
-  {
-    code: 'property_identifier',
-    header: 'Property Identifier',
-    group: 'general',
-    getValue: p => p.property_identifier ?? ''
-  },
-  {
-    code: 'ota_access_levels',
-    header: 'Access Levels',
-    group: 'general',
-    getValue: p =>
-      formatYesNoTriple(
-        p.expedia_access_level,
-        p.booking_access_level,
-        p.agoda_access_level
-      )
-  },
-  {
-    code: 'ota_credentials_verified',
-    header: 'Credentials Verified',
-    group: 'general',
-    getValue: p =>
-      formatYesNoTriple(
-        p.expedia_credential_verified,
-        p.booking_credential_verified,
-        p.agoda_credential_verified
-      )
-  },
-  {
-    code: 'expedia_id',
-    header: 'Expedia ID',
-    group: 'expedia',
-    getValue: p => formatCell(p.expedia_id)
-  },
-  {
-    code: 'expedia_priority',
-    header: 'Expedia Priority',
-    group: 'expedia',
-    getValue: p => p.expedia_priority ?? ''
-  },
-  {
-    code: 'expedia_billing_type',
-    header: 'Expedia Billing Type',
-    group: 'expedia',
-    getValue: p => p.expedia_billing_type?.name ?? ''
-  },
-  {
-    code: 'expedia_service_type',
-    header: 'Expedia Service Type',
-    group: 'expedia',
-    getValue: p => p.expedia_service_type?.type ?? ''
-  },
-  {
-    code: 'expedia_service_fee',
-    header: 'Expedia Service Fee',
-    group: 'expedia',
-    getValue: p => formatCell(p.expedia_service_fee)
-  },
-  {
-    code: 'expedia_frequency',
-    header: 'Expedia Frequency',
-    group: 'expedia',
-    getValue: p => p.expedia_frequency?.name ?? ''
-  },
-  {
-    code: 'expedia_historical_review',
-    header: 'Expedia Historical Review',
-    group: 'expedia',
-    getValue: p => formatDateRange(p.expedia_from, p.expedia_to)
-  },
-  {
-    code: 'expedia_historical_review_db',
-    header: 'Expedia Historical Review DB',
-    group: 'expedia',
-    getValue: p => formatDateRange(p.from_db, p.to_db)
-  },
-  {
-    code: 'expedia_crs',
-    header: 'Expedia CRS',
-    group: 'expedia',
-    getValue: p => p.expedia_crs ?? ''
-  },
-  {
-    code: 'expedia_crs_db',
-    header: 'Expedia CRS DB',
-    group: 'expedia',
-    getValue: p => p.expedia_crs_db ?? ''
-  },
-  {
-    code: 'expedia_run_date',
-    header: 'Expedia Run Date',
-    group: 'expedia',
-    getValue: p => formatExportDate(p.expedia_run_date)
-  },
-  {
-    code: 'expedia_run_date_db',
-    header: 'Expedia Run Date DB',
-    group: 'expedia',
-    getValue: p => formatExportDate(p.expedia_run_date_db)
-  },
-  {
-    code: 'expedia_processor',
-    header: 'Expedia Processor',
-    group: 'expedia',
-    getValue: p => p.expedia_processor?.name ?? ''
-  },
-  {
-    code: 'expedia_otp_number',
-    header: 'Expedia OTP Number',
-    group: 'expedia',
-    getValue: p => p.expedia_otp_number ?? ''
-  },
-  {
-    code: 'userNameExpedia',
-    header: 'User Name Expedia',
-    group: 'expedia',
-    getValue: p => cred(p).expediaUsername ?? ''
-  },
-  {
-    code: 'passwordExpedia',
-    header: 'Password Expedia',
-    group: 'expedia',
-    getValue: p => cred(p).expediaPassword ?? ''
-  },
-  {
-    code: 'expedia_secondary_username',
-    header: 'Expedia Secondary User Name',
-    group: 'expedia',
-    getValue: p => cred(p).expediaSecondaryUsername ?? ''
-  },
-  {
-    code: 'expedia_secondary_password',
-    header: 'Expedia Secondary Password',
-    group: 'expedia',
-    getValue: p => cred(p).expediaSecondaryPassword ?? ''
-  },
-  {
-    code: 'need_another_domain',
-    header: 'Need another Domain',
-    group: 'expedia',
-    getValue: p => formatYesNo(p.need_another_domain)
-  },
-  {
-    code: 'booking_id',
-    header: 'Booking ID',
-    group: 'booking',
-    getValue: p => formatCell(p.booking_id)
-  },
-  {
-    code: 'booking_priority',
-    header: 'Booking Priority',
-    group: 'booking',
-    getValue: p => p.booking_priority ?? ''
-  },
-  {
-    code: 'booking_service_type',
-    header: 'Booking Service Type',
-    group: 'booking',
-    getValue: p => p.booking_service_type?.type ?? ''
-  },
-  {
-    code: 'booking_service_fee',
-    header: 'Booking Service Fee',
-    group: 'booking',
-    getValue: p => formatCell(p.booking_service_fee)
-  },
-  {
-    code: 'booking_frequency',
-    header: 'Booking Frequency',
-    group: 'booking',
-    getValue: p => p.booking_frequency?.name ?? ''
-  },
-  {
-    code: 'booking_historical_review',
-    header: 'Booking Historical Review',
-    group: 'booking',
-    getValue: p => formatDateRange(p.booking_from, p.booking_to)
-  },
-  {
-    code: 'booking_crs',
-    header: 'Booking CRS',
-    group: 'booking',
-    getValue: p => p.booking_crs ?? ''
-  },
-  {
-    code: 'booking_run_date',
-    header: 'Booking Run Date',
-    group: 'booking',
-    getValue: p => formatExportDate(p.booking_run_date)
-  },
-  {
-    code: 'booking_processor',
-    header: 'Booking Processor',
-    group: 'booking',
-    getValue: p => p.booking_processor?.name ?? ''
-  },
-  {
-    code: 'userNameBooking',
-    header: 'User Name Booking',
-    group: 'booking',
-    getValue: p => cred(p).bookingUsername ?? ''
-  },
-  {
-    code: 'passwordBooking',
-    header: 'Password Booking',
-    group: 'booking',
-    getValue: p => cred(p).bookingPassword ?? ''
-  },
-  {
-    code: 'booking_otp_phone',
-    header: 'Booking OTP Phone Number',
-    group: 'booking',
-    getValue: p => p.booking_otp_phone ?? ''
-  },
-  {
-    code: 'agoda_id',
-    header: 'Agoda ID',
-    group: 'agoda',
-    getValue: p => formatCell(p.agoda_id)
-  },
-  {
-    code: 'agoda_priority',
-    header: 'Agoda Priority',
-    group: 'agoda',
-    getValue: p => p.agoda_priority ?? ''
-  },
-  {
-    code: 'agoda_service_type',
-    header: 'Agoda Service Type',
-    group: 'agoda',
-    getValue: p => p.agoda_service_type?.type ?? ''
-  },
-  {
-    code: 'agoda_service_fee',
-    header: 'Agoda Service Fee',
-    group: 'agoda',
-    getValue: p => formatCell(p.agoda_service_fee)
-  },
-  {
-    code: 'agoda_frequency',
-    header: 'Agoda Frequency',
-    group: 'agoda',
-    getValue: p => p.agoda_frequency?.name ?? ''
-  },
-  {
-    code: 'agoda_historical_review',
-    header: 'Agoda Historical Review',
-    group: 'agoda',
-    getValue: p => formatDateRange(p.agoda_from, p.agoda_to)
-  },
-  {
-    code: 'agoda_crs',
-    header: 'Agoda CRS',
-    group: 'agoda',
-    getValue: p => p.agoda_crs ?? ''
-  },
-  {
-    code: 'agoda_run_date',
-    header: 'Agoda Run Date',
-    group: 'agoda',
-    getValue: p => formatExportDate(p.agoda_run_date)
-  },
-  {
-    code: 'agoda_processor',
-    header: 'Agoda Processor',
-    group: 'agoda',
-    getValue: p => p.agoda_processor?.name ?? ''
-  },
-  {
-    code: 'userNameAgoda',
-    header: 'User Name Agoda',
-    group: 'agoda',
-    getValue: p => cred(p).agodaUsername ?? ''
-  },
-  {
-    code: 'passwordAgoda',
-    header: 'Password Agoda',
-    group: 'agoda',
-    getValue: p => cred(p).agodaPassword ?? ''
-  },
-  {
-    code: 'agoda_otp_number',
-    header: 'Agoda OTP Number',
-    group: 'agoda',
-    getValue: p => p.agoda_otp_number ?? ''
-  },
-  {
-    code: 'hotel_address',
-    header: 'Hotel Address',
-    group: 'contact',
-    getValue: p => p.hotel_address ?? ''
-  },
-  {
-    code: 'portfolio_contact_email',
-    header: 'Portfolio Contact Email',
-    group: 'contact',
-    getValue: p => p.portfolio_contact_email ?? ''
-  },
-  {
-    code: 'reporting_contact',
-    header: 'Reporting Contact',
-    group: 'contact',
-    getValue: p => p.reporting_contact ?? ''
-  },
-  {
-    code: 'primary_case_email',
-    header: 'Case Contact Email',
-    group: 'contact',
-    getValue: p => p.primary_case_email ?? ''
-  },
-  {
-    code: 'access_contact',
-    header: 'Access Contact',
-    group: 'contact',
-    getValue: p => p.access_contact ?? ''
-  },
-  {
-    code: 'discontinued_email_ids',
-    header: 'Discontinued Email IDs',
-    group: 'contact',
-    getValue: p =>
-      Array.isArray(p.discontinued_email_ids)
-        ? p.discontinued_email_ids.filter(Boolean).join(', ')
-        : (p.discontinued_email_ids ?? '')
-  },
-  {
-    code: 'card_descriptor',
-    header: 'Card Descriptor',
-    group: 'contact',
-    getValue: p => p.card_descriptor ?? ''
-  },
-  {
-    code: 'qp_username',
-    header: 'QP Username',
-    group: 'contact',
-    getValue: p => p.qp_username ?? ''
-  },
-  {
-    code: 'qp_password',
-    header: 'QP Password',
-    group: 'contact',
-    getValue: p => p.qp_password ?? ''
-  },
-  {
-    code: 'fp_username',
-    header: 'FP User Name',
-    group: 'contact',
-    getValue: p => p.fp_username ?? ''
-  },
-  {
-    code: 'fp_password',
-    header: 'FP Password',
-    group: 'contact',
-    getValue: p => p.fp_password ?? ''
-  },
-  {
-    code: 'sales_rep',
-    header: 'Sales Rep',
-    group: 'contact',
-    getValue: p => p.sales_rep ?? ''
-  },
-  {
-    code: 'cybersource_mid',
-    header: 'Cybersource MID',
-    group: 'contact',
-    getValue: p => p.cybersource_mid ?? ''
-  },
-  {
-    code: 'adyen_location',
-    header: 'Adyen Location',
-    group: 'contact',
-    getValue: p => p.adyen_location ?? ''
-  },
-  {
-    code: 'stripe_connected_email',
-    header: 'Stripe Connected Email',
-    group: 'contact',
-    getValue: p => p.stripe_connected_email ?? ''
-  },
-  {
-    code: 'currency',
-    header: 'Currency',
-    group: 'contact',
-    getValue: p => p.currency?.code ?? p.currency?.name ?? ''
-  }
-] as const
+  singleCol('portfolio_id', 'Portfolio', 'general', p => p.portfolio?.name ?? ''),
+  singleCol(
+    'subportfolio_id',
+    'Sub-Portfolio',
+    'general',
+    p => p.subportfolio?.name ?? ''
+  ),
+  singleCol(
+    'service_type',
+    'Service Type',
+    'general',
+    p => p.service_type?.type ?? ''
+  ),
+  singleCol('name', 'Property Name', 'general', p => p.name ?? ''),
+  singleCol(
+    'property_identifier',
+    'Property Identifier',
+    'general',
+    p => p.property_identifier ?? ''
+  ),
+  multiCol('ota_access_levels', [
+    sheetCol('Expedia Access Level', 'general', p =>
+      formatYesNo(p.expedia_access_level)
+    ),
+    sheetCol('Booking Access Level', 'general', p =>
+      formatYesNo(p.booking_access_level)
+    ),
+    sheetCol('Agoda Access Level', 'general', p =>
+      formatYesNo(p.agoda_access_level)
+    )
+  ]),
+  multiCol('ota_credentials_verified', [
+    sheetCol('Expedia Credential Verified', 'general', p =>
+      formatYesNo(p.expedia_credential_verified)
+    ),
+    sheetCol('Booking Credential Verified', 'general', p =>
+      formatYesNo(p.booking_credential_verified)
+    ),
+    sheetCol('Agoda Credential Verified', 'general', p =>
+      formatYesNo(p.agoda_credential_verified)
+    )
+  ]),
+  singleCol('expedia_id', 'Expedia ID', 'expedia', p => formatCell(p.expedia_id)),
+  singleCol(
+    'expedia_priority',
+    'Expedia Priority',
+    'expedia',
+    p => p.expedia_priority ?? ''
+  ),
+  singleCol(
+    'expedia_billing_type',
+    'Expedia Billing Type',
+    'expedia',
+    p => p.expedia_billing_type?.name ?? ''
+  ),
+  singleCol(
+    'expedia_service_type',
+    'Expedia Service Type',
+    'expedia',
+    p => p.expedia_service_type?.type ?? ''
+  ),
+  singleCol('expedia_service_fee', 'Expedia Service Fee', 'expedia', p =>
+    formatCell(p.expedia_service_fee)
+  ),
+  singleCol(
+    'expedia_frequency',
+    'Expedia Frequency',
+    'expedia',
+    p => p.expedia_frequency?.name ?? ''
+  ),
+  multiCol('expedia_historical_review', [
+    sheetCol('Expedia Historical From', 'expedia', p =>
+      formatExportDate(p.expedia_from)
+    ),
+    sheetCol('Expedia Historical To', 'expedia', p =>
+      formatExportDate(p.expedia_to)
+    )
+  ]),
+  multiCol('expedia_historical_review_db', [
+    sheetCol('DB Historical From', 'expedia', p => formatExportDate(p.from_db)),
+    sheetCol('DB Historical To', 'expedia', p => formatExportDate(p.to_db))
+  ]),
+  singleCol('expedia_crs', 'Expedia CRS', 'expedia', p => p.expedia_crs ?? ''),
+  singleCol(
+    'expedia_crs_db',
+    'Expedia CRS DB',
+    'expedia',
+    p => p.expedia_crs_db ?? ''
+  ),
+  singleCol('expedia_run_date', 'Expedia Run Date', 'expedia', p =>
+    formatExportDate(p.expedia_run_date)
+  ),
+  singleCol('expedia_run_date_db', 'Expedia Run Date DB', 'expedia', p =>
+    formatExportDate(p.expedia_run_date_db)
+  ),
+  singleCol(
+    'expedia_processor',
+    'Expedia Processor',
+    'expedia',
+    p => p.expedia_processor?.name ?? ''
+  ),
+  singleCol(
+    'expedia_otp_number',
+    'Expedia OTP Number',
+    'expedia',
+    p => p.expedia_otp_number ?? ''
+  ),
+  singleCol('userNameExpedia', 'User Name Expedia', 'expedia', p =>
+    cred(p).expediaUsername ?? ''
+  ),
+  singleCol('passwordExpedia', 'Password Expedia', 'expedia', p =>
+    cred(p).expediaPassword ?? ''
+  ),
+  singleCol(
+    'expedia_secondary_username',
+    'Expedia Secondary User Name',
+    'expedia',
+    p => cred(p).expediaSecondaryUsername ?? ''
+  ),
+  singleCol(
+    'expedia_secondary_password',
+    'Expedia Secondary Password',
+    'expedia',
+    p => cred(p).expediaSecondaryPassword ?? ''
+  ),
+  singleCol('need_another_domain', 'Need another Domain', 'expedia', p =>
+    formatYesNo(p.need_another_domain)
+  ),
+  singleCol('booking_id', 'Booking ID', 'booking', p => formatCell(p.booking_id)),
+  singleCol(
+    'booking_priority',
+    'Booking Priority',
+    'booking',
+    p => p.booking_priority ?? ''
+  ),
+  singleCol(
+    'booking_service_type',
+    'Booking Service Type',
+    'booking',
+    p => p.booking_service_type?.type ?? ''
+  ),
+  singleCol('booking_service_fee', 'Booking Service Fee', 'booking', p =>
+    formatCell(p.booking_service_fee)
+  ),
+  singleCol(
+    'booking_frequency',
+    'Booking Frequency',
+    'booking',
+    p => p.booking_frequency?.name ?? ''
+  ),
+  multiCol('booking_historical_review', [
+    sheetCol('Booking Historical From', 'booking', p =>
+      formatExportDate(p.booking_from)
+    ),
+    sheetCol('Booking Historical To', 'booking', p =>
+      formatExportDate(p.booking_to)
+    )
+  ]),
+  singleCol('booking_crs', 'Booking CRS', 'booking', p => p.booking_crs ?? ''),
+  singleCol('booking_run_date', 'Booking Run Date', 'booking', p =>
+    formatExportDate(p.booking_run_date)
+  ),
+  singleCol(
+    'booking_processor',
+    'Booking Processor',
+    'booking',
+    p => p.booking_processor?.name ?? ''
+  ),
+  singleCol('userNameBooking', 'User Name Booking', 'booking', p =>
+    cred(p).bookingUsername ?? ''
+  ),
+  singleCol('passwordBooking', 'Password Booking', 'booking', p =>
+    cred(p).bookingPassword ?? ''
+  ),
+  singleCol(
+    'booking_otp_phone',
+    'Booking OTP Phone Number',
+    'booking',
+    p => p.booking_otp_phone ?? ''
+  ),
+  singleCol('agoda_id', 'Agoda ID', 'agoda', p => formatCell(p.agoda_id)),
+  singleCol(
+    'agoda_priority',
+    'Agoda Priority',
+    'agoda',
+    p => p.agoda_priority ?? ''
+  ),
+  singleCol(
+    'agoda_service_type',
+    'Agoda Service Type',
+    'agoda',
+    p => p.agoda_service_type?.type ?? ''
+  ),
+  singleCol('agoda_service_fee', 'Agoda Service Fee', 'agoda', p =>
+    formatCell(p.agoda_service_fee)
+  ),
+  singleCol(
+    'agoda_frequency',
+    'Agoda Frequency',
+    'agoda',
+    p => p.agoda_frequency?.name ?? ''
+  ),
+  multiCol('agoda_historical_review', [
+    sheetCol('Agoda Historical From', 'agoda', p =>
+      formatExportDate(p.agoda_from)
+    ),
+    sheetCol('Agoda Historical To', 'agoda', p => formatExportDate(p.agoda_to))
+  ]),
+  singleCol('agoda_crs', 'Agoda CRS', 'agoda', p => p.agoda_crs ?? ''),
+  singleCol('agoda_run_date', 'Agoda Run Date', 'agoda', p =>
+    formatExportDate(p.agoda_run_date)
+  ),
+  singleCol(
+    'agoda_processor',
+    'Agoda Processor',
+    'agoda',
+    p => p.agoda_processor?.name ?? ''
+  ),
+  singleCol('userNameAgoda', 'User Name Agoda', 'agoda', p =>
+    cred(p).agodaUsername ?? ''
+  ),
+  singleCol('passwordAgoda', 'Password Agoda', 'agoda', p =>
+    cred(p).agodaPassword ?? ''
+  ),
+  singleCol(
+    'agoda_otp_number',
+    'Agoda OTP Number',
+    'agoda',
+    p => p.agoda_otp_number ?? ''
+  ),
+  singleCol(
+    'hotel_address',
+    'Hotel Address',
+    'contact',
+    p => p.hotel_address ?? ''
+  ),
+  singleCol(
+    'portfolio_contact_email',
+    'Portfolio Contact Email',
+    'contact',
+    p => p.portfolio_contact_email ?? ''
+  ),
+  singleCol(
+    'reporting_contact',
+    'Reporting Contact',
+    'contact',
+    p => p.reporting_contact ?? ''
+  ),
+  singleCol(
+    'primary_case_email',
+    'Case Contact Email',
+    'contact',
+    p => p.primary_case_email ?? ''
+  ),
+  singleCol(
+    'access_contact',
+    'Access Contact',
+    'contact',
+    p => p.access_contact ?? ''
+  ),
+  singleCol('discontinued_email_ids', 'Discontinued Email IDs', 'contact', p =>
+    Array.isArray(p.discontinued_email_ids)
+      ? p.discontinued_email_ids.filter(Boolean).join(', ')
+      : (p.discontinued_email_ids ?? '')
+  ),
+  singleCol(
+    'card_descriptor',
+    'Card Descriptor',
+    'contact',
+    p => p.card_descriptor ?? ''
+  ),
+  singleCol('qp_username', 'QP Username', 'contact', p => p.qp_username ?? ''),
+  singleCol('qp_password', 'QP Password', 'contact', p => p.qp_password ?? ''),
+  singleCol('fp_username', 'FP User Name', 'contact', p => p.fp_username ?? ''),
+  singleCol('fp_password', 'FP Password', 'contact', p => p.fp_password ?? ''),
+  singleCol('sales_rep', 'Sales Rep', 'contact', p => p.sales_rep ?? ''),
+  singleCol(
+    'cybersource_mid',
+    'Cybersource MID',
+    'contact',
+    p => p.cybersource_mid ?? ''
+  ),
+  singleCol(
+    'adyen_location',
+    'Adyen Location',
+    'contact',
+    p => p.adyen_location ?? ''
+  ),
+  singleCol(
+    'stripe_connected_email',
+    'Stripe Connected Email',
+    'contact',
+    p => p.stripe_connected_email ?? ''
+  ),
+  singleCol(
+    'currency',
+    'Currency',
+    'contact',
+    p => p.currency?.code ?? p.currency?.name ?? ''
+  )
+]
 
 const PROPERTY_EXPORT_COLUMN_BY_CODE = new Map(
   PROPERTY_EXPORT_COLUMNS.map(col => [col.code, col])
@@ -635,22 +545,31 @@ export const PROPERTY_EXPORT_COLUMN_CODES = PROPERTY_EXPORT_COLUMNS.map(
   c => c.code
 )
 
-/** Headers in default export order (kept for callers that need the full list). */
-export const PROPERTY_EXCEL_HEADERS = PROPERTY_EXPORT_COLUMNS.map(c => c.header)
+function flattenExportSheetColumns(
+  defs: readonly PropertyExportColumnDef[]
+): PropertyExportSheetColumn[] {
+  return defs.flatMap(def => def.columns)
+}
+
+/** Headers in default export order (expanded composites). */
+export const PROPERTY_EXCEL_HEADERS = flattenExportSheetColumns(
+  PROPERTY_EXPORT_COLUMNS
+).map(c => c.header)
 
 /**
- * Resolves requested column codes to export defs.
+ * Resolves requested column codes to physical Excel sheet columns.
+ * Composite codes expand (e.g. ota_access_levels → 3 columns).
  * Omitted / null / empty array → all columns.
  * Unknown codes are ignored; order follows the request when codes are provided.
  */
 export function resolvePropertyExportColumns(
   columnCodes?: string[] | null
-): PropertyExportColumnDef[] {
+): PropertyExportSheetColumn[] {
   if (!columnCodes || columnCodes.length === 0) {
-    return [...PROPERTY_EXPORT_COLUMNS]
+    return flattenExportSheetColumns(PROPERTY_EXPORT_COLUMNS)
   }
 
-  const resolved: PropertyExportColumnDef[] = []
+  const resolvedDefs: PropertyExportColumnDef[] = []
   const seen = new Set<string>()
   for (const code of columnCodes) {
     if (seen.has(code)) continue
@@ -659,13 +578,16 @@ export function resolvePropertyExportColumns(
     )
     if (!def) continue
     seen.add(code)
-    resolved.push(def)
+    resolvedDefs.push(def)
   }
 
-  return resolved.length > 0 ? resolved : [...PROPERTY_EXPORT_COLUMNS]
+  const flattened = flattenExportSheetColumns(
+    resolvedDefs.length > 0 ? resolvedDefs : PROPERTY_EXPORT_COLUMNS
+  )
+  return flattened
 }
 
-function headerCellStyle(group: PropertyExportColumnDef['group']) {
+function headerCellStyle(group: ExportHeaderGroup) {
   const bg = HEADER_GROUP_COLORS[group]
   if (!bg) return HEADER_CELL_STYLE
   return {
