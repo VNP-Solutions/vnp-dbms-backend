@@ -1837,6 +1837,28 @@ export class ExportPropertyExcelDto extends PropertyFilterDto {
   // page and limit are not applicable for export — all matching records are always returned
   declare page?: never
   declare limit?: never
+
+  @ApiPropertyOptional({
+    description:
+      'Column codes to include in the Excel export. Omitted, null, or [] exports all columns. Unknown codes are ignored. Order of codes is preserved in the sheet.',
+    type: [String],
+    example: [
+      'portfolio_id',
+      'name',
+      'property_identifier',
+      'expedia_id',
+      'booking_id',
+      'agoda_id'
+    ]
+  })
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === null || value === undefined) return undefined
+    return value
+  })
+  @IsArray()
+  @IsString({ each: true })
+  columns?: string[] | null
 }
 
 export class SyncByOtaDto {
