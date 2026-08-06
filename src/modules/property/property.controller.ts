@@ -412,15 +412,29 @@ export class PropertyController {
   @ApiOperation({
     summary: 'Export filtered properties to Excel and send via email',
     description:
-      'Generates an Excel (.xlsx) file from the filtered property list and emails it to the authenticated user\'s email address. All filters are optional — send an empty body {} to export everything. Pagination (page/limit) is ignored; all matching records are always exported. Credentials are masked by default; set masked=false with user_name and user_password to include decrypted values.'
+      'Generates an Excel (.xlsx) file from the filtered property list and emails it to the authenticated user\'s email address. All filters are optional — send an empty body {} to export everything. Pagination (page/limit) is ignored; all matching records are always exported. Pass `columns` as an array of column codes to include only those columns; omit, null, or [] to export all columns. Credentials are masked by default; set masked=false with user_name and user_password to include decrypted values.'
   })
   @ApiBody({
     type: ExportPropertyExcelDto,
-    description: 'All fields optional. Send {} to export all properties.',
+    description: 'All fields optional. Send {} to export all properties with all columns.',
     examples: {
       'Export all': {
-        summary: 'No filters — export every property',
+        summary: 'No filters — export every property with all columns',
         value: {}
+      },
+      'Selected columns': {
+        summary: 'Export only the requested columns',
+        value: {
+          columns: [
+            'portfolio_id',
+            'name',
+            'property_identifier',
+            'expedia_id',
+            'booking_id',
+            'agoda_id',
+            'currency'
+          ]
+        }
       },
       'Active only + date range': {
         summary: 'Active properties created within a date range',
@@ -444,6 +458,7 @@ export class PropertyController {
           masked: false,
           user_name: 'admin@vnp.com',
           user_password: 'secret',
+          columns: ['portfolio_id', 'name', 'expedia_id', 'booking_id'],
           filters: [
             { name: 'portfolio_id',         in: ['507f1f77bcf86cd799439011'] },
             { name: 'subportfolio_id',       in: ['507f1f77bcf86cd799439012'] },

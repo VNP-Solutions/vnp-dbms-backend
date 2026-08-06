@@ -26,7 +26,7 @@ async function bootstrap() {
   )
 
   app.setGlobalPrefix('api', {
-    exclude: ['/']
+    exclude: ['/', 'auth', 'oauth2callback']
   })
 
   app.useGlobalPipes(

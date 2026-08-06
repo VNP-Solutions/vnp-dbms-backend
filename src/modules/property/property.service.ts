@@ -1762,8 +1762,9 @@ export class PropertyService implements IPropertyService {
     })
     const properties = raw.map(p => this.decryptCredentialsForResponse(p))
 
-    const rows = properties.map(p => mapPropertyToExcelRow(p))
-    const buffer = writePropertyExportBuffer(rows)
+    const columnCodes = dto.columns
+    const rows = properties.map(p => mapPropertyToExcelRow(p, columnCodes))
+    const buffer = writePropertyExportBuffer(rows, columnCodes)
 
     const filename = `properties-export-${new Date().toISOString().slice(0, 10)}.xlsx`
 
