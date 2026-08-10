@@ -70,6 +70,10 @@ export interface Configuration {
   scraperServiceToken: string
   syncTimeoutMs: number
   serviceToken: string
+  /// This DBMS backend's own reachable base URL (used ONLY to build the
+  /// sync-callback URL that dashboard/scraper POST their results to).
+  /// Separate from PUBLIC_API_URL (used for cookie-domain resolution).
+  dbmsApiUrl: string
   runDateCapacity: {
     expedia: number
     booking: number
@@ -173,14 +177,17 @@ export default (): Configuration => {
       lambdaPlatform: process.env.EXPEDIA_CHECK_LAMBDA_PLATFORM || 'expedia'
     },
     agodaCheck: {
-    queueUrl: process.env.AGODA_CHECK_QUEUE_URL || process.env.EXPEDIA_CHECK_QUEUE_URL || '',
-    lambdaFunctionName:
-      process.env.AGODA_CHECK_LAMBDA_FUNCTION_NAME ||
-      process.env.EXPEDIA_CHECK_LAMBDA_FUNCTION_NAME ||
-      '',
-    lambdaPlatform: process.env.AGODA_CHECK_LAMBDA_PLATFORM || 'agoda'
-  },
-  redis: {
+      queueUrl:
+        process.env.AGODA_CHECK_QUEUE_URL ||
+        process.env.EXPEDIA_CHECK_QUEUE_URL ||
+        '',
+      lambdaFunctionName:
+        process.env.AGODA_CHECK_LAMBDA_FUNCTION_NAME ||
+        process.env.EXPEDIA_CHECK_LAMBDA_FUNCTION_NAME ||
+        '',
+      lambdaPlatform: process.env.AGODA_CHECK_LAMBDA_PLATFORM || 'agoda'
+    },
+    redis: {
       host: process.env.REDIS_HOST || 'localhost',
       port: parseInt(process.env.REDIS_PORT || '6379', 10),
       password: process.env.REDIS_PASSWORD || undefined,
@@ -191,10 +198,11 @@ export default (): Configuration => {
     scraperServiceToken: process.env.SCRAPER_SERVICE_TOKEN || '',
     syncTimeoutMs: parseInt(process.env.SYNC_TIMEOUT_MS || '15000', 10),
     serviceToken: process.env.SERVICE_TOKEN || '',
+    dbmsApiUrl: process.env.DBMS_API_URL || '',
     runDateCapacity: {
-      expedia:   parseInt(process.env.EXPEDIA_CAPACITY    || '5', 10),
-      booking:   parseInt(process.env.BOOKING_CAPACITY    || '5', 10),
-      agoda:     parseInt(process.env.AGODA_CAPACITY      || '5', 10),
+      expedia: parseInt(process.env.EXPEDIA_CAPACITY || '5', 10),
+      booking: parseInt(process.env.BOOKING_CAPACITY || '5', 10),
+      agoda: parseInt(process.env.AGODA_CAPACITY || '5', 10),
       expediaDb: parseInt(process.env.EXPEDIA_DB_CAPACITY || '5', 10)
     },
     cookies: {

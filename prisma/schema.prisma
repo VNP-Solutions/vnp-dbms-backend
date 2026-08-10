@@ -44,8 +44,6 @@ enum AccessLevel {
   none
 }
 
-
-
 model User {
   id                 String    @id @default(auto()) @map("_id") @db.ObjectId
   first_name         String
@@ -249,20 +247,20 @@ model UserAccessedProperty {
 }
 
 model ServiceType {
-  id         String      @id @default(auto()) @map("_id") @db.ObjectId
-  type       String      @unique
-  is_active  Boolean
-  order      Int         @default(0)
+  id        String  @id @default(auto()) @map("_id") @db.ObjectId
+  type      String  @unique
+  is_active Boolean
+  order     Int     @default(0)
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
   // Back-relations
-  portfolios                Portfolio[]
-  properties                Property[]  @relation("PropertyServiceType")
-  expedia_properties        Property[]  @relation("PropertyExpediaServiceType")
-  booking_properties        Property[]  @relation("PropertyBookingServiceType")
-  agoda_properties          Property[]  @relation("PropertyAgodaServiceType")
+  portfolios         Portfolio[]
+  properties         Property[]  @relation("PropertyServiceType")
+  expedia_properties Property[]  @relation("PropertyExpediaServiceType")
+  booking_properties Property[]  @relation("PropertyBookingServiceType")
+  agoda_properties   Property[]  @relation("PropertyAgodaServiceType")
 
   @@index([is_active])
   @@index([order])
@@ -335,17 +333,17 @@ model Subportfolio {
 }
 
 model Property {
-  id                    String        @id @default(auto()) @map("_id") @db.ObjectId
-  name                  String        @unique
-  card_descriptor       String?
-  is_active             Boolean       @default(true)
-  next_due_date         DateTime?
-  portfolio_id          String        @db.ObjectId
-  portfolio             Portfolio     @relation(fields: [portfolio_id], references: [id], onDelete: Cascade)
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  name            String    @unique
+  card_descriptor String?
+  is_active       Boolean   @default(true)
+  next_due_date   DateTime?
+  portfolio_id    String    @db.ObjectId
+  portfolio       Portfolio @relation(fields: [portfolio_id], references: [id], onDelete: Cascade)
 
   // Service Type
-  service_type_id       String?       @db.ObjectId
-  service_type          ServiceType?  @relation("PropertyServiceType", fields: [service_type_id], references: [id])
+  service_type_id String?      @db.ObjectId
+  service_type    ServiceType? @relation("PropertyServiceType", fields: [service_type_id], references: [id])
 
   currency_id           String?       @db.ObjectId
   currency              Currency?     @relation("PropertyCurrency", fields: [currency_id], references: [id])
@@ -372,12 +370,12 @@ model Property {
   reporting_contact       String?
 
   // OTA Processors
-  expedia_processor_id  String?    @db.ObjectId
-  expedia_processor     Processor? @relation("PropertyExpediaProcessor", fields: [expedia_processor_id], references: [id])
-  booking_processor_id  String?    @db.ObjectId
-  booking_processor     Processor? @relation("PropertyBookingProcessor", fields: [booking_processor_id], references: [id])
-  agoda_processor_id    String?    @db.ObjectId
-  agoda_processor       Processor? @relation("PropertyAgodaProcessor", fields: [agoda_processor_id], references: [id])
+  expedia_processor_id String?    @db.ObjectId
+  expedia_processor    Processor? @relation("PropertyExpediaProcessor", fields: [expedia_processor_id], references: [id])
+  booking_processor_id String?    @db.ObjectId
+  booking_processor    Processor? @relation("PropertyBookingProcessor", fields: [booking_processor_id], references: [id])
+  agoda_processor_id   String?    @db.ObjectId
+  agoda_processor      Processor? @relation("PropertyAgodaProcessor", fields: [agoda_processor_id], references: [id])
 
   // Date Range Fields (legacy)
   from String?
@@ -401,73 +399,73 @@ model Property {
   agoda_status   String?
 
   // Expedia integration detail
-  expedia_billing_type_id   String?      @db.ObjectId
-  expedia_billing_type      BillingType? @relation("PropertyExpediaBillingType", fields: [expedia_billing_type_id], references: [id])
-  expedia_service_type_id   String?      @db.ObjectId
-  expedia_service_type      ServiceType? @relation("PropertyExpediaServiceType", fields: [expedia_service_type_id], references: [id])
-  expedia_frequency_id      String?      @db.ObjectId
-  expedia_frequency         Frequency?   @relation("PropertyExpediaFrequency", fields: [expedia_frequency_id], references: [id])
-  expedia_access_level      Boolean?
-  expedia_from              String?
-  expedia_to                String?
-  expedia_scheduler         Boolean?
-  expedia_duration          Int?
-  expedia_service_fee       Int?
-  expedia_crs               String?
-  expedia_crs_db            String?
-  expedia_run_date          String?
-  expedia_run_date_db       String?
-  expedia_revised_date         String?
+  expedia_billing_type_id          String?      @db.ObjectId
+  expedia_billing_type             BillingType? @relation("PropertyExpediaBillingType", fields: [expedia_billing_type_id], references: [id])
+  expedia_service_type_id          String?      @db.ObjectId
+  expedia_service_type             ServiceType? @relation("PropertyExpediaServiceType", fields: [expedia_service_type_id], references: [id])
+  expedia_frequency_id             String?      @db.ObjectId
+  expedia_frequency                Frequency?   @relation("PropertyExpediaFrequency", fields: [expedia_frequency_id], references: [id])
+  expedia_access_level             Boolean?
+  expedia_from                     String?
+  expedia_to                       String?
+  expedia_scheduler                Boolean?
+  expedia_duration                 Int?
+  expedia_service_fee              Int?
+  expedia_crs                      String?
+  expedia_crs_db                   String?
+  expedia_run_date                 String?
+  expedia_run_date_db              String?
+  expedia_revised_date             String?
   expedia_scheduler_review_from    String?
   expedia_scheduler_review_to      String?
-  expedia_scheduler_db              String?
+  expedia_scheduler_db             String?
   expedia_scheduler_review_db_from String?
   expedia_scheduler_review_db_to   String?
-  expedia_db_duration         Int?
-  expedia_credential_verified Boolean?
-  expedia_otp_number          String?
-  from_db                     String?
-  to_db                       String?
+  expedia_db_duration              Int?
+  expedia_credential_verified      Boolean?
+  expedia_otp_number               String?
+  from_db                          String?
+  to_db                            String?
 
   // Booking.com integration detail
-  booking_billing_type_id   String?      @db.ObjectId
-  booking_billing_type      BillingType? @relation("PropertyBookingBillingType", fields: [booking_billing_type_id], references: [id])
-  booking_service_type_id   String?      @db.ObjectId
-  booking_service_type      ServiceType? @relation("PropertyBookingServiceType", fields: [booking_service_type_id], references: [id])
-  booking_frequency_id      String?      @db.ObjectId
-  booking_frequency         Frequency?   @relation("PropertyBookingFrequency", fields: [booking_frequency_id], references: [id])
-  booking_access_level      Boolean?
-  booking_from              String?
-  booking_to                String?
-  booking_scheduler         Boolean?
-  booking_duration          Int?
-  booking_service_fee       Int?
-  booking_crs               String?
-  booking_run_date          String?
-  booking_revised_date      String?
+  booking_billing_type_id     String?      @db.ObjectId
+  booking_billing_type        BillingType? @relation("PropertyBookingBillingType", fields: [booking_billing_type_id], references: [id])
+  booking_service_type_id     String?      @db.ObjectId
+  booking_service_type        ServiceType? @relation("PropertyBookingServiceType", fields: [booking_service_type_id], references: [id])
+  booking_frequency_id        String?      @db.ObjectId
+  booking_frequency           Frequency?   @relation("PropertyBookingFrequency", fields: [booking_frequency_id], references: [id])
+  booking_access_level        Boolean?
+  booking_from                String?
+  booking_to                  String?
+  booking_scheduler           Boolean?
+  booking_duration            Int?
+  booking_service_fee         Int?
+  booking_crs                 String?
+  booking_run_date            String?
+  booking_revised_date        String?
   booking_credential_verified Boolean?
   booking_otp_number          String?
 
   // Agoda integration detail
-  agoda_billing_type_id   String?      @db.ObjectId
-  agoda_billing_type      BillingType? @relation("PropertyAgodaBillingType", fields: [agoda_billing_type_id], references: [id])
-  agoda_service_type_id   String?      @db.ObjectId
-  agoda_service_type      ServiceType? @relation("PropertyAgodaServiceType", fields: [agoda_service_type_id], references: [id])
-  agoda_frequency_id      String?      @db.ObjectId
-  agoda_frequency         Frequency?   @relation("PropertyAgodaFrequency", fields: [agoda_frequency_id], references: [id])
-  agoda_access_level      Boolean?
-  agoda_from              String?
-  agoda_to                String?
-  agoda_scheduler         Boolean?
-  agoda_duration          Int?
-  agoda_service_fee       Int?
-  agoda_crs               String?
-  agoda_run_date          String?
-  agoda_revised_date      String?
+  agoda_billing_type_id     String?      @db.ObjectId
+  agoda_billing_type        BillingType? @relation("PropertyAgodaBillingType", fields: [agoda_billing_type_id], references: [id])
+  agoda_service_type_id     String?      @db.ObjectId
+  agoda_service_type        ServiceType? @relation("PropertyAgodaServiceType", fields: [agoda_service_type_id], references: [id])
+  agoda_frequency_id        String?      @db.ObjectId
+  agoda_frequency           Frequency?   @relation("PropertyAgodaFrequency", fields: [agoda_frequency_id], references: [id])
+  agoda_access_level        Boolean?
+  agoda_from                String?
+  agoda_to                  String?
+  agoda_scheduler           Boolean?
+  agoda_duration            Int?
+  agoda_service_fee         Int?
+  agoda_crs                 String?
+  agoda_run_date            String?
+  agoda_revised_date        String?
   agoda_credential_verified Boolean?
   agoda_otp_number          String?
 
-  sales_rep   String?
+  sales_rep String?
 
   // Payment gateway fields
   discontinued_email_ids String[] @default([])
@@ -502,6 +500,7 @@ model Property {
   @@index([expedia_id])
   @@index([booking_id])
   @@index([agoda_id])
+  @@index([property_identifier])
 }
 
 model UserFeatureAccessPermission {
@@ -613,9 +612,9 @@ model BillingType {
   updated_at DateTime @updatedAt
 
   // Back-relations
-  expedia_properties  Property[] @relation("PropertyExpediaBillingType")
-  booking_properties  Property[] @relation("PropertyBookingBillingType")
-  agoda_properties    Property[] @relation("PropertyAgodaBillingType")
+  expedia_properties Property[] @relation("PropertyExpediaBillingType")
+  booking_properties Property[] @relation("PropertyBookingBillingType")
+  agoda_properties   Property[] @relation("PropertyAgodaBillingType")
 
   @@index([is_active])
   @@index([order])
@@ -645,9 +644,9 @@ model Frequency {
   updated_at DateTime @updatedAt
 
   // Back-relations
-  expedia_properties  Property[] @relation("PropertyExpediaFrequency")
-  booking_properties  Property[] @relation("PropertyBookingFrequency")
-  agoda_properties    Property[] @relation("PropertyAgodaFrequency")
+  expedia_properties Property[] @relation("PropertyExpediaFrequency")
+  booking_properties Property[] @relation("PropertyBookingFrequency")
+  agoda_properties   Property[] @relation("PropertyAgodaFrequency")
 
   @@index([is_active])
   @@index([order])
@@ -662,9 +661,9 @@ model Processor {
   updated_at DateTime @updatedAt
 
   // Back-relations
-  expedia_properties  Property[] @relation("PropertyExpediaProcessor")
-  booking_properties  Property[] @relation("PropertyBookingProcessor")
-  agoda_properties    Property[] @relation("PropertyAgodaProcessor")
+  expedia_properties Property[] @relation("PropertyExpediaProcessor")
+  booking_properties Property[] @relation("PropertyBookingProcessor")
+  agoda_properties   Property[] @relation("PropertyAgodaProcessor")
 
   @@index([is_active])
   @@index([order])
@@ -723,11 +722,11 @@ model OtpStatus {
 }
 
 model ColumnTemplate {
-  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  id          String     @id @default(auto()) @map("_id") @db.ObjectId
   name        String
   column_list String[]
-  user_id     String   @db.ObjectId
-  user        User     @relation(fields: [user_id], references: [id])
+  user_id     String     @db.ObjectId
+  user        User       @relation(fields: [user_id], references: [id])
   roles       UserRole[]
 
   created_at DateTime @default(now())
@@ -754,4 +753,37 @@ model Note {
   @@index([user_id])
   @@index([portfolio_id])
   @@index([property_id])
+}
+
+/// Tracks an async bulk property sync (import / bulk-update) so the email
+/// report can be assembled once both the dashboard and scraper call back.
+/// Replaces the previous synchronous "wait for all syncs then email" flow:
+/// the DBMS now responds to the caller immediately after its own import,
+/// dispatches the sync in the background, and sends the email only when all
+/// expected sources have reported (or the sweeper gives up on stale ones).
+model SyncBatch {
+  id           String    @id @default(auto()) @map("_id") @db.ObjectId
+  batch_id     String    @unique
+  status       String    @default("pending") // pending | partial | complete | failed
+  source       String // "import" | "bulk-update"
+  user_email   String
+  filename     String
+  /// Compact per-row context keyed by property parent_id:
+  /// { [parentId]: { row, action, name, identifier, portfolioName, expediaId, bookingId, agodaId, hasPortfolioId } }
+  rows         Json
+  /// Rows skipped during DBMS import (DBMS = NO): [{ row, name, reason }]
+  skipped_rows Json      @default("[]")
+  expected      String[]  @default(["dashboard", "scraper"])
+  /// Received results keyed by source: { dashboard: {...}, scraper: {...} }
+  received      Json      @default("{}")
+  /// DBMS-side import/update summary, filled once importFromExcel finishes:
+  /// { status: "importing"|"imported"|"failed", created, existing, skipped, total, error? }
+  dbms_summary  Json      @default("{}")
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+  completed_at  DateTime?
+
+  @@index([status])
+  @@index([created_at])
+  @@map("sync_batches")
 }
