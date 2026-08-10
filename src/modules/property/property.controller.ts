@@ -54,7 +54,8 @@ import {
   SyncBulkDeleteBodyDto,
   TransferPropertyDto,
   SyncByOtaDto,
-  UpdatePropertyDto,
+  SyncCallbackDto,
+  UpdatePropertyDto
 } from './property.dto'
 import type { IPropertyService } from './property.interface'
 import { ServiceTokenGuard } from './guards/service-token.guard'
@@ -196,7 +197,8 @@ export class PropertyController {
     `
   })
   @ApiBody({
-    description: 'Excel (.xlsx/.xls) or CSV file containing property update data',
+    description:
+      'Excel (.xlsx/.xls) or CSV file containing property update data',
     schema: {
       type: 'object',
       properties: {
@@ -210,7 +212,10 @@ export class PropertyController {
     description: 'Bulk update completed',
     type: BulkUpdateResultDto
   })
-  @ApiResponse({ status: 400, description: 'Bad Request — invalid file or missing required column' })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad Request — invalid file or missing required column'
+  })
   @ApiResponse({ status: 403, description: 'Forbidden' })
   bulkUpdate(
     @UploadedFile() file: Express.Multer.File,
@@ -231,7 +236,8 @@ export class PropertyController {
   })
   @ApiResponse({
     status: 200,
-    description: 'Paginated list of properties. When masked=false with invalid credentials, returns masked data with error message in metadata.error',
+    description:
+      'Paginated list of properties. When masked=false with invalid credentials, returns masked data with error message in metadata.error',
     schema: {
       type: 'object',
       properties: {
@@ -248,7 +254,8 @@ export class PropertyController {
             limit: { type: 'number' },
             error: {
               type: 'string',
-              description: 'Error message when credentials are invalid (e.g., "Invalid username or password")'
+              description:
+                'Error message when credentials are invalid (e.g., "Invalid username or password")'
             }
           }
         }
@@ -412,11 +419,12 @@ export class PropertyController {
   @ApiOperation({
     summary: 'Export filtered properties to Excel and send via email',
     description:
-      'Generates an Excel (.xlsx) file from the filtered property list and emails it to the authenticated user\'s email address. All filters are optional — send an empty body {} to export everything. Pagination (page/limit) is ignored; all matching records are always exported. Pass `columns` as an array of column codes to include only those columns; omit, null, or [] to export all columns. Credentials are masked by default; set masked=false with user_name and user_password to include decrypted values.'
+      "Generates an Excel (.xlsx) file from the filtered property list and emails it to the authenticated user's email address. All filters are optional — send an empty body {} to export everything. Pagination (page/limit) is ignored; all matching records are always exported. Pass `columns` as an array of column codes to include only those columns; omit, null, or [] to export all columns. Credentials are masked by default; set masked=false with user_name and user_password to include decrypted values."
   })
   @ApiBody({
     type: ExportPropertyExcelDto,
-    description: 'All fields optional. Send {} to export all properties with all columns.',
+    description:
+      'All fields optional. Send {} to export all properties with all columns.',
     examples: {
       'Export all': {
         summary: 'No filters — export every property with all columns',
@@ -449,7 +457,8 @@ export class PropertyController {
         value: { search: 'Grand Hotel' }
       },
       'All filters combined': {
-        summary: 'Every available filter field populated with representative values',
+        summary:
+          'Every available filter field populated with representative values',
         value: {
           search: 'Hotel',
           is_active: true,
@@ -460,61 +469,73 @@ export class PropertyController {
           user_password: 'secret',
           columns: ['portfolio_id', 'name', 'expedia_id', 'booking_id'],
           filters: [
-            { name: 'portfolio_id',         in: ['507f1f77bcf86cd799439011'] },
-            { name: 'subportfolio_id',       in: ['507f1f77bcf86cd799439012'] },
-            { name: 'property_id',           in: ['507f1f77bcf86cd799439013'] },
-            { name: 'property_identifier',   in: ['VNP-001', 'VNP-002'] },
-            { name: 'service_type_id',       in: ['507f1f77bcf86cd799439099'] },
-            { name: 'portfolio_contact',     in: ['John Doe'] },
+            { name: 'portfolio_id', in: ['507f1f77bcf86cd799439011'] },
+            { name: 'subportfolio_id', in: ['507f1f77bcf86cd799439012'] },
+            { name: 'property_id', in: ['507f1f77bcf86cd799439013'] },
+            { name: 'property_identifier', in: ['VNP-001', 'VNP-002'] },
+            { name: 'service_type_id', in: ['507f1f77bcf86cd799439099'] },
+            { name: 'portfolio_contact', in: ['John Doe'] },
             { name: 'portfolio_contact_email', in: ['john@example.com'] },
-            { name: 'primary_case_email',    in: ['cases@example.com'] },
-            { name: 'card_descriptor',       in: ['HOTEL*NYC'] },
-            { name: 'hotel_address',         in: ['New York'] },
-            { name: 'new_domain_email',      in: ['domain@example.com'] },
+            { name: 'primary_case_email', in: ['cases@example.com'] },
+            { name: 'card_descriptor', in: ['HOTEL*NYC'] },
+            { name: 'hotel_address', in: ['New York'] },
+            { name: 'new_domain_email', in: ['domain@example.com'] },
             { name: 'case_management_contact', in: ['Jane Smith'] },
-            { name: 'access_contact',        in: ['access@example.com'] },
-            { name: 'reporting_contact',     in: ['report@example.com'] },
-            { name: 'fp_mid',                in: ['MID123'] },
-            { name: 'fp_username',           in: ['fpuser'] },
-            { name: 'stripe_account_email',  in: ['stripe@example.com'] },
-            { name: 'expedia_id',            in: [12345] },
-            { name: 'expedia_status',        in: ['ACTIVE'] },
-            { name: 'expedia_billing_type_id', in: ['507f1f77bcf86cd799439099'] },
-            { name: 'expedia_service_type_id', in: ['507f1f77bcf86cd799439099'] },
-            { name: 'expedia_frequency_id',  in: ['507f1f77bcf86cd799439099'] },
-            { name: 'expedia_processor_id',  in: ['507f1f77bcf86cd799439099'] },
-            { name: 'expedia_access_level',  in: ['true'] },
-            { name: 'expedia_scheduler',     in: ['false'] },
-            { name: 'expedia_duration',      in: [30, 60] },
-            { name: 'expedia_from',          in: ['2024-01-01'] },
-            { name: 'expedia_to',            in: ['2024-12-31'] },
-            { name: 'booking_id',            in: [67890] },
-            { name: 'booking_status',        in: ['ACTIVE'] },
-            { name: 'booking_billing_type_id', in: ['507f1f77bcf86cd799439099'] },
-            { name: 'booking_service_type_id', in: ['507f1f77bcf86cd799439099'] },
-            { name: 'booking_frequency_id',  in: ['507f1f77bcf86cd799439099'] },
-            { name: 'booking_processor_id',  in: ['507f1f77bcf86cd799439099'] },
-            { name: 'booking_access_level',  in: ['true'] },
-            { name: 'booking_scheduler',     in: ['false'] },
-            { name: 'booking_duration',      in: [30] },
-            { name: 'booking_from',          in: ['2024-01-01'] },
-            { name: 'booking_to',            in: ['2024-12-31'] },
-            { name: 'agoda_id',              in: [11111] },
-            { name: 'agoda_status',          in: ['ACTIVE'] },
+            { name: 'access_contact', in: ['access@example.com'] },
+            { name: 'reporting_contact', in: ['report@example.com'] },
+            { name: 'fp_mid', in: ['MID123'] },
+            { name: 'fp_username', in: ['fpuser'] },
+            { name: 'stripe_account_email', in: ['stripe@example.com'] },
+            { name: 'expedia_id', in: [12345] },
+            { name: 'expedia_status', in: ['ACTIVE'] },
+            {
+              name: 'expedia_billing_type_id',
+              in: ['507f1f77bcf86cd799439099']
+            },
+            {
+              name: 'expedia_service_type_id',
+              in: ['507f1f77bcf86cd799439099']
+            },
+            { name: 'expedia_frequency_id', in: ['507f1f77bcf86cd799439099'] },
+            { name: 'expedia_processor_id', in: ['507f1f77bcf86cd799439099'] },
+            { name: 'expedia_access_level', in: ['true'] },
+            { name: 'expedia_scheduler', in: ['false'] },
+            { name: 'expedia_duration', in: [30, 60] },
+            { name: 'expedia_from', in: ['2024-01-01'] },
+            { name: 'expedia_to', in: ['2024-12-31'] },
+            { name: 'booking_id', in: [67890] },
+            { name: 'booking_status', in: ['ACTIVE'] },
+            {
+              name: 'booking_billing_type_id',
+              in: ['507f1f77bcf86cd799439099']
+            },
+            {
+              name: 'booking_service_type_id',
+              in: ['507f1f77bcf86cd799439099']
+            },
+            { name: 'booking_frequency_id', in: ['507f1f77bcf86cd799439099'] },
+            { name: 'booking_processor_id', in: ['507f1f77bcf86cd799439099'] },
+            { name: 'booking_access_level', in: ['true'] },
+            { name: 'booking_scheduler', in: ['false'] },
+            { name: 'booking_duration', in: [30] },
+            { name: 'booking_from', in: ['2024-01-01'] },
+            { name: 'booking_to', in: ['2024-12-31'] },
+            { name: 'agoda_id', in: [11111] },
+            { name: 'agoda_status', in: ['ACTIVE'] },
             { name: 'agoda_billing_type_id', in: ['507f1f77bcf86cd799439099'] },
             { name: 'agoda_service_type_id', in: ['507f1f77bcf86cd799439099'] },
-            { name: 'agoda_frequency_id',  in: ['507f1f77bcf86cd799439099'] },
-            { name: 'agoda_processor_id',  in: ['507f1f77bcf86cd799439099'] },
-            { name: 'agoda_access_level',    in: ['true'] },
-            { name: 'agoda_scheduler',       in: ['false'] },
-            { name: 'agoda_duration',        in: [45] },
-            { name: 'agoda_from',            in: ['2024-01-01'] },
-            { name: 'agoda_to',              in: ['2024-12-31'] },
-            { name: 'from',                  in: ['2023-06-01'] },
-            { name: 'to',                    in: ['2024-06-01'] },
-            { name: 'need_another_domain',   in: ['true'] },
-            { name: 'created_at',            in: [],  sort_by: 'desc' },
-            { name: 'updated_at',            in: [],  sort_by: 'asc' }
+            { name: 'agoda_frequency_id', in: ['507f1f77bcf86cd799439099'] },
+            { name: 'agoda_processor_id', in: ['507f1f77bcf86cd799439099'] },
+            { name: 'agoda_access_level', in: ['true'] },
+            { name: 'agoda_scheduler', in: ['false'] },
+            { name: 'agoda_duration', in: [45] },
+            { name: 'agoda_from', in: ['2024-01-01'] },
+            { name: 'agoda_to', in: ['2024-12-31'] },
+            { name: 'from', in: ['2023-06-01'] },
+            { name: 'to', in: ['2024-06-01'] },
+            { name: 'need_another_domain', in: ['true'] },
+            { name: 'created_at', in: [], sort_by: 'desc' },
+            { name: 'updated_at', in: [], sort_by: 'asc' }
           ]
         }
       }
@@ -526,7 +547,10 @@ export class PropertyController {
     schema: {
       type: 'object',
       properties: {
-        message: { type: 'string', example: 'Excel report with 42 record(s) sent to user@example.com' }
+        message: {
+          type: 'string',
+          example: 'Excel report with 42 record(s) sent to user@example.com'
+        }
       }
     }
   })
@@ -650,7 +674,10 @@ export class PropertyController {
   @ApiBearerAuth('external-jwt')
   @ApiOperation({ summary: 'Get contact information for a property' })
   @ApiResponse({ status: 200, description: 'Contact information returned' })
-  @ApiResponse({ status: 401, description: 'Invalid or missing communication JWT' })
+  @ApiResponse({
+    status: 401,
+    description: 'Invalid or missing communication JWT'
+  })
   @ApiResponse({ status: 404, description: 'Property not found' })
   getContact(@Param('id') id: string) {
     return this.propertyService.getContactExternal(id)
@@ -660,17 +687,29 @@ export class PropertyController {
   @RequirePermission(ModuleType.PROPERTY, PermissionAction.UPDATE, true)
   @ApiOperation({
     summary: 'Transfer property to a different portfolio',
-    description: 'Moves a property to a new portfolio. Requires the caller\'s account password for confirmation.'
+    description:
+      "Moves a property to a new portfolio. Requires the caller's account password for confirmation."
   })
-  @ApiResponse({ status: 200, description: 'Property transferred successfully' })
-  @ApiResponse({ status: 400, description: 'Invalid password or property already in the target portfolio' })
+  @ApiResponse({
+    status: 200,
+    description: 'Property transferred successfully'
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid password or property already in the target portfolio'
+  })
   @ApiResponse({ status: 404, description: 'Property not found' })
   transferPortfolio(
     @Param('id') id: string,
     @Body() dto: TransferPropertyDto,
     @CurrentUser() user: IUserWithPermissions
   ) {
-    return this.propertyService.transferPortfolio(id, dto.portfolio_id, dto.password, user)
+    return this.propertyService.transferPortfolio(
+      id,
+      dto.portfolio_id,
+      dto.password,
+      user
+    )
   }
 
   @Patch(':id')
@@ -753,13 +792,21 @@ export class PropertyController {
         totalCount: 2,
         deletedCount: 1,
         failureCount: 1,
-        errors: [{ parent_id: 'dbms-property-id-2', error: 'Property not found with parent_id: dbms-property-id-2' }],
+        errors: [
+          {
+            parent_id: 'dbms-property-id-2',
+            error: 'Property not found with parent_id: dbms-property-id-2'
+          }
+        ],
         successfulDeletes: [{ parent_id: 'dbms-property-id-1' }]
       }
     }
   })
   @ApiResponse({ status: 400, description: 'Invalid request body' })
-  @ApiResponse({ status: 401, description: 'Missing or invalid communication JWT' })
+  @ApiResponse({
+    status: 401,
+    description: 'Missing or invalid communication JWT'
+  })
   syncBulkDelete(@Body() body: SyncBulkDeleteBodyDto) {
     return this.propertyService.syncBulkDelete(body)
   }
@@ -816,7 +863,8 @@ export class PropertyController {
   @RequirePermission(ModuleType.PROPERTY, PermissionAction.UPDATE)
   @ApiOperation({
     summary: 'Bulk transfer properties to a different portfolio',
-    description: 'Moves multiple properties to a new portfolio. Requires the caller\'s account password for confirmation. Properties already in the target portfolio or inaccessible ones are reported as skipped.'
+    description:
+      "Moves multiple properties to a new portfolio. Requires the caller's account password for confirmation. Properties already in the target portfolio or inaccessible ones are reported as skipped."
   })
   @ApiResponse({
     status: 200,
@@ -856,7 +904,12 @@ export class PropertyController {
     @Body() dto: BulkTransferPropertyDto,
     @CurrentUser() user: IUserWithPermissions
   ) {
-    return this.propertyService.bulkTransferPortfolio(dto.ids, dto.portfolio_id, dto.password, user)
+    return this.propertyService.bulkTransferPortfolio(
+      dto.ids,
+      dto.portfolio_id,
+      dto.password,
+      user
+    )
   }
 
   @Post('expedia-check')
@@ -874,14 +927,18 @@ export class PropertyController {
     description: 'All account groups enqueued — processing in background',
     schema: {
       example: {
-        message: 'Expedia property check dispatched. Payloads were queued to SQS and the checker Lambda was triggered.',
+        message:
+          'Expedia property check dispatched. Payloads were queued to SQS and the checker Lambda was triggered.',
         totalProperties: 3,
         accountGroups: 2
       }
     }
   })
   @ApiResponse({ status: 400, description: 'Invalid request body' })
-  @ApiResponse({ status: 502, description: 'Expedia check queue is not configured' })
+  @ApiResponse({
+    status: 502,
+    description: 'Expedia check queue is not configured'
+  })
   checkExpediaProperties(@Body() dto: ExpediaCheckPropertiesDto) {
     return this.expediaCheckerService.checkProperties(dto.items)
   }
@@ -901,14 +958,18 @@ export class PropertyController {
     description: 'All account groups enqueued — processing in background',
     schema: {
       example: {
-        message: 'Agoda property check dispatched. Payloads were queued to SQS and the checker Lambda was triggered.',
+        message:
+          'Agoda property check dispatched. Payloads were queued to SQS and the checker Lambda was triggered.',
         totalProperties: 3,
         accountGroups: 2
       }
     }
   })
   @ApiResponse({ status: 400, description: 'Invalid request body' })
-  @ApiResponse({ status: 502, description: 'Agoda check queue is not configured' })
+  @ApiResponse({
+    status: 502,
+    description: 'Agoda check queue is not configured'
+  })
   checkAgodaProperties(@Body() dto: AgodaCheckPropertiesDto) {
     return this.agodaCheckerService.checkProperties(dto.items)
   }
@@ -919,7 +980,8 @@ export class PropertyController {
 @Controller('property')
 export class PropertySyncController {
   constructor(
-    @Inject('IPropertyService') private readonly propertyService: IPropertyService,
+    @Inject('IPropertyService')
+    private readonly propertyService: IPropertyService,
     private readonly expediaCheckerService: PropertyExpediaCheckerService,
     private readonly agodaCheckerService: PropertyAgodaCheckerService
   ) {}
@@ -929,6 +991,36 @@ export class PropertySyncController {
   @ApiOperation({ summary: 'Internal: sync property from scraper by OTA id' })
   syncByOta(@Body() dto: SyncByOtaDto) {
     return this.propertyService.syncByOta(dto)
+  }
+
+  @Post('sync-callback')
+  @UseGuards(ExternalJwtGuard)
+  @ApiHeader({
+    name: 'Authorization',
+    description: 'Bearer JWT signed with JWT_COMMUNICATION_SECRET'
+  })
+  @ApiOperation({
+    summary:
+      'Internal: receive async bulk-upsert result from dashboard/scraper',
+    description:
+      'Dashboard/scraper POST their per-row bulk-upsert result here after finishing a background sync. When all expected sources for a batch have reported, the DBMS assembles and sends the email report.'
+  })
+  async syncCallback(@Body() dto: SyncCallbackDto) {
+    return this.propertyService.recordSyncCallback(dto)
+  }
+
+  @Get('sync-batch/:batchId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Poll the status of a background bulk import / bulk update sync',
+    description:
+      'The import and bulk-update endpoints now return instantly with a batchId. Use this endpoint to poll progress (status: pending | partial | complete | failed) and the DBMS-side summary.'
+  })
+  @ApiResponse({ status: 200, description: 'Batch status' })
+  @ApiResponse({ status: 404, description: 'Batch not found' })
+  syncBatchStatus(@Param('batchId') batchId: string) {
+    return this.propertyService.getSyncBatchStatus(batchId)
   }
 
   @Post('expedia-check/trigger-lambda')

@@ -33,7 +33,14 @@ const propertyInclude = {
   agoda_processor: true,
   priority: true,
   notes: {
-    select: { id: true, text: true, is_done: true, user_id: true, created_at: true, updated_at: true },
+    select: {
+      id: true,
+      text: true,
+      is_done: true,
+      user_id: true,
+      created_at: true,
+      updated_at: true
+    },
     orderBy: { created_at: 'desc' as const }
   },
   _count: { select: { notes: true } }
@@ -73,7 +80,7 @@ export class PropertyRepository implements IPropertyRepository {
           where: { portfolio_id: { in: accessRecord.portfolio_id } },
           select: { id: true }
         })
-        portfolioProperties.forEach((p) => propertyIds.add(p.id))
+        portfolioProperties.forEach(p => propertyIds.add(p.id))
       }
 
       return Array.from(propertyIds)
@@ -89,7 +96,9 @@ export class PropertyRepository implements IPropertyRepository {
       currency_id: data.currency_id,
       card_descriptor: data.card_descriptor,
       is_active: data.is_active ?? true,
-      next_due_date: data.next_due_date ? new Date(data.next_due_date) : undefined,
+      next_due_date: data.next_due_date
+        ? new Date(data.next_due_date)
+        : undefined,
       previous_portfolio_id: data.previous_portfolio_id,
       show_in_portfolio: data.show_in_portfolio ?? [],
       new_domain_email: data.new_domain_email,
@@ -239,21 +248,40 @@ export class PropertyRepository implements IPropertyRepository {
     return raw ? (withTotalNotes(raw) as PropertyWithRelations) : null
   }
 
-  async findIdsByOtaIds(ota: { expedia_id?: number | null; booking_id?: number | null; agoda_id?: number | null }): Promise<string[]> {
+  async findByIds(ids: string[]): Promise<PropertyWithRelations[]> {
+    if (!ids.length) return []
+    const rows = await this.prisma.property.findMany({
+      where: { id: { in: ids } },
+      include: propertyInclude
+    })
+    return rows.map(withTotalNotes) as PropertyWithRelations[]
+  }
+
+  async findIdsByOtaIds(ota: {
+    expedia_id?: number | null
+    booking_id?: number | null
+    agoda_id?: number | null
+  }): Promise<string[]> {
     const or: any[] = []
     if (ota.expedia_id != null) or.push({ expedia_id: Number(ota.expedia_id) })
     if (ota.booking_id != null) or.push({ booking_id: Number(ota.booking_id) })
-    if (ota.agoda_id   != null) or.push({ agoda_id:   Number(ota.agoda_id) })
+    if (ota.agoda_id != null) or.push({ agoda_id: Number(ota.agoda_id) })
     if (!or.length) return []
-    const rows = await this.prisma.property.findMany({ where: { OR: or }, select: { id: true } })
+    const rows = await this.prisma.property.findMany({
+      where: { OR: or },
+      select: { id: true }
+    })
     return rows.map(r => r.id)
   }
-  
+
   async findByName(name: string) {
     return this.prisma.property.findUnique({ where: { name } })
   }
 
-  async update(id: string, data: UpdatePropertyDto): Promise<PropertyWithRelations> {
+  async update(
+    id: string,
+    data: UpdatePropertyDto
+  ): Promise<PropertyWithRelations> {
     // Helper: convert a nullable FK id to Prisma connect/disconnect syntax
     const rel = (fkId: string | null | undefined) => {
       if (fkId === undefined) return undefined
@@ -264,93 +292,94 @@ export class PropertyRepository implements IPropertyRepository {
 
     // Scalar (non-relation) fields — spread directly
     const payload: any = {
-      name:                              d.name,
-      property_identifier:               d.property_identifier,
-      card_descriptor:                   d.card_descriptor,
-      description:                       d.description,
-      hotel_address:                     d.hotel_address,
-      previous_portfolio_id:             d.previous_portfolio_id,
-      show_in_portfolio:                 d.show_in_portfolio,
-      new_domain_email:                  d.new_domain_email,
-      others_case_emails:                d.others_case_emails,
-      primary_case_email:                d.primary_case_email,
-      portfolio_contact_email:           d.portfolio_contact_email,
-      portfolio_contact:                 d.portfolio_contact,
-      webmail_password:                  d.webmail_password,
-      case_management_contact:           d.case_management_contact,
-      access_contact:                    d.access_contact,
-      reporting_contact:                 d.reporting_contact,
-      from:                              d.from,
-      to:                                d.to,
-      qp_username:                       d.qp_username,
-      qp_password:                       d.qp_password,
-      qp_api_key:                        d.qp_api_key,
-      fp_mid:                            d.fp_mid,
-      fp_username:                       d.fp_username,
-      fp_password:                       d.fp_password,
-      stripe_account_email:              d.stripe_account_email,
-      expedia_id:                        d.expedia_id,
-      expedia_status:                    d.expedia_status,
-      expedia_access_level:              d.expedia_access_level,
-      expedia_from:                      d.expedia_from,
-      expedia_to:                        d.expedia_to,
-      expedia_priority:                  d.expedia_priority,
-      from_db:                           d.from_db,
-      to_db:                             d.to_db,
-      expedia_scheduler:                 d.expedia_scheduler,
-      expedia_duration:                  d.expedia_duration,
-      expedia_db_duration:               d.expedia_db_duration,
-      expedia_service_fee:               d.expedia_service_fee,
-      expedia_crs:                       d.expedia_crs,
-      expedia_crs_db:                    d.expedia_crs_db,
-      expedia_run_date:                  d.expedia_run_date,
-      expedia_run_date_db:               d.expedia_run_date_db,
-      expedia_revised_date:              d.expedia_revised_date,
-      expedia_scheduler_review_from:     d.expedia_scheduler_review_from,
-      expedia_scheduler_review_to:       d.expedia_scheduler_review_to,
-      expedia_scheduler_db:              d.expedia_scheduler_db,
-      expedia_scheduler_review_db_from:  d.expedia_scheduler_review_db_from,
-      expedia_scheduler_review_db_to:    d.expedia_scheduler_review_db_to,
-      expedia_credential_verified:       d.expedia_credential_verified,
-      expedia_otp_number:                d.expedia_otp_number,
-      booking_id:                        d.booking_id,
-      booking_status:                    d.booking_status,
-      booking_access_level:              d.booking_access_level,
-      booking_from:                      d.booking_from,
-      booking_to:                        d.booking_to,
-      booking_priority:                  d.booking_priority,
-      booking_scheduler:                 d.booking_scheduler,
-      booking_duration:                  d.booking_duration,
-      booking_service_fee:               d.booking_service_fee,
-      booking_crs:                       d.booking_crs,
-      booking_run_date:                  d.booking_run_date,
-      booking_revised_date:              d.booking_revised_date,
-      booking_credential_verified:       d.booking_credential_verified,
-      booking_otp_number:                d.booking_otp_number,
-      agoda_id:                          d.agoda_id,
-      agoda_status:                      d.agoda_status,
-      agoda_access_level:                d.agoda_access_level,
-      agoda_from:                        d.agoda_from,
-      agoda_to:                          d.agoda_to,
-      agoda_priority:                    d.agoda_priority,
-      agoda_scheduler:                   d.agoda_scheduler,
-      agoda_duration:                    d.agoda_duration,
-      agoda_service_fee:                 d.agoda_service_fee,
-      agoda_crs:                         d.agoda_crs,
-      agoda_run_date:                    d.agoda_run_date,
-      agoda_revised_date:                d.agoda_revised_date,
-      agoda_credential_verified:         d.agoda_credential_verified,
-      agoda_otp_number:                  d.agoda_otp_number,
-      need_another_domain:               d.need_another_domain,
-      booking_otp_phone:                 d.booking_otp_phone,
-      sales_rep:                         d.sales_rep,
-      cybersource_mid:                   d.cybersource_mid,
-      adyen_location:                    d.adyen_location,
-      stripe_connected_email:            d.stripe_connected_email,
+      name: d.name,
+      property_identifier: d.property_identifier,
+      card_descriptor: d.card_descriptor,
+      description: d.description,
+      hotel_address: d.hotel_address,
+      previous_portfolio_id: d.previous_portfolio_id,
+      show_in_portfolio: d.show_in_portfolio,
+      new_domain_email: d.new_domain_email,
+      others_case_emails: d.others_case_emails,
+      primary_case_email: d.primary_case_email,
+      portfolio_contact_email: d.portfolio_contact_email,
+      portfolio_contact: d.portfolio_contact,
+      webmail_password: d.webmail_password,
+      case_management_contact: d.case_management_contact,
+      access_contact: d.access_contact,
+      reporting_contact: d.reporting_contact,
+      from: d.from,
+      to: d.to,
+      qp_username: d.qp_username,
+      qp_password: d.qp_password,
+      qp_api_key: d.qp_api_key,
+      fp_mid: d.fp_mid,
+      fp_username: d.fp_username,
+      fp_password: d.fp_password,
+      stripe_account_email: d.stripe_account_email,
+      expedia_id: d.expedia_id,
+      expedia_status: d.expedia_status,
+      expedia_access_level: d.expedia_access_level,
+      expedia_from: d.expedia_from,
+      expedia_to: d.expedia_to,
+      expedia_priority: d.expedia_priority,
+      from_db: d.from_db,
+      to_db: d.to_db,
+      expedia_scheduler: d.expedia_scheduler,
+      expedia_duration: d.expedia_duration,
+      expedia_db_duration: d.expedia_db_duration,
+      expedia_service_fee: d.expedia_service_fee,
+      expedia_crs: d.expedia_crs,
+      expedia_crs_db: d.expedia_crs_db,
+      expedia_run_date: d.expedia_run_date,
+      expedia_run_date_db: d.expedia_run_date_db,
+      expedia_revised_date: d.expedia_revised_date,
+      expedia_scheduler_review_from: d.expedia_scheduler_review_from,
+      expedia_scheduler_review_to: d.expedia_scheduler_review_to,
+      expedia_scheduler_db: d.expedia_scheduler_db,
+      expedia_scheduler_review_db_from: d.expedia_scheduler_review_db_from,
+      expedia_scheduler_review_db_to: d.expedia_scheduler_review_db_to,
+      expedia_credential_verified: d.expedia_credential_verified,
+      expedia_otp_number: d.expedia_otp_number,
+      booking_id: d.booking_id,
+      booking_status: d.booking_status,
+      booking_access_level: d.booking_access_level,
+      booking_from: d.booking_from,
+      booking_to: d.booking_to,
+      booking_priority: d.booking_priority,
+      booking_scheduler: d.booking_scheduler,
+      booking_duration: d.booking_duration,
+      booking_service_fee: d.booking_service_fee,
+      booking_crs: d.booking_crs,
+      booking_run_date: d.booking_run_date,
+      booking_revised_date: d.booking_revised_date,
+      booking_credential_verified: d.booking_credential_verified,
+      booking_otp_number: d.booking_otp_number,
+      agoda_id: d.agoda_id,
+      agoda_status: d.agoda_status,
+      agoda_access_level: d.agoda_access_level,
+      agoda_from: d.agoda_from,
+      agoda_to: d.agoda_to,
+      agoda_priority: d.agoda_priority,
+      agoda_scheduler: d.agoda_scheduler,
+      agoda_duration: d.agoda_duration,
+      agoda_service_fee: d.agoda_service_fee,
+      agoda_crs: d.agoda_crs,
+      agoda_run_date: d.agoda_run_date,
+      agoda_revised_date: d.agoda_revised_date,
+      agoda_credential_verified: d.agoda_credential_verified,
+      agoda_otp_number: d.agoda_otp_number,
+      need_another_domain: d.need_another_domain,
+      booking_otp_phone: d.booking_otp_phone,
+      sales_rep: d.sales_rep,
+      cybersource_mid: d.cybersource_mid,
+      adyen_location: d.adyen_location,
+      stripe_connected_email: d.stripe_connected_email,
       // Non-nullable String[] — null → empty array
-      discontinued_email_ids:            d.discontinued_email_ids !== undefined
-                                           ? (d.discontinued_email_ids ?? [])
-                                           : undefined,
+      discontinued_email_ids:
+        d.discontinued_email_ids !== undefined
+          ? (d.discontinued_email_ids ?? [])
+          : undefined
     }
 
     // Remove undefined keys so Prisma ignores unset fields
@@ -365,24 +394,38 @@ export class PropertyRepository implements IPropertyRepository {
     if (d.is_active !== undefined) payload.is_active = d.is_active
 
     // All FK relations — must use nested connect/disconnect in update()
-    const portfolioRel   = rel(d.portfolio_id)
-    if (portfolioRel)                         payload.portfolio             = portfolioRel
-    if (d.subportfolio_id !== undefined)      payload.subportfolio          = rel(d.subportfolio_id)
-    if (d.service_type_id !== undefined)      payload.service_type          = rel(d.service_type_id)
-    if (d.currency_id !== undefined)          payload.currency              = rel(d.currency_id)
-    if (d.expedia_billing_type_id !== undefined)  payload.expedia_billing_type  = rel(d.expedia_billing_type_id)
-    if (d.expedia_service_type_id !== undefined)  payload.expedia_service_type  = rel(d.expedia_service_type_id)
-    if (d.expedia_frequency_id !== undefined)     payload.expedia_frequency     = rel(d.expedia_frequency_id)
-    if (d.priority_id !== undefined)               payload.priority             = rel(d.priority_id)
-    if (d.expedia_processor_id !== undefined)     payload.expedia_processor     = rel(d.expedia_processor_id)
-    if (d.booking_billing_type_id !== undefined)  payload.booking_billing_type  = rel(d.booking_billing_type_id)
-    if (d.booking_service_type_id !== undefined)  payload.booking_service_type  = rel(d.booking_service_type_id)
-    if (d.booking_frequency_id !== undefined)     payload.booking_frequency     = rel(d.booking_frequency_id)
-    if (d.booking_processor_id !== undefined)     payload.booking_processor     = rel(d.booking_processor_id)
-    if (d.agoda_billing_type_id !== undefined)    payload.agoda_billing_type    = rel(d.agoda_billing_type_id)
-    if (d.agoda_service_type_id !== undefined)    payload.agoda_service_type    = rel(d.agoda_service_type_id)
-    if (d.agoda_frequency_id !== undefined)       payload.agoda_frequency       = rel(d.agoda_frequency_id)
-    if (d.agoda_processor_id !== undefined)       payload.agoda_processor       = rel(d.agoda_processor_id)
+    const portfolioRel = rel(d.portfolio_id)
+    if (portfolioRel) payload.portfolio = portfolioRel
+    if (d.subportfolio_id !== undefined)
+      payload.subportfolio = rel(d.subportfolio_id)
+    if (d.service_type_id !== undefined)
+      payload.service_type = rel(d.service_type_id)
+    if (d.currency_id !== undefined) payload.currency = rel(d.currency_id)
+    if (d.expedia_billing_type_id !== undefined)
+      payload.expedia_billing_type = rel(d.expedia_billing_type_id)
+    if (d.expedia_service_type_id !== undefined)
+      payload.expedia_service_type = rel(d.expedia_service_type_id)
+    if (d.expedia_frequency_id !== undefined)
+      payload.expedia_frequency = rel(d.expedia_frequency_id)
+    if (d.priority_id !== undefined) payload.priority = rel(d.priority_id)
+    if (d.expedia_processor_id !== undefined)
+      payload.expedia_processor = rel(d.expedia_processor_id)
+    if (d.booking_billing_type_id !== undefined)
+      payload.booking_billing_type = rel(d.booking_billing_type_id)
+    if (d.booking_service_type_id !== undefined)
+      payload.booking_service_type = rel(d.booking_service_type_id)
+    if (d.booking_frequency_id !== undefined)
+      payload.booking_frequency = rel(d.booking_frequency_id)
+    if (d.booking_processor_id !== undefined)
+      payload.booking_processor = rel(d.booking_processor_id)
+    if (d.agoda_billing_type_id !== undefined)
+      payload.agoda_billing_type = rel(d.agoda_billing_type_id)
+    if (d.agoda_service_type_id !== undefined)
+      payload.agoda_service_type = rel(d.agoda_service_type_id)
+    if (d.agoda_frequency_id !== undefined)
+      payload.agoda_frequency = rel(d.agoda_frequency_id)
+    if (d.agoda_processor_id !== undefined)
+      payload.agoda_processor = rel(d.agoda_processor_id)
 
     const raw = await this.prisma.property.update({
       where: { id },
@@ -396,7 +439,9 @@ export class PropertyRepository implements IPropertyRepository {
     return this.prisma.property.delete({ where: { id } })
   }
 
-  async findByPortfolioId(portfolioId: string): Promise<PropertyWithRelations[]> {
+  async findByPortfolioId(
+    portfolioId: string
+  ): Promise<PropertyWithRelations[]> {
     const rows = await this.prisma.property.findMany({
       where: {
         OR: [
@@ -409,7 +454,9 @@ export class PropertyRepository implements IPropertyRepository {
     return rows.map(withTotalNotes) as PropertyWithRelations[]
   }
 
-  async findBySubportfolioId(subportfolioId: string): Promise<PropertyWithRelations[]> {
+  async findBySubportfolioId(
+    subportfolioId: string
+  ): Promise<PropertyWithRelations[]> {
     const rows = await this.prisma.property.findMany({
       where: { subportfolio_id: subportfolioId },
       include: propertyInclude
@@ -420,7 +467,11 @@ export class PropertyRepository implements IPropertyRepository {
   async getDropdownPortfoliosAndSubportfolios(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { role: { select: { portfolio_permission: true, property_permission: true } } }
+      select: {
+        role: {
+          select: { portfolio_permission: true, property_permission: true }
+        }
+      }
     })
     const portfolioPerm = user?.role?.portfolio_permission
     const propertyPerm = user?.role?.property_permission
@@ -430,7 +481,9 @@ export class PropertyRepository implements IPropertyRepository {
     if (hasAllPortfolios && hasAllProperties) {
       const [portfolios, subportfolios] = await Promise.all([
         this.prisma.portfolio.findMany({ select: { id: true, name: true } }),
-        this.prisma.subportfolio.findMany({ select: { id: true, name: true, portfolio_id: true } })
+        this.prisma.subportfolio.findMany({
+          select: { id: true, name: true, portfolio_id: true }
+        })
       ])
       return { portfolios, subportfolios }
     }
@@ -460,7 +513,8 @@ export class PropertyRepository implements IPropertyRepository {
     return {
       portfolios,
       subportfolios: subportfolios.filter(
-        (s: any, i: number, arr: any[]) => arr.findIndex((x: any) => x.id === s.id) === i
+        (s: any, i: number, arr: any[]) =>
+          arr.findIndex((x: any) => x.id === s.id) === i
       )
     }
   }
@@ -469,7 +523,10 @@ export class PropertyRepository implements IPropertyRepository {
    * Bulk-imports properties from pre-parsed, typed rows.
    * Auto-creates portfolios if they don't exist.
    */
-  async importProperties(rows: ImportPropertyRow[], userId?: string): Promise<ImportPropertiesResult> {
+  async importProperties(
+    rows: ImportPropertyRow[],
+    userId?: string
+  ): Promise<ImportPropertiesResult> {
     const logger = new Logger(PropertyRepository.name)
 
     let propertiesCreated = 0
@@ -503,7 +560,7 @@ export class PropertyRepository implements IPropertyRepository {
 
       if (!portfolio) {
         logger.log(`Portfolio "${portfolioName}" not found — creating it`)
-        
+
         // Find or create default "OTA" ServiceType
         let defaultServiceType = await this.prisma.serviceType.findFirst({
           where: { type: { equals: 'OTA', mode: 'insensitive' } }
@@ -538,7 +595,9 @@ export class PropertyRepository implements IPropertyRepository {
           })
           logger.log(`Portfolio "${portfolioName}" created successfully`)
         } catch (err: any) {
-          logger.error(`Error creating portfolio "${portfolioName}": ${err.message}`)
+          logger.error(
+            `Error creating portfolio "${portfolioName}": ${err.message}`
+          )
           skippedProperties.push({
             name: propertyName,
             reason: `Error creating portfolio: ${err.message}`
@@ -571,18 +630,36 @@ export class PropertyRepository implements IPropertyRepository {
       if (existingProp) {
         // Property already exists — only create/update credentials if provided
         const credPayloadExisting: any = {}
-        if (row.expediaUsername) credPayloadExisting.expediaUsername = row.expediaUsername
-        if (row.agodaUsername) credPayloadExisting.agodaUsername = row.agodaUsername
-        if (row.bookingUsername) credPayloadExisting.bookingUsername = row.bookingUsername
-        if (row.expediaPassword) credPayloadExisting.expediaPassword = row.expediaPassword
-        if (row.bookingPassword) credPayloadExisting.bookingPassword = row.bookingPassword
-        if (row.agodaPassword) credPayloadExisting.agodaPassword = row.agodaPassword
-        if (row.expediaSecondaryUsername) credPayloadExisting.expediaSecondaryUsername = row.expediaSecondaryUsername
-        if (row.expediaSecondaryPassword) credPayloadExisting.expediaSecondaryPassword = row.expediaSecondaryPassword
-        if (row.bookingSecondaryUsername) credPayloadExisting.bookingSecondaryUsername = row.bookingSecondaryUsername
-        if (row.bookingSecondaryPassword) credPayloadExisting.bookingSecondaryPassword = row.bookingSecondaryPassword
-        if (row.agodaSecondaryUsername) credPayloadExisting.agodaSecondaryUsername = row.agodaSecondaryUsername
-        if (row.agodaSecondaryPassword) credPayloadExisting.agodaSecondaryPassword = row.agodaSecondaryPassword
+        if (row.expediaUsername)
+          credPayloadExisting.expediaUsername = row.expediaUsername
+        if (row.agodaUsername)
+          credPayloadExisting.agodaUsername = row.agodaUsername
+        if (row.bookingUsername)
+          credPayloadExisting.bookingUsername = row.bookingUsername
+        if (row.expediaPassword)
+          credPayloadExisting.expediaPassword = row.expediaPassword
+        if (row.bookingPassword)
+          credPayloadExisting.bookingPassword = row.bookingPassword
+        if (row.agodaPassword)
+          credPayloadExisting.agodaPassword = row.agodaPassword
+        if (row.expediaSecondaryUsername)
+          credPayloadExisting.expediaSecondaryUsername =
+            row.expediaSecondaryUsername
+        if (row.expediaSecondaryPassword)
+          credPayloadExisting.expediaSecondaryPassword =
+            row.expediaSecondaryPassword
+        if (row.bookingSecondaryUsername)
+          credPayloadExisting.bookingSecondaryUsername =
+            row.bookingSecondaryUsername
+        if (row.bookingSecondaryPassword)
+          credPayloadExisting.bookingSecondaryPassword =
+            row.bookingSecondaryPassword
+        if (row.agodaSecondaryUsername)
+          credPayloadExisting.agodaSecondaryUsername =
+            row.agodaSecondaryUsername
+        if (row.agodaSecondaryPassword)
+          credPayloadExisting.agodaSecondaryPassword =
+            row.agodaSecondaryPassword
 
         if (Object.keys(credPayloadExisting).length > 0) {
           const existingCred = await this.prisma.propertyCredentials.findFirst({
@@ -593,16 +670,22 @@ export class PropertyRepository implements IPropertyRepository {
               where: { id: existingCred.id },
               data: credPayloadExisting
             })
-            logger.log(`Credentials updated for existing property "${propertyName}"`)
+            logger.log(
+              `Credentials updated for existing property "${propertyName}"`
+            )
           } else {
             await this.prisma.propertyCredentials.create({
               data: { property_id: existingProp.id, ...credPayloadExisting }
             })
             credentialsCreated++
-            logger.log(`Credentials created for existing property "${propertyName}"`)
+            logger.log(
+              `Credentials created for existing property "${propertyName}"`
+            )
           }
         } else {
-          logger.debug(`Property "${propertyName}" already exists and no credentials provided — skipping`)
+          logger.debug(
+            `Property "${propertyName}" already exists and no credentials provided — skipping`
+          )
         }
 
         if (subportfolioId) {
@@ -625,9 +708,9 @@ export class PropertyRepository implements IPropertyRepository {
         existingProperties.push({
           ...existingProp,
           portfolio: { id: portfolio.id, name: portfolio.name },
-          subportfolio: linkedSubportfolio,
+          subportfolio: linkedSubportfolio
         })
-        
+
         skippedProperties.push({
           name: propertyName,
           reason: 'Property already exists (credentials updated if provided)'
@@ -645,125 +728,238 @@ export class PropertyRepository implements IPropertyRepository {
 
       if (subportfolioId) propertyPayload.subportfolio_id = subportfolioId
 
-      if (row.propertyAddress) propertyPayload.hotel_address = row.propertyAddress
-      if (row.cardDescriptor) propertyPayload.card_descriptor = row.cardDescriptor
+      if (row.propertyAddress)
+        propertyPayload.hotel_address = row.propertyAddress
+      if (row.cardDescriptor)
+        propertyPayload.card_descriptor = row.cardDescriptor
       if (row.description) propertyPayload.description = row.description
       propertyPayload.property_identifier = normalizedIdentifier
       if (row.portfolioContact)
         propertyPayload.portfolio_contact = row.portfolioContact
-      if (row.expediaId) propertyPayload.expedia_id = parseInt(row.expediaId) || undefined
-      if (row.agodaId) propertyPayload.agoda_id = parseInt(row.agodaId) || undefined
-      if (row.bookingId) propertyPayload.booking_id = parseInt(row.bookingId) || undefined
-      if (row.portfolioContactEmail) propertyPayload.portfolio_contact_email = row.portfolioContactEmail
-      if (row.newDomainsEmail) propertyPayload.new_domain_email = row.newDomainsEmail
+      if (row.expediaId)
+        propertyPayload.expedia_id = parseInt(row.expediaId) || undefined
+      if (row.agodaId)
+        propertyPayload.agoda_id = parseInt(row.agodaId) || undefined
+      if (row.bookingId)
+        propertyPayload.booking_id = parseInt(row.bookingId) || undefined
+      if (row.portfolioContactEmail)
+        propertyPayload.portfolio_contact_email = row.portfolioContactEmail
+      if (row.newDomainsEmail)
+        propertyPayload.new_domain_email = row.newDomainsEmail
       if (row.qpUsername) propertyPayload.qp_username = row.qpUsername
       if (row.qpPassword) propertyPayload.qp_password = row.qpPassword
       if (row.qpApiKey) propertyPayload.qp_api_key = row.qpApiKey
       if (row.fpUsername) propertyPayload.fp_username = row.fpUsername
       if (row.fpPassword) propertyPayload.fp_password = row.fpPassword
-      if (row.webmailPassword) propertyPayload.webmail_password = row.webmailPassword
+      if (row.webmailPassword)
+        propertyPayload.webmail_password = row.webmailPassword
       if (row.expediaStatus) propertyPayload.expedia_status = row.expediaStatus
       if (row.bookingStatus) propertyPayload.booking_status = row.bookingStatus
       if (row.agodaStatus) propertyPayload.agoda_status = row.agodaStatus
-      if (row.caseManagementContact) propertyPayload.case_management_contact = row.caseManagementContact
+      if (row.caseManagementContact)
+        propertyPayload.case_management_contact = row.caseManagementContact
       if (row.accessContact) propertyPayload.access_contact = row.accessContact
-      if (row.reportingContact) propertyPayload.reporting_contact = row.reportingContact
+      if (row.reportingContact)
+        propertyPayload.reporting_contact = row.reportingContact
       // Normalize a string to UPPER_SNAKE_CASE (for ServiceType and Frequency)
       const toUpperSnakeCase = (val: string): string =>
-        val.trim().toUpperCase().replace(/[\s\-.]+/g, '_').replace(/_+/g, '_').replace(/^_|_$/, '')
+        val
+          .trim()
+          .toUpperCase()
+          .replace(/[\s\-.]+/g, '_')
+          .replace(/_+/g, '_')
+          .replace(/^_|_$/, '')
 
       // Helper: resolve processor name → ID (find or create)
-      const resolveProcessor = async (name?: string): Promise<string | undefined> => {
+      const resolveProcessor = async (
+        name?: string
+      ): Promise<string | undefined> => {
         if (!name) return undefined
         const normalized = name.trim()
-        let rec = await this.prisma.processor.findFirst({ where: { name: { equals: normalized, mode: 'insensitive' } } })
+        let rec = await this.prisma.processor.findFirst({
+          where: { name: { equals: normalized, mode: 'insensitive' } }
+        })
         if (!rec) {
-          const last = await this.prisma.processor.findFirst({ orderBy: { order: 'desc' }, select: { order: true } })
-          rec = await this.prisma.processor.create({ data: { name: normalized, is_active: true, order: (last?.order ?? 0) + 1 } })
+          const last = await this.prisma.processor.findFirst({
+            orderBy: { order: 'desc' },
+            select: { order: true }
+          })
+          rec = await this.prisma.processor.create({
+            data: {
+              name: normalized,
+              is_active: true,
+              order: (last?.order ?? 0) + 1
+            }
+          })
           logger.log(`Processor "${normalized}" created during import`)
         }
         return rec.id
       }
 
       // Helper: resolve service type name → ID (normalize to UPPER_SNAKE_CASE, find or create)
-      const resolveServiceType = async (name?: string): Promise<string | undefined> => {
+      const resolveServiceType = async (
+        name?: string
+      ): Promise<string | undefined> => {
         if (!name) return undefined
         const normalized = toUpperSnakeCase(name)
-        let rec = await this.prisma.serviceType.findFirst({ where: { type: { equals: normalized, mode: 'insensitive' } } })
+        let rec = await this.prisma.serviceType.findFirst({
+          where: { type: { equals: normalized, mode: 'insensitive' } }
+        })
         if (!rec) {
-          const maxOrder = await this.prisma.serviceType.findFirst({ orderBy: { order: 'desc' }, select: { order: true } })
-          rec = await this.prisma.serviceType.create({ data: { type: normalized, is_active: true, order: (maxOrder?.order ?? 0) + 1 } })
+          const maxOrder = await this.prisma.serviceType.findFirst({
+            orderBy: { order: 'desc' },
+            select: { order: true }
+          })
+          rec = await this.prisma.serviceType.create({
+            data: {
+              type: normalized,
+              is_active: true,
+              order: (maxOrder?.order ?? 0) + 1
+            }
+          })
           logger.log(`ServiceType "${normalized}" created during import`)
         }
         return rec.id
       }
 
       // Helper: resolve billing type name → ID (find or create)
-      const resolveBillingType = async (name?: string): Promise<string | undefined> => {
+      const resolveBillingType = async (
+        name?: string
+      ): Promise<string | undefined> => {
         if (!name) return undefined
         const normalized = name.trim()
-        let rec = await this.prisma.billingType.findFirst({ where: { name: { equals: normalized, mode: 'insensitive' } } })
+        let rec = await this.prisma.billingType.findFirst({
+          where: { name: { equals: normalized, mode: 'insensitive' } }
+        })
         if (!rec) {
-          const last = await this.prisma.billingType.findFirst({ orderBy: { order: 'desc' }, select: { order: true } })
-          rec = await this.prisma.billingType.create({ data: { name: normalized, is_active: true, order: (last?.order ?? 0) + 1 } })
+          const last = await this.prisma.billingType.findFirst({
+            orderBy: { order: 'desc' },
+            select: { order: true }
+          })
+          rec = await this.prisma.billingType.create({
+            data: {
+              name: normalized,
+              is_active: true,
+              order: (last?.order ?? 0) + 1
+            }
+          })
           logger.log(`BillingType "${normalized}" created during import`)
         }
         return rec.id
       }
 
       // Helper: resolve frequency name → ID (normalize to UPPER_SNAKE_CASE, find or create)
-      const resolveFrequency = async (name?: string): Promise<string | undefined> => {
+      const resolveFrequency = async (
+        name?: string
+      ): Promise<string | undefined> => {
         if (!name) return undefined
         const normalized = toUpperSnakeCase(name)
-        let rec = await this.prisma.frequency.findFirst({ where: { name: { equals: normalized, mode: 'insensitive' } } })
+        let rec = await this.prisma.frequency.findFirst({
+          where: { name: { equals: normalized, mode: 'insensitive' } }
+        })
         if (!rec) {
-          const last = await this.prisma.frequency.findFirst({ orderBy: { order: 'desc' }, select: { order: true } })
-          rec = await this.prisma.frequency.create({ data: { name: normalized, is_active: true, order: (last?.order ?? 0) + 1 } })
+          const last = await this.prisma.frequency.findFirst({
+            orderBy: { order: 'desc' },
+            select: { order: true }
+          })
+          rec = await this.prisma.frequency.create({
+            data: {
+              name: normalized,
+              is_active: true,
+              order: (last?.order ?? 0) + 1
+            }
+          })
           logger.log(`Frequency "${normalized}" created during import`)
         }
         return rec.id
       }
 
       // Helper: resolve priority name → priority_id (find or create Priority record, return id)
-      const resolvePriority = async (name?: string): Promise<string | undefined> => {
+      const resolvePriority = async (
+        name?: string
+      ): Promise<string | undefined> => {
         if (!name) return undefined
         const normalized = name.trim()
-        let rec = await this.prisma.priority.findFirst({ where: { name: { equals: normalized, mode: 'insensitive' } } })
+        let rec = await this.prisma.priority.findFirst({
+          where: { name: { equals: normalized, mode: 'insensitive' } }
+        })
         if (!rec) {
-          const last = await this.prisma.priority.findFirst({ orderBy: { order: 'desc' }, select: { order: true } })
-          rec = await this.prisma.priority.create({ data: { name: normalized, is_active: true, order: (last?.order ?? 0) + 1 } })
+          const last = await this.prisma.priority.findFirst({
+            orderBy: { order: 'desc' },
+            select: { order: true }
+          })
+          rec = await this.prisma.priority.create({
+            data: {
+              name: normalized,
+              is_active: true,
+              order: (last?.order ?? 0) + 1
+            }
+          })
           logger.log(`Priority "${normalized}" created during import`)
         }
         return rec.id
       }
 
       // Helper: resolve currency code → currency_id (find or create Currency, return id)
-      const resolveCurrency = async (code?: string): Promise<string | undefined> => {
+      const resolveCurrency = async (
+        code?: string
+      ): Promise<string | undefined> => {
         if (!code) return undefined
         const normalized = code.trim().toUpperCase()
-        let rec = await this.prisma.currency.findFirst({ where: { code: { equals: normalized, mode: 'insensitive' } } })
+        let rec = await this.prisma.currency.findFirst({
+          where: { code: { equals: normalized, mode: 'insensitive' } }
+        })
         if (!rec) {
-          const last = await this.prisma.currency.findFirst({ orderBy: { order: 'desc' }, select: { order: true } })
-          rec = await this.prisma.currency.create({ data: { code: normalized, name: normalized, is_active: true, order: (last?.order ?? 0) + 1 } })
+          const last = await this.prisma.currency.findFirst({
+            orderBy: { order: 'desc' },
+            select: { order: true }
+          })
+          rec = await this.prisma.currency.create({
+            data: {
+              code: normalized,
+              name: normalized,
+              is_active: true,
+              order: (last?.order ?? 0) + 1
+            }
+          })
           logger.log(`Currency "${normalized}" created during import`)
         }
         return rec.id
       }
 
-      if (row.expediaProcessor) propertyPayload.expedia_processor_id = await resolveProcessor(row.expediaProcessor)
-      if (row.bookingProcessor) propertyPayload.booking_processor_id = await resolveProcessor(row.bookingProcessor)
-      if (row.agodaProcessor) propertyPayload.agoda_processor_id = await resolveProcessor(row.agodaProcessor)
-      if (row.priority) propertyPayload.priority_id = await resolvePriority(row.priority)
+      if (row.expediaProcessor)
+        propertyPayload.expedia_processor_id = await resolveProcessor(
+          row.expediaProcessor
+        )
+      if (row.bookingProcessor)
+        propertyPayload.booking_processor_id = await resolveProcessor(
+          row.bookingProcessor
+        )
+      if (row.agodaProcessor)
+        propertyPayload.agoda_processor_id = await resolveProcessor(
+          row.agodaProcessor
+        )
+      if (row.priority)
+        propertyPayload.priority_id = await resolvePriority(row.priority)
       if (row.fpMid) propertyPayload.fp_mid = row.fpMid
-      if (row.stripeAccountEmail) propertyPayload.stripe_account_email = row.stripeAccountEmail
+      if (row.stripeAccountEmail)
+        propertyPayload.stripe_account_email = row.stripeAccountEmail
       if (row.expediaBillingType)
-        propertyPayload.expedia_billing_type_id = await resolveBillingType(row.expediaBillingType)
+        propertyPayload.expedia_billing_type_id = await resolveBillingType(
+          row.expediaBillingType
+        )
       if (row.expediaServiceType)
-        propertyPayload.expedia_service_type_id = await resolveServiceType(row.expediaServiceType)
+        propertyPayload.expedia_service_type_id = await resolveServiceType(
+          row.expediaServiceType
+        )
       if (row.expediaFrequency)
-        propertyPayload.expedia_frequency_id = await resolveFrequency(row.expediaFrequency)
-      if (row.expediaPriority) propertyPayload.expedia_priority = row.expediaPriority
-      if (row.bookingPriority) propertyPayload.booking_priority = row.bookingPriority
+        propertyPayload.expedia_frequency_id = await resolveFrequency(
+          row.expediaFrequency
+        )
+      if (row.expediaPriority)
+        propertyPayload.expedia_priority = row.expediaPriority
+      if (row.bookingPriority)
+        propertyPayload.booking_priority = row.bookingPriority
       if (row.agodaPriority) propertyPayload.agoda_priority = row.agodaPriority
       if (row.expediaAccessLevel)
         propertyPayload.expedia_access_level = row.expediaAccessLevel === 'true'
@@ -772,13 +968,20 @@ export class PropertyRepository implements IPropertyRepository {
       if (row.expediaScheduler)
         propertyPayload.expedia_scheduler = row.expediaScheduler === 'true'
       if (row.expediaDuration)
-        propertyPayload.expedia_duration = parseInt(row.expediaDuration) || undefined
+        propertyPayload.expedia_duration =
+          parseInt(row.expediaDuration) || undefined
       if (row.bookingBillingType)
-        propertyPayload.booking_billing_type_id = await resolveBillingType(row.bookingBillingType)
+        propertyPayload.booking_billing_type_id = await resolveBillingType(
+          row.bookingBillingType
+        )
       if (row.bookingServiceType)
-        propertyPayload.booking_service_type_id = await resolveServiceType(row.bookingServiceType)
+        propertyPayload.booking_service_type_id = await resolveServiceType(
+          row.bookingServiceType
+        )
       if (row.bookingFrequency)
-        propertyPayload.booking_frequency_id = await resolveFrequency(row.bookingFrequency)
+        propertyPayload.booking_frequency_id = await resolveFrequency(
+          row.bookingFrequency
+        )
       if (row.bookingAccessLevel)
         propertyPayload.booking_access_level = row.bookingAccessLevel === 'true'
       if (row.bookingFrom) propertyPayload.booking_from = row.bookingFrom
@@ -786,13 +989,20 @@ export class PropertyRepository implements IPropertyRepository {
       if (row.bookingScheduler)
         propertyPayload.booking_scheduler = row.bookingScheduler === 'true'
       if (row.bookingDuration)
-        propertyPayload.booking_duration = parseInt(row.bookingDuration) || undefined
+        propertyPayload.booking_duration =
+          parseInt(row.bookingDuration) || undefined
       if (row.agodaBillingType)
-        propertyPayload.agoda_billing_type_id = await resolveBillingType(row.agodaBillingType)
+        propertyPayload.agoda_billing_type_id = await resolveBillingType(
+          row.agodaBillingType
+        )
       if (row.agodaServiceType)
-        propertyPayload.agoda_service_type_id = await resolveServiceType(row.agodaServiceType)
+        propertyPayload.agoda_service_type_id = await resolveServiceType(
+          row.agodaServiceType
+        )
       if (row.agodaFrequency)
-        propertyPayload.agoda_frequency_id = await resolveFrequency(row.agodaFrequency)
+        propertyPayload.agoda_frequency_id = await resolveFrequency(
+          row.agodaFrequency
+        )
       if (row.agodaAccessLevel)
         propertyPayload.agoda_access_level = row.agodaAccessLevel === 'true'
       if (row.agodaFrom) propertyPayload.agoda_from = row.agodaFrom
@@ -800,8 +1010,9 @@ export class PropertyRepository implements IPropertyRepository {
       if (row.agodaScheduler)
         propertyPayload.agoda_scheduler = row.agodaScheduler === 'true'
       if (row.agodaDuration)
-        propertyPayload.agoda_duration = parseInt(row.agodaDuration) || undefined
-      
+        propertyPayload.agoda_duration =
+          parseInt(row.agodaDuration) || undefined
+
       if (row.needAnotherDomain)
         propertyPayload.need_another_domain = row.needAnotherDomain === 'true'
       if (row.bookingOtpPhone)
@@ -809,36 +1020,69 @@ export class PropertyRepository implements IPropertyRepository {
       if (row.caseContactEmail)
         propertyPayload.primary_case_email = row.caseContactEmail
       // New Expedia fields
-      if (row.expediaServiceFee) propertyPayload.expedia_service_fee = parseInt(row.expediaServiceFee) || undefined
+      if (row.expediaServiceFee)
+        propertyPayload.expedia_service_fee =
+          parseInt(row.expediaServiceFee) || undefined
       if (row.expediaCrs) propertyPayload.expedia_crs = row.expediaCrs
       if (row.expediaCrsDb) propertyPayload.expedia_crs_db = row.expediaCrsDb
-      if (row.expediaRunDateFrom) propertyPayload.expedia_run_date = row.expediaRunDateFrom
-      if (row.expediaRunDateDbFrom) propertyPayload.expedia_run_date_db = row.expediaRunDateDbFrom
-      if (row.expediaRevisedDate) propertyPayload.expedia_revised_date = row.expediaRevisedDate
-      if (row.expediaSchedulerReviewFrom) propertyPayload.expedia_scheduler_review_from = row.expediaSchedulerReviewFrom
-      if (row.expediaSchedulerReviewTo) propertyPayload.expedia_scheduler_review_to = row.expediaSchedulerReviewTo
-      if (row.expediaSchedulerDb) propertyPayload.expedia_scheduler_db = row.expediaSchedulerDb
-      if (row.expediaSchedulerReviewDbFrom) propertyPayload.expedia_scheduler_review_db_from = row.expediaSchedulerReviewDbFrom
-      if (row.expediaSchedulerReviewDbTo) propertyPayload.expedia_scheduler_review_db_to = row.expediaSchedulerReviewDbTo
-      if (row.expediaDbDuration) propertyPayload.expedia_db_duration = parseInt(row.expediaDbDuration) || undefined
-      if (row.expediaCredentialVerified !== undefined) propertyPayload.expedia_credential_verified = row.expediaCredentialVerified === 'true'
-      if (row.expediaOtpNumber) propertyPayload.expedia_otp_number = row.expediaOtpNumber
+      if (row.expediaRunDateFrom)
+        propertyPayload.expedia_run_date = row.expediaRunDateFrom
+      if (row.expediaRunDateDbFrom)
+        propertyPayload.expedia_run_date_db = row.expediaRunDateDbFrom
+      if (row.expediaRevisedDate)
+        propertyPayload.expedia_revised_date = row.expediaRevisedDate
+      if (row.expediaSchedulerReviewFrom)
+        propertyPayload.expedia_scheduler_review_from =
+          row.expediaSchedulerReviewFrom
+      if (row.expediaSchedulerReviewTo)
+        propertyPayload.expedia_scheduler_review_to =
+          row.expediaSchedulerReviewTo
+      if (row.expediaSchedulerDb)
+        propertyPayload.expedia_scheduler_db = row.expediaSchedulerDb
+      if (row.expediaSchedulerReviewDbFrom)
+        propertyPayload.expedia_scheduler_review_db_from =
+          row.expediaSchedulerReviewDbFrom
+      if (row.expediaSchedulerReviewDbTo)
+        propertyPayload.expedia_scheduler_review_db_to =
+          row.expediaSchedulerReviewDbTo
+      if (row.expediaDbDuration)
+        propertyPayload.expedia_db_duration =
+          parseInt(row.expediaDbDuration) || undefined
+      if (row.expediaCredentialVerified !== undefined)
+        propertyPayload.expedia_credential_verified =
+          row.expediaCredentialVerified === 'true'
+      if (row.expediaOtpNumber)
+        propertyPayload.expedia_otp_number = row.expediaOtpNumber
       if (row.fromDb) propertyPayload.from_db = row.fromDb
       if (row.toDb) propertyPayload.to_db = row.toDb
       // New Booking fields
-      if (row.bookingServiceFee) propertyPayload.booking_service_fee = parseInt(row.bookingServiceFee) || undefined
+      if (row.bookingServiceFee)
+        propertyPayload.booking_service_fee =
+          parseInt(row.bookingServiceFee) || undefined
       if (row.bookingCrs) propertyPayload.booking_crs = row.bookingCrs
-      if (row.bookingRunDateFrom) propertyPayload.booking_run_date = row.bookingRunDateFrom
-      if (row.bookingRevisedDate) propertyPayload.booking_revised_date = row.bookingRevisedDate
-      if (row.bookingCredentialVerified !== undefined) propertyPayload.booking_credential_verified = row.bookingCredentialVerified === 'true'
-      if (row.bookingOtpNumber) propertyPayload.booking_otp_number = row.bookingOtpNumber
+      if (row.bookingRunDateFrom)
+        propertyPayload.booking_run_date = row.bookingRunDateFrom
+      if (row.bookingRevisedDate)
+        propertyPayload.booking_revised_date = row.bookingRevisedDate
+      if (row.bookingCredentialVerified !== undefined)
+        propertyPayload.booking_credential_verified =
+          row.bookingCredentialVerified === 'true'
+      if (row.bookingOtpNumber)
+        propertyPayload.booking_otp_number = row.bookingOtpNumber
       // New Agoda fields
-      if (row.agodaServiceFee) propertyPayload.agoda_service_fee = parseInt(row.agodaServiceFee) || undefined
+      if (row.agodaServiceFee)
+        propertyPayload.agoda_service_fee =
+          parseInt(row.agodaServiceFee) || undefined
       if (row.agodaCrs) propertyPayload.agoda_crs = row.agodaCrs
-      if (row.agodaRunDateFrom) propertyPayload.agoda_run_date = row.agodaRunDateFrom
-      if (row.agodaRevisedDate) propertyPayload.agoda_revised_date = row.agodaRevisedDate
-      if (row.agodaCredentialVerified !== undefined) propertyPayload.agoda_credential_verified = row.agodaCredentialVerified === 'true'
-      if (row.agodaOtpNumber) propertyPayload.agoda_otp_number = row.agodaOtpNumber
+      if (row.agodaRunDateFrom)
+        propertyPayload.agoda_run_date = row.agodaRunDateFrom
+      if (row.agodaRevisedDate)
+        propertyPayload.agoda_revised_date = row.agodaRevisedDate
+      if (row.agodaCredentialVerified !== undefined)
+        propertyPayload.agoda_credential_verified =
+          row.agodaCredentialVerified === 'true'
+      if (row.agodaOtpNumber)
+        propertyPayload.agoda_otp_number = row.agodaOtpNumber
       // Misc
       if (row.salesRep) propertyPayload.sales_rep = row.salesRep
       if (row.discontinuedEmailIds) {
@@ -847,18 +1091,26 @@ export class PropertyRepository implements IPropertyRepository {
           .map(e => e.trim())
           .filter(Boolean)
       }
-      if (row.cybersourceMid) propertyPayload.cybersource_mid = row.cybersourceMid
+      if (row.cybersourceMid)
+        propertyPayload.cybersource_mid = row.cybersourceMid
       if (row.adyenLocation) propertyPayload.adyen_location = row.adyenLocation
-      if (row.stripeConnectedEmail) propertyPayload.stripe_connected_email = row.stripeConnectedEmail
+      if (row.stripeConnectedEmail)
+        propertyPayload.stripe_connected_email = row.stripeConnectedEmail
 
       if (row.serviceTypeName) {
-        propertyPayload.service_type_id = await resolveServiceType(row.serviceTypeName)
+        propertyPayload.service_type_id = await resolveServiceType(
+          row.serviceTypeName
+        )
       }
-      if (row.currency) propertyPayload.currency_id = await resolveCurrency(row.currency)
+      if (row.currency)
+        propertyPayload.currency_id = await resolveCurrency(row.currency)
 
-      if (!propertyPayload.expedia_status) propertyPayload.expedia_status = 'Access Required'
-      if (!propertyPayload.booking_status) propertyPayload.booking_status = 'Access Required'
-      if (!propertyPayload.agoda_status) propertyPayload.agoda_status = 'Access Required'
+      if (!propertyPayload.expedia_status)
+        propertyPayload.expedia_status = 'Access Required'
+      if (!propertyPayload.booking_status)
+        propertyPayload.booking_status = 'Access Required'
+      if (!propertyPayload.agoda_status)
+        propertyPayload.agoda_status = 'Access Required'
 
       const uniqueConflicts = await collectPropertyUniqueConflicts(
         this.prisma,
@@ -924,11 +1176,15 @@ export class PropertyRepository implements IPropertyRepository {
 
         // Create credentials if provided
         const credPayload: any = {}
-        if (row.expediaUsername) credPayload.expediaUsername = row.expediaUsername
+        if (row.expediaUsername)
+          credPayload.expediaUsername = row.expediaUsername
         if (row.agodaUsername) credPayload.agodaUsername = row.agodaUsername
-        if (row.bookingUsername) credPayload.bookingUsername = row.bookingUsername
-        if (row.expediaPassword) credPayload.expediaPassword = row.expediaPassword
-        if (row.bookingPassword) credPayload.bookingPassword = row.bookingPassword
+        if (row.bookingUsername)
+          credPayload.bookingUsername = row.bookingUsername
+        if (row.expediaPassword)
+          credPayload.expediaPassword = row.expediaPassword
+        if (row.bookingPassword)
+          credPayload.bookingPassword = row.bookingPassword
         if (row.agodaPassword) credPayload.agodaPassword = row.agodaPassword
         if (row.expediaSecondaryUsername)
           credPayload.expediaSecondaryUsername = row.expediaSecondaryUsername
@@ -950,7 +1206,9 @@ export class PropertyRepository implements IPropertyRepository {
           credentialsCreated++
         }
       } catch (err: any) {
-        logger.error(`Error creating property "${propertyName}": ${err.message}`)
+        logger.error(
+          `Error creating property "${propertyName}": ${err.message}`
+        )
         skippedProperties.push({
           name: propertyName,
           reason: `Error: ${err.message}`
@@ -969,7 +1227,9 @@ export class PropertyRepository implements IPropertyRepository {
     }
   }
 
-  async bulkDelete(ids: string[]): Promise<import('./property.interface').BulkDeleteResult> {
+  async bulkDelete(
+    ids: string[]
+  ): Promise<import('./property.interface').BulkDeleteResult> {
     const logger = new Logger('PropertyRepository')
     const success: Array<{ id: string; name: string }> = []
     const skipped: Array<{ id: string; name?: string; reason: string }> = []

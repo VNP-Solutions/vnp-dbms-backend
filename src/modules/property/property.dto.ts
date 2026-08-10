@@ -17,7 +17,6 @@ import {
 } from 'class-validator'
 import { QueryDto } from '../../common/dto/query.dto'
 
-
 export class PropertyCredentialsInput {
   @ApiPropertyOptional({
     description: 'Expedia login — username or email (single field)'
@@ -233,7 +232,8 @@ export class CreatePropertyDto {
 
   @ApiPropertyOptional({
     example: '507f1f77bcf86cd799439099',
-    description: 'Currency ID (MongoDB ObjectId reference to Currency collection)'
+    description:
+      'Currency ID (MongoDB ObjectId reference to Currency collection)'
   })
   @IsMongoId()
   @IsOptional()
@@ -241,7 +241,8 @@ export class CreatePropertyDto {
 
   @ApiPropertyOptional({
     example: '507f1f77bcf86cd799439099',
-    description: 'Priority ID (MongoDB ObjectId reference to Priority collection)'
+    description:
+      'Priority ID (MongoDB ObjectId reference to Priority collection)'
   })
   @IsMongoId()
   @IsOptional()
@@ -327,7 +328,7 @@ export class CreatePropertyDto {
   @IsMongoId()
   agoda_processor_id?: string
 
-  @ApiPropertyOptional({ 
+  @ApiPropertyOptional({
     description: 'From date (YYYY-MM-DD format)',
     example: '2024-01-01'
   })
@@ -335,7 +336,7 @@ export class CreatePropertyDto {
   @IsOptional()
   from?: string
 
-  @ApiPropertyOptional({ 
+  @ApiPropertyOptional({
     description: 'To date (YYYY-MM-DD format)',
     example: '2024-12-31'
   })
@@ -512,7 +513,10 @@ export class CreatePropertyDto {
   @Type(() => Number)
   expedia_duration?: number
 
-  @ApiPropertyOptional({ description: 'Expedia DB duration in days', example: 30 })
+  @ApiPropertyOptional({
+    description: 'Expedia DB duration in days',
+    example: 30
+  })
   @IsNumber()
   @IsOptional()
   @Type(() => Number)
@@ -534,27 +538,42 @@ export class CreatePropertyDto {
   @IsOptional()
   expedia_crs_db?: string
 
-  @ApiPropertyOptional({ description: 'Expedia Run Date (YYYY-MM-DD)', example: '2024-01-01' })
+  @ApiPropertyOptional({
+    description: 'Expedia Run Date (YYYY-MM-DD)',
+    example: '2024-01-01'
+  })
   @IsString()
   @IsOptional()
   expedia_run_date?: string
 
-  @ApiPropertyOptional({ description: 'Expedia Run Date DB (YYYY-MM-DD)', example: '2024-01-01' })
+  @ApiPropertyOptional({
+    description: 'Expedia Run Date DB (YYYY-MM-DD)',
+    example: '2024-01-01'
+  })
   @IsString()
   @IsOptional()
   expedia_run_date_db?: string
 
-  @ApiPropertyOptional({ description: 'Expedia revised date (YYYY-MM-DD)', example: '2024-01-15' })
+  @ApiPropertyOptional({
+    description: 'Expedia revised date (YYYY-MM-DD)',
+    example: '2024-01-15'
+  })
   @IsString()
   @IsOptional()
   expedia_revised_date?: string
 
-  @ApiPropertyOptional({ description: 'Expedia Scheduler Review From (YYYY-MM-DD)', example: '2024-01-01' })
+  @ApiPropertyOptional({
+    description: 'Expedia Scheduler Review From (YYYY-MM-DD)',
+    example: '2024-01-01'
+  })
   @IsString()
   @IsOptional()
   expedia_scheduler_review_from?: string
 
-  @ApiPropertyOptional({ description: 'Expedia Scheduler Review To (YYYY-MM-DD)', example: '2024-12-31' })
+  @ApiPropertyOptional({
+    description: 'Expedia Scheduler Review To (YYYY-MM-DD)',
+    example: '2024-12-31'
+  })
   @IsString()
   @IsOptional()
   expedia_scheduler_review_to?: string
@@ -564,17 +583,26 @@ export class CreatePropertyDto {
   @IsOptional()
   expedia_scheduler_db?: string
 
-  @ApiPropertyOptional({ description: 'Expedia Scheduler Review DB From (YYYY-MM-DD)', example: '2024-01-01' })
+  @ApiPropertyOptional({
+    description: 'Expedia Scheduler Review DB From (YYYY-MM-DD)',
+    example: '2024-01-01'
+  })
   @IsString()
   @IsOptional()
   expedia_scheduler_review_db_from?: string
 
-  @ApiPropertyOptional({ description: 'Expedia Scheduler Review DB To (YYYY-MM-DD)', example: '2024-12-31' })
+  @ApiPropertyOptional({
+    description: 'Expedia Scheduler Review DB To (YYYY-MM-DD)',
+    example: '2024-12-31'
+  })
   @IsString()
   @IsOptional()
   expedia_scheduler_review_db_to?: string
 
-  @ApiPropertyOptional({ description: 'Expedia credential verified', example: true })
+  @ApiPropertyOptional({
+    description: 'Expedia credential verified',
+    example: true
+  })
   @Transform(({ value }) => {
     if (value === 'true') return true
     if (value === 'false') return false
@@ -589,12 +617,18 @@ export class CreatePropertyDto {
   @IsOptional()
   expedia_otp_number?: string
 
-  @ApiPropertyOptional({ description: 'From date DB (YYYY-MM-DD)', example: '2024-01-01' })
+  @ApiPropertyOptional({
+    description: 'From date DB (YYYY-MM-DD)',
+    example: '2024-01-01'
+  })
   @IsString()
   @IsOptional()
   from_db?: string
 
-  @ApiPropertyOptional({ description: 'To date DB (YYYY-MM-DD)', example: '2024-12-31' })
+  @ApiPropertyOptional({
+    description: 'To date DB (YYYY-MM-DD)',
+    example: '2024-12-31'
+  })
   @IsString()
   @IsOptional()
   to_db?: string
@@ -696,17 +730,26 @@ export class CreatePropertyDto {
   @IsOptional()
   booking_crs?: string
 
-  @ApiPropertyOptional({ description: 'Booking Run Date (YYYY-MM-DD)', example: '2024-01-01' })
+  @ApiPropertyOptional({
+    description: 'Booking Run Date (YYYY-MM-DD)',
+    example: '2024-01-01'
+  })
   @IsString()
   @IsOptional()
   booking_run_date?: string
 
-  @ApiPropertyOptional({ description: 'Booking revised date (YYYY-MM-DD)', example: '2024-01-15' })
+  @ApiPropertyOptional({
+    description: 'Booking revised date (YYYY-MM-DD)',
+    example: '2024-01-15'
+  })
   @IsString()
   @IsOptional()
   booking_revised_date?: string
 
-  @ApiPropertyOptional({ description: 'Booking credential verified', example: true })
+  @ApiPropertyOptional({
+    description: 'Booking credential verified',
+    example: true
+  })
   @Transform(({ value }) => {
     if (value === 'true') return true
     if (value === 'false') return false
@@ -818,17 +861,26 @@ export class CreatePropertyDto {
   @IsOptional()
   agoda_crs?: string
 
-  @ApiPropertyOptional({ description: 'Agoda Run Date (YYYY-MM-DD)', example: '2024-01-01' })
+  @ApiPropertyOptional({
+    description: 'Agoda Run Date (YYYY-MM-DD)',
+    example: '2024-01-01'
+  })
   @IsString()
   @IsOptional()
   agoda_run_date?: string
 
-  @ApiPropertyOptional({ description: 'Agoda revised date (YYYY-MM-DD)', example: '2024-01-15' })
+  @ApiPropertyOptional({
+    description: 'Agoda revised date (YYYY-MM-DD)',
+    example: '2024-01-15'
+  })
   @IsString()
   @IsOptional()
   agoda_revised_date?: string
 
-  @ApiPropertyOptional({ description: 'Agoda credential verified', example: true })
+  @ApiPropertyOptional({
+    description: 'Agoda credential verified',
+    example: true
+  })
   @Transform(({ value }) => {
     if (value === 'true') return true
     if (value === 'false') return false
@@ -919,7 +971,10 @@ export class BulkUpdateResultDto {
   @ApiProperty({ example: 10, description: 'Total number of rows processed' })
   totalRows: number
 
-  @ApiProperty({ example: 8, description: 'Number of properties successfully updated' })
+  @ApiProperty({
+    example: 8,
+    description: 'Number of properties successfully updated'
+  })
   successCount: number
 
   @ApiProperty({ example: 2, description: 'Number of rows that failed' })
@@ -1089,22 +1144,30 @@ export class PropertyQueryDto extends QueryDto {
   @IsString()
   portfolio_contact_email?: string
 
-  @ApiPropertyOptional({ description: 'Filter by service type ID (MongoDB ObjectId)' })
+  @ApiPropertyOptional({
+    description: 'Filter by service type ID (MongoDB ObjectId)'
+  })
   @IsOptional()
   @IsMongoId()
   service_type_id?: string
 
-  @ApiPropertyOptional({ description: 'Filter by currency ID (MongoDB ObjectId)' })
+  @ApiPropertyOptional({
+    description: 'Filter by currency ID (MongoDB ObjectId)'
+  })
   @IsOptional()
   @IsMongoId()
   currency_id?: string
 
-  @ApiPropertyOptional({ description: 'Filter by property identifier (partial match)' })
+  @ApiPropertyOptional({
+    description: 'Filter by property identifier (partial match)'
+  })
   @IsOptional()
   @IsString()
   property_identifier?: string
 
-  @ApiPropertyOptional({ description: 'Filter by portfolio contact (partial match)' })
+  @ApiPropertyOptional({
+    description: 'Filter by portfolio contact (partial match)'
+  })
   @IsOptional()
   @IsString()
   portfolio_contact?: string
@@ -1114,17 +1177,23 @@ export class PropertyQueryDto extends QueryDto {
   @IsString()
   fp_username?: string
 
-  @ApiPropertyOptional({ description: 'Expedia billing type ID (MongoDB ObjectId)' })
+  @ApiPropertyOptional({
+    description: 'Expedia billing type ID (MongoDB ObjectId)'
+  })
   @IsOptional()
   @IsMongoId()
   expedia_billing_type_id?: string
 
-  @ApiPropertyOptional({ description: 'Expedia service type ID (MongoDB ObjectId)' })
+  @ApiPropertyOptional({
+    description: 'Expedia service type ID (MongoDB ObjectId)'
+  })
   @IsOptional()
   @IsMongoId()
   expedia_service_type_id?: string
 
-  @ApiPropertyOptional({ description: 'Expedia frequency ID (MongoDB ObjectId)' })
+  @ApiPropertyOptional({
+    description: 'Expedia frequency ID (MongoDB ObjectId)'
+  })
   @IsOptional()
   @IsMongoId()
   expedia_frequency_id?: string
@@ -1134,7 +1203,9 @@ export class PropertyQueryDto extends QueryDto {
   @IsString()
   description?: string
 
-  @ApiPropertyOptional({ description: 'Filter by hotel address (partial match)' })
+  @ApiPropertyOptional({
+    description: 'Filter by hotel address (partial match)'
+  })
   @IsOptional()
   @IsString()
   hotel_address?: string
@@ -1195,12 +1266,18 @@ export class PropertyQueryDto extends QueryDto {
 }
 
 export class TransferPropertyDto {
-  @ApiProperty({ example: '507f1f77bcf86cd799439011', description: 'New portfolio ID (MongoDB ObjectId)' })
+  @ApiProperty({
+    example: '507f1f77bcf86cd799439011',
+    description: 'New portfolio ID (MongoDB ObjectId)'
+  })
   @IsMongoId()
   @IsNotEmpty()
   portfolio_id: string
 
-  @ApiProperty({ example: 'mySecretPassword', description: 'User account password for confirmation' })
+  @ApiProperty({
+    example: 'mySecretPassword',
+    description: 'User account password for confirmation'
+  })
   @IsString()
   @IsNotEmpty()
   password: string
@@ -1217,12 +1294,18 @@ export class BulkTransferPropertyDto {
   @IsNotEmpty({ each: true })
   ids: string[]
 
-  @ApiProperty({ example: '507f1f77bcf86cd799439011', description: 'Target portfolio ID (MongoDB ObjectId)' })
+  @ApiProperty({
+    example: '507f1f77bcf86cd799439011',
+    description: 'Target portfolio ID (MongoDB ObjectId)'
+  })
   @IsMongoId()
   @IsNotEmpty()
   portfolio_id: string
 
-  @ApiProperty({ example: 'mySecretPassword', description: 'User account password for confirmation' })
+  @ApiProperty({
+    example: 'mySecretPassword',
+    description: 'User account password for confirmation'
+  })
   @IsString()
   @IsNotEmpty()
   password: string
@@ -1336,7 +1419,8 @@ export const PROPERTY_FILTER_FIELD_NAMES = [
   'user_name_agoda'
 ] as const
 
-export type PropertyFilterFieldName = (typeof PROPERTY_FILTER_FIELD_NAMES)[number]
+export type PropertyFilterFieldName =
+  (typeof PROPERTY_FILTER_FIELD_NAMES)[number]
 
 const OID = '507f1f77bcf86cd799439013'
 
@@ -1348,16 +1432,11 @@ function swaggerExampleForFilterName(name: PropertyFilterFieldName): {
     return { in: [], sort_by: 'desc' }
   if (name === 'portfolio_id')
     return { in: [OID, '507f1f77bcf86cd799439014'], sort_by: 'asc' }
-  if (name === 'property_id')
-    return { in: ['507f1f77bcf86cd799439015'] }
-  if (name === 'subportfolio_id')
-    return { in: [OID] }
-  if (name === 'service_type_id')
-    return { in: ['507f1f77bcf86cd799439099'] }
-  if (name === 'currency_id')
-    return { in: ['507f1f77bcf86cd799439099'] }
-  if (name === 'priority_id')
-    return { in: ['507f1f77bcf86cd799439099'] }
+  if (name === 'property_id') return { in: ['507f1f77bcf86cd799439015'] }
+  if (name === 'subportfolio_id') return { in: [OID] }
+  if (name === 'service_type_id') return { in: ['507f1f77bcf86cd799439099'] }
+  if (name === 'currency_id') return { in: ['507f1f77bcf86cd799439099'] }
+  if (name === 'priority_id') return { in: ['507f1f77bcf86cd799439099'] }
   if (
     name === 'expedia_priority' ||
     name === 'booking_priority' ||
@@ -1418,7 +1497,7 @@ function swaggerExampleForFilterName(name: PropertyFilterFieldName): {
 
 /** One filter row per allowed field — for Swagger “all fields” body example. */
 export const PROPERTY_FILTER_SWAGGER_EXAMPLE_FILTERS =
-  PROPERTY_FILTER_FIELD_NAMES.map((name) => {
+  PROPERTY_FILTER_FIELD_NAMES.map(name => {
     const row = swaggerExampleForFilterName(name)
     return { name, ...row }
   })
@@ -1430,8 +1509,7 @@ const PROPERTY_FILTER_ITEM_NAME_DESCRIPTION = `Field to filter or sort. Allowed 
 const PROPERTY_FILTER_DTO_FILTERS_DESCRIPTION = `Each item: name (required, one of: ${PROPERTY_FILTER_FIELD_NAMES_LIST}), in (required; OR match; empty only for sort-only on created_at/updated_at), sort_by (optional asc|desc). Root fields: page, limit, search (name, description, hotel_address, property_identifier, portfolio_contact, card_descriptor), start_date, end_date, is_active, masked, user_name, user_password.`
 
 /** Full narrative for POST /property/filter Swagger operation text. */
-export const PROPERTY_FILTER_OPERATION_DESCRIPTION =
-  `Returns properties with optional pagination. filters[].name must be one of: ${PROPERTY_FILTER_FIELD_NAMES_LIST}. Each filter row: in = array of values (OR match); use in: [] only with sort_by for created_at or updated_at. Boolean fields (expedia_access_level, expedia_scheduler, booking_access_level, booking_scheduler, agoda_access_level, agoda_scheduler) accept true/false or "true"/"false". Numeric in values: expedia_id, booking_id, agoda_id, expedia_duration, booking_duration, agoda_duration. OTA date range filtering: *_from and *_to filters MUST be provided together as pairs (e.g., expedia_from + expedia_to). When both are present, they automatically create a range filter that finds properties where their OTA date ranges overlap with the provided range. Individual *_from or *_to filters without their pair are ignored. Enum strings: billing types VCC, DB, EBS; frequencies REGULAR, ONE_TIME, STOP; processors QuantumPay, Stripe, FreedomPay; OTA run-date priorities expedia_priority, booking_priority, agoda_priority accept REGULAR or HIGH (case-insensitive). currency_id accepts MongoDB ObjectId strings. Root body (outside filters): page, limit, search, start_date, end_date, is_active, masked, user_name, user_password (when masked=false).`
+export const PROPERTY_FILTER_OPERATION_DESCRIPTION = `Returns properties with optional pagination. filters[].name must be one of: ${PROPERTY_FILTER_FIELD_NAMES_LIST}. Each filter row: in = array of values (OR match); use in: [] only with sort_by for created_at or updated_at. Boolean fields (expedia_access_level, expedia_scheduler, booking_access_level, booking_scheduler, agoda_access_level, agoda_scheduler) accept true/false or "true"/"false". Numeric in values: expedia_id, booking_id, agoda_id, expedia_duration, booking_duration, agoda_duration. OTA date range filtering: *_from and *_to filters MUST be provided together as pairs (e.g., expedia_from + expedia_to). When both are present, they automatically create a range filter that finds properties where their OTA date ranges overlap with the provided range. Individual *_from or *_to filters without their pair are ignored. Enum strings: billing types VCC, DB, EBS; frequencies REGULAR, ONE_TIME, STOP; processors QuantumPay, Stripe, FreedomPay; OTA run-date priorities expedia_priority, booking_priority, agoda_priority accept REGULAR or HIGH (case-insensitive). currency_id accepts MongoDB ObjectId strings. Root body (outside filters): page, limit, search, start_date, end_date, is_active, masked, user_name, user_password (when masked=false).`
 
 export class PropertyFilterItem {
   @ApiProperty({
@@ -1445,13 +1523,14 @@ export class PropertyFilterItem {
   name: PropertyFilterFieldName
 
   @ApiPropertyOptional({
-    description: 'Sort order for this field (applied in array order for multi-field sorting)',
+    description:
+      'Sort order for this field (applied in array order for multi-field sorting)',
     example: 'asc',
     enum: ['asc', 'desc']
   })
   @IsOptional()
   @IsIn(['asc', 'desc'])
-  sort_by?: 'asc' | 'desc'
+  sort_by?: 'asc' | 'desc';
 
   @ApiProperty({
     description:
@@ -1521,7 +1600,8 @@ export class PropertyFilterDto {
   end_date?: Date
 
   @ApiPropertyOptional({
-    description: 'Filter by active status (true/false/All). true=active only, false=inactive only, All or omit=both',
+    description:
+      'Filter by active status (true/false/All). true=active only, false=inactive only, All or omit=both',
     example: true
   })
   @IsOptional()
@@ -1536,7 +1616,8 @@ export class PropertyFilterDto {
   is_active?: boolean
 
   @ApiPropertyOptional({
-    description: 'If true (default), credentials are masked. If false, credentials are decrypted. When false, user_name and user_password are required.',
+    description:
+      'If true (default), credentials are masked. If false, credentials are decrypted. When false, user_name and user_password are required.',
     example: true
   })
   @Transform(({ value }) => {
@@ -1549,7 +1630,8 @@ export class PropertyFilterDto {
   masked?: boolean
 
   @ApiPropertyOptional({
-    description: 'User email for authentication when masked=false. Required when requesting decrypted credentials.',
+    description:
+      'User email for authentication when masked=false. Required when requesting decrypted credentials.',
     example: 'user@example.com'
   })
   @IsOptional()
@@ -1557,7 +1639,8 @@ export class PropertyFilterDto {
   user_name?: string
 
   @ApiPropertyOptional({
-    description: 'User password for authentication when masked=false. Required when requesting decrypted credentials.',
+    description:
+      'User password for authentication when masked=false. Required when requesting decrypted credentials.',
     example: 'password123'
   })
   @IsOptional()
@@ -1648,13 +1731,25 @@ export class AllDataForGlobalFilterResponseDto {
   @ApiProperty({ type: [String] })
   agoda_status: string[]
 
-  @ApiProperty({ type: [Object], description: 'Unique Expedia Processor objects used across accessible properties' })
+  @ApiProperty({
+    type: [Object],
+    description:
+      'Unique Expedia Processor objects used across accessible properties'
+  })
   expedia_processor: object[]
 
-  @ApiProperty({ type: [Object], description: 'Unique Booking Processor objects used across accessible properties' })
+  @ApiProperty({
+    type: [Object],
+    description:
+      'Unique Booking Processor objects used across accessible properties'
+  })
   booking_processor: object[]
 
-  @ApiProperty({ type: [Object], description: 'Unique Agoda Processor objects used across accessible properties' })
+  @ApiProperty({
+    type: [Object],
+    description:
+      'Unique Agoda Processor objects used across accessible properties'
+  })
   agoda_processor: object[]
 
   @ApiProperty({ type: [String] })
@@ -1675,10 +1770,16 @@ export class AllDataForGlobalFilterResponseDto {
   @ApiProperty({ type: [String] })
   portfolio_contact: string[]
 
-  @ApiProperty({ type: [Object], description: 'Unique ServiceType objects used across accessible properties' })
+  @ApiProperty({
+    type: [Object],
+    description: 'Unique ServiceType objects used across accessible properties'
+  })
   service_type: object[]
 
-  @ApiProperty({ type: [Object], description: 'Unique Currency objects used across accessible properties' })
+  @ApiProperty({
+    type: [Object],
+    description: 'Unique Currency objects used across accessible properties'
+  })
   currency: object[]
 
   @ApiProperty({ type: [String] })
@@ -1693,13 +1794,25 @@ export class AllDataForGlobalFilterResponseDto {
   @ApiProperty({ type: [String], description: 'ISO date-time strings' })
   next_due_date: string[]
 
-  @ApiProperty({ type: [Object], description: 'Unique Expedia BillingType objects used across accessible properties' })
+  @ApiProperty({
+    type: [Object],
+    description:
+      'Unique Expedia BillingType objects used across accessible properties'
+  })
   expedia_billing_type: object[]
 
-  @ApiProperty({ type: [Object], description: 'Unique Expedia ServiceType objects used across accessible properties' })
+  @ApiProperty({
+    type: [Object],
+    description:
+      'Unique Expedia ServiceType objects used across accessible properties'
+  })
   expedia_service_type: object[]
 
-  @ApiProperty({ type: [Object], description: 'Unique Expedia Frequency objects used across accessible properties' })
+  @ApiProperty({
+    type: [Object],
+    description:
+      'Unique Expedia Frequency objects used across accessible properties'
+  })
   expedia_frequency: object[]
 
   @ApiProperty({ type: [String] })
@@ -1733,13 +1846,25 @@ export class AllDataForGlobalFilterResponseDto {
   })
   expedia_scheduler: string[]
 
-  @ApiProperty({ type: [Object], description: 'Unique Booking BillingType objects used across accessible properties' })
+  @ApiProperty({
+    type: [Object],
+    description:
+      'Unique Booking BillingType objects used across accessible properties'
+  })
   booking_billing_type: object[]
 
-  @ApiProperty({ type: [Object], description: 'Unique Booking ServiceType objects used across accessible properties' })
+  @ApiProperty({
+    type: [Object],
+    description:
+      'Unique Booking ServiceType objects used across accessible properties'
+  })
   booking_service_type: object[]
 
-  @ApiProperty({ type: [Object], description: 'Unique Booking Frequency objects used across accessible properties' })
+  @ApiProperty({
+    type: [Object],
+    description:
+      'Unique Booking Frequency objects used across accessible properties'
+  })
   booking_frequency: object[]
 
   @ApiProperty({ type: [String] })
@@ -1763,13 +1888,25 @@ export class AllDataForGlobalFilterResponseDto {
   })
   booking_scheduler: string[]
 
-  @ApiProperty({ type: [Object], description: 'Unique Agoda BillingType objects used across accessible properties' })
+  @ApiProperty({
+    type: [Object],
+    description:
+      'Unique Agoda BillingType objects used across accessible properties'
+  })
   agoda_billing_type: object[]
 
-  @ApiProperty({ type: [Object], description: 'Unique Agoda ServiceType objects used across accessible properties' })
+  @ApiProperty({
+    type: [Object],
+    description:
+      'Unique Agoda ServiceType objects used across accessible properties'
+  })
   agoda_service_type: object[]
 
-  @ApiProperty({ type: [Object], description: 'Unique Agoda Frequency objects used across accessible properties' })
+  @ApiProperty({
+    type: [Object],
+    description:
+      'Unique Agoda Frequency objects used across accessible properties'
+  })
   agoda_frequency: object[]
 
   @ApiProperty({ type: [String] })
@@ -1811,7 +1948,10 @@ export class AllDataForGlobalFilterResponseDto {
   @ApiProperty({ type: [String] })
   agoda_secondary_username: string[]
 
-  @ApiProperty({ type: [Object], description: 'Unique Priority objects used across accessible properties' })
+  @ApiProperty({
+    type: [Object],
+    description: 'Unique Priority objects used across accessible properties'
+  })
   priority: object[]
 
   @ApiProperty({
@@ -1871,7 +2011,10 @@ export class SyncByOtaDto {
 // ─── Expedia Property Checker ─────────────────────────────────────────────────
 
 export class ExpediaCheckPropertyItemDto {
-  @ApiProperty({ example: '507f1f77bcf86cd799439011', description: 'Internal MongoDB _id of the property' })
+  @ApiProperty({
+    example: '507f1f77bcf86cd799439011',
+    description: 'Internal MongoDB _id of the property'
+  })
   @IsString()
   @IsNotEmpty()
   _id: string
@@ -1880,12 +2023,18 @@ export class ExpediaCheckPropertyItemDto {
   @IsInt()
   expedia_id: number
 
-  @ApiProperty({ example: 'partner@example.com', description: 'Expedia account username (email)' })
+  @ApiProperty({
+    example: 'partner@example.com',
+    description: 'Expedia account username (email)'
+  })
   @IsString()
   @IsNotEmpty()
   expedia_username: string
 
-  @ApiProperty({ example: 'secret123', description: 'Expedia account password (never logged)' })
+  @ApiProperty({
+    example: 'secret123',
+    description: 'Expedia account password (never logged)'
+  })
   @IsString()
   @IsNotEmpty()
   expedia_password: string
@@ -1894,7 +2043,8 @@ export class ExpediaCheckPropertyItemDto {
 export class ExpediaCheckPropertiesDto {
   @ApiProperty({
     type: [ExpediaCheckPropertyItemDto],
-    description: 'List of properties to check. Items are grouped by expedia_username internally.'
+    description:
+      'List of properties to check. Items are grouped by expedia_username internally.'
   })
   @IsArray()
   @ValidateNested({ each: true })
@@ -1916,7 +2066,10 @@ export interface ExpediaCheckerUpstreamPayload {
 // ─── Agoda Property Checker ───────────────────────────────────────────────────
 
 export class AgodaCheckPropertyItemDto {
-  @ApiProperty({ example: '507f1f77bcf86cd799439011', description: 'Internal MongoDB _id of the property' })
+  @ApiProperty({
+    example: '507f1f77bcf86cd799439011',
+    description: 'Internal MongoDB _id of the property'
+  })
   @IsString()
   @IsNotEmpty()
   _id: string
@@ -1926,12 +2079,18 @@ export class AgodaCheckPropertyItemDto {
   @IsInt()
   agoda_id: number
 
-  @ApiProperty({ example: 'partner@example.com', description: 'Agoda account username (email)' })
+  @ApiProperty({
+    example: 'partner@example.com',
+    description: 'Agoda account username (email)'
+  })
   @IsString()
   @IsNotEmpty()
   agoda_username: string
 
-  @ApiProperty({ example: 'secret123', description: 'Agoda account password (never logged)' })
+  @ApiProperty({
+    example: 'secret123',
+    description: 'Agoda account password (never logged)'
+  })
   @IsString()
   @IsNotEmpty()
   agoda_password: string
@@ -1940,7 +2099,8 @@ export class AgodaCheckPropertyItemDto {
 export class AgodaCheckPropertiesDto {
   @ApiProperty({
     type: [AgodaCheckPropertyItemDto],
-    description: 'List of properties to check. Items are grouped by agoda_username internally.'
+    description:
+      'List of properties to check. Items are grouped by agoda_username internally.'
   })
   @IsArray()
   @ValidateNested({ each: true })
@@ -1951,11 +2111,17 @@ export class AgodaCheckPropertiesDto {
 // ─── Sync Bulk Upsert (external JWT endpoint) ────────────────────────────────
 
 export class SyncBulkUpsertItemDto {
-  @ApiProperty({ example: 2, description: 'Excel row number for error reporting' })
+  @ApiProperty({
+    example: 2,
+    description: 'Excel row number for error reporting'
+  })
   @IsInt()
   row: number
 
-  @ApiProperty({ example: 'property-parent-123', description: 'DBMS property ID — used to find/create the property' })
+  @ApiProperty({
+    example: 'property-parent-123',
+    description: 'DBMS property ID — used to find/create the property'
+  })
   @IsString()
   @IsNotEmpty()
   parent_id: string
@@ -1965,7 +2131,10 @@ export class SyncBulkUpsertItemDto {
   @IsNotEmpty()
   name: string
 
-  @ApiProperty({ example: 'portfolio-parent-123', description: 'DBMS portfolio ID' })
+  @ApiProperty({
+    example: 'portfolio-parent-123',
+    description: 'DBMS portfolio ID'
+  })
   @IsString()
   @IsNotEmpty()
   portfolio_parent_id: string
@@ -2062,10 +2231,51 @@ export interface SyncBulkUpsertResponseDto {
   successfulUpserts: Array<{ parent_id: string; action: 'created' | 'updated' }>
 }
 
+/// Body POSTed by the dashboard / scraper back to the DBMS once they finish
+/// processing an async bulk upsert in the background. `result` mirrors the
+/// shape those services already return from their sync-bulk-upsert endpoint.
+export class SyncCallbackDto {
+  @ApiProperty({
+    description: 'Batch id assigned by the DBMS when dispatching'
+  })
+  batchId: string
+
+  @ApiProperty({
+    enum: ['dashboard', 'scraper'],
+    description: 'Which service is reporting'
+  })
+  source: 'dashboard' | 'scraper'
+
+  @ApiProperty({ description: 'Per-row outcome of the bulk upsert' })
+  result: SyncBulkUpsertResponseDto
+}
+
+/// Response returned immediately by the DBMS bulk import / bulk update
+/// endpoints once the work has been accepted for background processing. The
+/// caller no longer waits for the (potentially many-minute) DBMS import or
+/// the dashboard/scraper sync — the per-row report is delivered by email
+/// (and is queryable via GET /property/sync-batch/:batchId) when complete.
+export class SyncBatchAcceptedDto {
+  @ApiProperty({ description: 'Unique id assigned to this sync batch' })
+  batchId: string
+
+  @ApiProperty({ example: 'accepted', description: 'Always "accepted" on success' })
+  status: string
+
+  @ApiProperty({
+    example: 'Import started. You will receive an email report when the sync is complete.',
+    description: 'Human-readable note about what happens next'
+  })
+  message: string
+}
+
 // ─── Sync Bulk Delete (external JWT endpoint) ────────────────────────────────
 
 export class SyncBulkDeleteItemDto {
-  @ApiProperty({ example: 'dbms-property-id-1', description: 'DBMS property ID to delete' })
+  @ApiProperty({
+    example: 'dbms-property-id-1',
+    description: 'DBMS property ID to delete'
+  })
   @IsString()
   @IsNotEmpty()
   parent_id: string
