@@ -2238,15 +2238,19 @@ export class SyncCallbackDto {
   @ApiProperty({
     description: 'Batch id assigned by the DBMS when dispatching'
   })
+  @IsString()
+  @IsNotEmpty()
   batchId: string
 
   @ApiProperty({
     enum: ['dashboard', 'scraper'],
     description: 'Which service is reporting'
   })
+  @IsIn(['dashboard', 'scraper'])
   source: 'dashboard' | 'scraper'
 
   @ApiProperty({ description: 'Per-row outcome of the bulk upsert' })
+  @IsObject()
   result: SyncBulkUpsertResponseDto
 }
 
@@ -2259,11 +2263,15 @@ export class SyncBatchAcceptedDto {
   @ApiProperty({ description: 'Unique id assigned to this sync batch' })
   batchId: string
 
-  @ApiProperty({ example: 'accepted', description: 'Always "accepted" on success' })
+  @ApiProperty({
+    example: 'accepted',
+    description: 'Always "accepted" on success'
+  })
   status: string
 
   @ApiProperty({
-    example: 'Import started. You will receive an email report when the sync is complete.',
+    example:
+      'Import started. You will receive an email report when the sync is complete.',
     description: 'Human-readable note about what happens next'
   })
   message: string

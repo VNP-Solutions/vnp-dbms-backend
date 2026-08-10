@@ -70,9 +70,10 @@ export interface Configuration {
   scraperServiceToken: string
   syncTimeoutMs: number
   serviceToken: string
-  /// This DBMS backend's own reachable base URL (used to build the
+  /// This DBMS backend's own reachable base URL (used ONLY to build the
   /// sync-callback URL that dashboard/scraper POST their results to).
-  publicApiUrl: string
+  /// Separate from PUBLIC_API_URL (used for cookie-domain resolution).
+  dbmsApiUrl: string
   runDateCapacity: {
     expedia: number
     booking: number
@@ -197,8 +198,7 @@ export default (): Configuration => {
     scraperServiceToken: process.env.SCRAPER_SERVICE_TOKEN || '',
     syncTimeoutMs: parseInt(process.env.SYNC_TIMEOUT_MS || '15000', 10),
     serviceToken: process.env.SERVICE_TOKEN || '',
-    publicApiUrl:
-      process.env.PUBLIC_API_URL || process.env.PUBLIC_BASE_URL || '',
+    dbmsApiUrl: process.env.DBMS_API_URL || '',
     runDateCapacity: {
       expedia: parseInt(process.env.EXPEDIA_CAPACITY || '5', 10),
       booking: parseInt(process.env.BOOKING_CAPACITY || '5', 10),

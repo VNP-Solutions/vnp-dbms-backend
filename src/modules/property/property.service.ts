@@ -5522,9 +5522,9 @@ export class PropertyService implements IPropertyService {
     filename: string
   }): Promise<string> {
     const batchId = params.batchId
-    const publicApiUrl = this.config.get('publicApiUrl', { infer: true }) ?? ''
-    const callbackUrl = publicApiUrl
-      ? `${publicApiUrl.replace(/\/$/, '')}/api/property/sync-callback`
+    const dbmsApiUrl = this.config.get('dbmsApiUrl', { infer: true }) ?? ''
+    const callbackUrl = dbmsApiUrl
+      ? `${dbmsApiUrl.replace(/\/$/, '')}/api/property/sync-callback`
       : ''
 
     // The batch was already created (pending, dbms_summary importing) when the
@@ -5677,7 +5677,10 @@ export class PropertyService implements IPropertyService {
 
     received[source] = result
     const haveAll = batch.expected.every(s => received[s])
-    const status = haveAll ? 'complete' : 'partial'
+    // Use 'finalizing' (not 'complete') so finalizeSyncBatch's guard
+    // (which bails on 'complete') actually runs. finalize sets 'complete'
+    // at the end once the email has been sent.
+    const status = haveAll ? 'finalizing' : 'partial'
 
     await this.prisma.syncBatch.update({
       where: { id: batch.id },
@@ -5703,7 +5706,13 @@ export class PropertyService implements IPropertyService {
     const batch = await this.prisma.syncBatch.findUnique({
       where: { id: batchDbId }
     })
-    if (!batch || batch.status === 'complete') return
+    if (!batch || batch.status === 'complete') {
+      return
+    }
+
+    this.syncLogger.step(
+      `📧 Finalizing sync batch ${batch.batch_id} — building per-row report + sending email to ${batch.user_email}`
+    )
 
     const received: Record<string, SyncBulkUpsertResponseDto> =
       (batch.received as any) ?? {}
@@ -5885,7 +5894,9 @@ export class PropertyService implements IPropertyService {
     const staleBefore = new Date(Date.now() - this.syncBatchStaleMs)
     const stale = await this.prisma.syncBatch.findMany({
       where: {
-        status: { in: ['pending', 'partial'] },
+        // 'finalizing' is included so a batch whose finalize crashed (server
+        // restart mid-email) gets retried instead of stuck forever.
+        status: { in: ['pending', 'partial', 'finalizing'] },
         created_at: { lt: staleBefore }
       }
     })
@@ -5955,7 +5966,7 @@ export class PropertyService implements IPropertyService {
       if (changed) {
         await this.prisma.syncBatch.update({
           where: { id: batch.id },
-          data: { received: received as any, status: 'complete' }
+          data: { received: received as any, status: 'finalizing' }
         })
       }
       this.finalizeSyncBatch(batch.id).catch(e =>
