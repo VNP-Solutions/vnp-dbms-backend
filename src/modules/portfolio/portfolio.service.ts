@@ -922,66 +922,24 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
 
     // ── Dashboard & parser bulk-upsert sync ───────────────────────────────────
     if (portfolios.length) {
-      const dashboardItems = portfolios.map(
-        ({
-          row_no,
-          portfolio: p,
-          service_type_name,
-          currency_code,
-          file_count
-        }) => ({
-          row: row_no,
-          parent_id: p.id,
-          name: p.name,
-          service_type: service_type_name,
-          currency: currency_code,
-          is_active: p.is_active,
-          is_commissionable: p.is_commissionable,
-          file_count
-        })
+      await this.syncPortfoliosBulkUpsert(
+        portfolios.map(
+          ({
+            row_no,
+            portfolio: p,
+            service_type_name,
+            currency_code,
+            file_count
+          }) => ({
+            row: row_no,
+            portfolio: p,
+            service_type_name,
+            currency_code,
+            file_count
+          })
+        ),
+        'bulk-upsert-import'
       )
-
-      const parserItems = portfolios.map(({ row_no, portfolio: p }) => ({
-        row: row_no,
-        parent_id: p.id,
-        name: p.name
-      }))
-
-      if (this.dashboardClient) {
-        this.postSync(
-          this.dashboardClient,
-          '/api/portfolio/sync-bulk-upsert',
-          { items: dashboardItems } as unknown as Record<string, unknown>,
-          'dashboard',
-          'bulk-upsert-import'
-        ).catch(e =>
-          this.logger.error(
-            `[sync] dashboard portfolio bulk-upsert failed: ${e?.message ?? e}`
-          )
-        )
-      } else {
-        this.logger.warn(
-          '[sync] dashboard disabled — skipping portfolio bulk-upsert sync'
-        )
-      }
-
-      if (this.scraperClient) {
-        this.postSync(
-          this.scraperClient,
-          '/portfolios/sync-bulk-upsert',
-          { items: parserItems } as unknown as Record<string, unknown>,
-          'scraper',
-          'bulk-upsert-import'
-        ).catch(e =>
-          this.logger.error(
-            `[sync] scraper portfolio bulk-upsert failed: ${e?.message ?? e}`
-          )
-        )
-      } else {
-        this.logger.warn(
-          '[sync] scraper disabled — skipping portfolio bulk-upsert sync'
-        )
-      }
     }
 
     return {
@@ -1149,5 +1107,113 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
       )
     }
     return full ?? portfolio
+  }
+
+  /**
+   * Sync portfolios created elsewhere (e.g. property bulk import/update) to
+   * dashboard and scraper via bulk-upsert endpoints.
+   */
+  async syncPortfoliosBulkUpsertByIds(portfolioIds: string[]): Promise<void> {
+    const uniqueIds = [...new Set(portfolioIds.filter(Boolean))]
+    if (!uniqueIds.length) return
+
+    const portfolios = await this.prisma.portfolio.findMany({
+      where: { id: { in: uniqueIds } },
+      include: {
+        service_type: { select: { type: true } },
+        currency: { select: { code: true } }
+      }
+    })
+
+    if (!portfolios.length) {
+      this.logger.warn(
+        `[sync] no portfolios found for bulk-upsert sync (ids: ${uniqueIds.join(', ')})`
+      )
+      return
+    }
+
+    await this.syncPortfoliosBulkUpsert(
+      portfolios.map((p, index) => ({
+        row: index + 1,
+        portfolio: p,
+        service_type_name: p.service_type?.type ?? 'OTA',
+        currency_code: p.currency?.code ?? 'USD',
+        file_count: 0
+      })),
+      'bulk-upsert-property-import'
+    )
+  }
+
+  private async syncPortfoliosBulkUpsert(
+    items: Array<{
+      row: number
+      portfolio: {
+        id: string
+        name: string
+        is_active: boolean
+        is_commissionable: boolean
+      }
+      service_type_name: string
+      currency_code: string
+      file_count: number
+    }>,
+    operationLabel: string
+  ): Promise<void> {
+    if (!items.length) return
+
+    const dashboardItems = items.map(
+      ({ row, portfolio: p, service_type_name, currency_code, file_count }) => ({
+        row,
+        parent_id: p.id,
+        name: p.name,
+        service_type: service_type_name,
+        currency: currency_code,
+        is_active: p.is_active,
+        is_commissionable: p.is_commissionable,
+        file_count
+      })
+    )
+
+    const parserItems = items.map(({ row, portfolio: p }) => ({
+      row,
+      parent_id: p.id,
+      name: p.name
+    }))
+
+    if (this.dashboardClient) {
+      await this.postSync(
+        this.dashboardClient,
+        '/api/portfolio/sync-bulk-upsert',
+        { items: dashboardItems } as unknown as Record<string, unknown>,
+        'dashboard',
+        operationLabel
+      ).catch(e =>
+        this.logger.error(
+          `[sync] dashboard portfolio bulk-upsert failed: ${e?.message ?? e}`
+        )
+      )
+    } else {
+      this.logger.warn(
+        '[sync] dashboard disabled — skipping portfolio bulk-upsert sync'
+      )
+    }
+
+    if (this.scraperClient) {
+      await this.postSync(
+        this.scraperClient,
+        '/portfolios/sync-bulk-upsert',
+        { items: parserItems } as unknown as Record<string, unknown>,
+        'scraper',
+        operationLabel
+      ).catch(e =>
+        this.logger.error(
+          `[sync] scraper portfolio bulk-upsert failed: ${e?.message ?? e}`
+        )
+      )
+    } else {
+      this.logger.warn(
+        '[sync] scraper disabled — skipping portfolio bulk-upsert sync'
+      )
+    }
   }
 }

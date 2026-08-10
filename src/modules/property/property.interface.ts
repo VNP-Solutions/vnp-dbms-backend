@@ -174,6 +174,8 @@ export interface ImportPropertiesResult {
   propertiesSkipped: number
   properties: any[]
   skippedProperties: Array<{ name: string; reason: string }>
+  /** Portfolios auto-created during import (for dashboard/scraper sync). */
+  createdPortfolios?: Array<{ id: string; name: string }>
 }
 
 export interface GetPropertyCredentialResult {
@@ -320,6 +322,11 @@ export interface IPropertyRepository {
     rows: ImportPropertyRow[],
     userId?: string
   ): Promise<ImportPropertiesResult>
+  resolveOrCreatePortfolio(
+    portfolioName: string
+  ): Promise<
+    { id: string; name: string; created: boolean } | { error: string }
+  >
   findIdsByOtaIds(ota: {
     expedia_id?: number | null
     booking_id?: number | null
@@ -480,4 +487,5 @@ export interface ImportPropertiesResult {
   properties: any[]
   existingProperties?: any[] // existed on DBMS — still attempt parser sync
   skippedProperties: Array<{ name: string; reason: string }>
+  createdPortfolios?: Array<{ id: string; name: string }>
 }

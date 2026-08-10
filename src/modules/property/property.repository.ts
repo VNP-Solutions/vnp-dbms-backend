@@ -535,6 +535,7 @@ export class PropertyRepository implements IPropertyRepository {
     const createdProperties: any[] = []
     const skippedProperties: Array<{ name: string; reason: string }> = []
     const existingProperties: any[] = []
+    const createdPortfolios: Array<{ id: string; name: string }> = []
     const seenIdentifiersInBatch = new Set<string>()
 
     for (const row of rows) {
@@ -553,58 +554,21 @@ export class PropertyRepository implements IPropertyRepository {
       }
 
       // Find or create portfolio by name
-      let portfolio = await this.prisma.portfolio.findUnique({
-        where: { name: portfolioName },
-        select: { id: true, name: true }
-      })
-
-      if (!portfolio) {
-        logger.log(`Portfolio "${portfolioName}" not found — creating it`)
-
-        // Find or create default "OTA" ServiceType
-        let defaultServiceType = await this.prisma.serviceType.findFirst({
-          where: { type: { equals: 'OTA', mode: 'insensitive' } }
+      const portfolioResult = await this.resolveOrCreatePortfolio(
+        portfolioName,
+        logger
+      )
+      if ('error' in portfolioResult) {
+        skippedProperties.push({
+          name: propertyName,
+          reason: portfolioResult.error
         })
-
-        if (!defaultServiceType) {
-          logger.log('Default "OTA" service type not found, creating it...')
-          const maxOrder = await this.prisma.serviceType.findFirst({
-            orderBy: { order: 'desc' },
-            select: { order: true }
-          })
-          defaultServiceType = await this.prisma.serviceType.create({
-            data: {
-              type: 'OTA',
-              is_active: true,
-              order: (maxOrder?.order ?? 0) + 1
-            }
-          })
-          logger.log('Default "OTA" service type created successfully')
-        }
-
-        // Create the portfolio
-        try {
-          portfolio = await this.prisma.portfolio.create({
-            data: {
-              name: portfolioName,
-              service_type_id: defaultServiceType.id,
-              is_active: true,
-              is_commissionable: false
-            },
-            select: { id: true, name: true }
-          })
-          logger.log(`Portfolio "${portfolioName}" created successfully`)
-        } catch (err: any) {
-          logger.error(
-            `Error creating portfolio "${portfolioName}": ${err.message}`
-          )
-          skippedProperties.push({
-            name: propertyName,
-            reason: `Error creating portfolio: ${err.message}`
-          })
-          propertiesSkipped++
-          continue
-        }
+        propertiesSkipped++
+        continue
+      }
+      const portfolio = { id: portfolioResult.id, name: portfolioResult.name }
+      if (portfolioResult.created) {
+        createdPortfolios.push({ id: portfolio.id, name: portfolio.name })
       }
 
       let subportfolioId: string | undefined
@@ -1223,7 +1187,67 @@ export class PropertyRepository implements IPropertyRepository {
       propertiesSkipped,
       properties: createdProperties,
       existingProperties,
-      skippedProperties
+      skippedProperties,
+      createdPortfolios
+    }
+  }
+
+  async resolveOrCreatePortfolio(
+    portfolioName: string,
+    logger = new Logger(PropertyRepository.name)
+  ): Promise<
+    { id: string; name: string; created: boolean } | { error: string }
+  > {
+    const trimmed = portfolioName?.trim()
+    if (!trimmed) {
+      return { error: 'Portfolio name is empty' }
+    }
+
+    const existing = await this.prisma.portfolio.findUnique({
+      where: { name: trimmed },
+      select: { id: true, name: true }
+    })
+    if (existing) {
+      return { id: existing.id, name: existing.name, created: false }
+    }
+
+    logger.log(`Portfolio "${trimmed}" not found — creating it`)
+
+    let defaultServiceType = await this.prisma.serviceType.findFirst({
+      where: { type: { equals: 'OTA', mode: 'insensitive' } }
+    })
+
+    if (!defaultServiceType) {
+      logger.log('Default "OTA" service type not found, creating it...')
+      const maxOrder = await this.prisma.serviceType.findFirst({
+        orderBy: { order: 'desc' },
+        select: { order: true }
+      })
+      defaultServiceType = await this.prisma.serviceType.create({
+        data: {
+          type: 'OTA',
+          is_active: true,
+          order: (maxOrder?.order ?? 0) + 1
+        }
+      })
+      logger.log('Default "OTA" service type created successfully')
+    }
+
+    try {
+      const portfolio = await this.prisma.portfolio.create({
+        data: {
+          name: trimmed,
+          service_type_id: defaultServiceType.id,
+          is_active: true,
+          is_commissionable: false
+        },
+        select: { id: true, name: true }
+      })
+      logger.log(`Portfolio "${trimmed}" created successfully`)
+      return { id: portfolio.id, name: portfolio.name, created: true }
+    } catch (err: any) {
+      logger.error(`Error creating portfolio "${trimmed}": ${err.message}`)
+      return { error: `Error creating portfolio: ${err.message}` }
     }
   }
 

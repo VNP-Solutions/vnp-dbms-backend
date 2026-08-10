@@ -100,4 +100,6 @@ export interface IPortfolioService {
   createAndSync(data: CreatePortfolioDto, user: IUserWithPermissions): Promise<Portfolio>
   updateAndSync(id: string, data: UpdatePortfolioDto, user: IUserWithPermissions): Promise<Portfolio>
   removeAndSync(id: string, user: IUserWithPermissions): Promise<{ message: string }>
+  /** Sync portfolios (e.g. auto-created during property import) to dashboard + scraper. */
+  syncPortfoliosBulkUpsertByIds(portfolioIds: string[]): Promise<void>
 }

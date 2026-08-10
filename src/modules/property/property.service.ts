@@ -2382,6 +2382,21 @@ export class PropertyService implements IPropertyService {
       ...(result.existingProperties ?? [])
     ]
 
+    if (result.createdPortfolios?.length) {
+      this.syncLogger.info(
+        `Syncing ${result.createdPortfolios.length} auto-created portfolio(s) to dashboard/scraper...`
+      )
+      await this.portfolioService
+        .syncPortfoliosBulkUpsertByIds(
+          result.createdPortfolios.map(p => p.id)
+        )
+        .catch(e =>
+          this.syncLogger.error(
+            `[sync] portfolio bulk-upsert after property import failed: ${e?.message ?? e}`
+          )
+        )
+    }
+
     await this.prisma.syncBatch.update({
       where: { batch_id: batchId },
       data: {
@@ -2641,6 +2656,7 @@ export class PropertyService implements IPropertyService {
 
     // Tracks successfully updated properties for post-loop sync
     const syncQueue: Array<{ rowNumber: number; propertyId: string }> = []
+    const createdPortfolioIds: string[] = []
 
     // Helper to find a column value with flexible header matching (case-insensitive, strips asterisks)
     const findValue = (
@@ -3111,19 +3127,22 @@ export class PropertyService implements IPropertyService {
             'Portfolio name'
           ])
           if (portfolioName) {
-            const portfolio = await this.prisma.portfolio.findFirst({
-              where: { name: portfolioName }
-            })
-            if (!portfolio) {
+            const portfolioResult = await this.repo.resolveOrCreatePortfolio(
+              portfolioName
+            )
+            if ('error' in portfolioResult) {
               result.errors.push({
                 row: rowNumber,
                 propertyName: existingProperty.name,
-                error: `Portfolio not found: ${portfolioName}`
+                error: portfolioResult.error
               })
               result.failureCount++
               continue
             }
-            updateData.portfolio_id = portfolio.id
+            if (portfolioResult.created) {
+              createdPortfolioIds.push(portfolioResult.id)
+            }
+            updateData.portfolio_id = portfolioResult.id
           }
 
           const subportfolioName = findValue(row, [
@@ -3989,6 +4008,19 @@ export class PropertyService implements IPropertyService {
           })
           result.failureCount++
         }
+      }
+
+      if (createdPortfolioIds.length) {
+        this.syncLogger.info(
+          `Syncing ${createdPortfolioIds.length} auto-created portfolio(s) to dashboard/scraper...`
+        )
+        await this.portfolioService
+          .syncPortfoliosBulkUpsertByIds(createdPortfolioIds)
+          .catch(e =>
+            this.syncLogger.error(
+              `[sync] portfolio bulk-upsert after property bulk-update failed: ${e?.message ?? e}`
+            )
+          )
       }
 
       // ── Post-loop: record DBMS summary, then dispatch to dashboard + scraper ──
@@ -5467,6 +5499,51 @@ export class PropertyService implements IPropertyService {
     return merged
   }
 
+  private buildSyncBulkUpsertResultFromChunked(
+    items: Record<string, unknown>[],
+    merged: {
+      errors: Array<{ row: number; parent_id: string; error: string }>
+      successfulUpserts: Array<{
+        parent_id: string
+        action: 'created' | 'updated'
+      }>
+    } | null,
+    fallbackError?: string
+  ): SyncBulkUpsertResponseDto {
+    if (!merged) {
+      const errorMsg = fallbackError ?? 'Sync failed'
+      return {
+        totalRows: items.length,
+        createdCount: 0,
+        updatedCount: 0,
+        failureCount: items.length,
+        errors: items.map((item, index) => ({
+          row: typeof item.row === 'number' ? item.row : index + 1,
+          parent_id:
+            typeof item.parent_id === 'string' ? item.parent_id : 'Unknown',
+          error: errorMsg
+        })),
+        successfulUpserts: []
+      }
+    }
+
+    const createdCount = merged.successfulUpserts.filter(
+      s => s.action === 'created'
+    ).length
+    const updatedCount = merged.successfulUpserts.filter(
+      s => s.action === 'updated'
+    ).length
+
+    return {
+      totalRows: items.length,
+      createdCount,
+      updatedCount,
+      failureCount: merged.errors.length,
+      errors: merged.errors,
+      successfulUpserts: merged.successfulUpserts
+    }
+  }
+
   // ─── Async callback sync (long-term solution) ────────────────────────────
   // The DBMS no longer blocks on dashboard/scraper sync results. After its own
   // import/update it persists a SyncBatch (unique batchId + compact per-row
@@ -5542,7 +5619,6 @@ export class PropertyService implements IPropertyService {
       `📦 Sync batch ${batchId} created — ${params.rows.length} rows, scraper items=${params.scraperItems.length}, dashboard items=${params.dashboardItems.length}, callback=${callbackUrl || '(none)'}`
     )
 
-    const authHeaders = this.syncCommunication.createAuthHeaders()
     const emptyResult: SyncBulkUpsertResponseDto = {
       totalRows: 0,
       createdCount: 0,
@@ -5552,56 +5628,76 @@ export class PropertyService implements IPropertyService {
       successfulUpserts: []
     }
 
-    // Scraper dispatch — only await the 202 ack; processing happens in the
-    // background on the scraper, which POSTs the result to callbackUrl.
-    if (params.scraperItems.length && this.scraperJwtClient) {
-      this.scraperJwtClient
-        .post(
-          '/properties/sync-bulk-upsert',
-          { items: params.scraperItems, batchId, callbackUrl },
-          { headers: authHeaders }
+    // Dashboard/scraper property sync-bulk-upsert expects a raw items array
+    // (not { items, batchId, callbackUrl }). Run chunked sync synchronously and
+    // record results as callbacks until those services support async dispatch.
+    const dispatchScraper = async () => {
+      if (!params.scraperItems.length || !this.scraperJwtClient) {
+        await this.recordSyncCallbackInternal(batchId, 'scraper', emptyResult)
+        return
+      }
+      try {
+        const merged = await this.runScraperBulkUpsertChunked(
+          params.scraperItems
         )
-        .then(r =>
-          this.syncLogger.info(
-            `[scraper] dispatch ack ${r.status} for batch ${batchId}`
+        const result = this.buildSyncBulkUpsertResultFromChunked(
+          params.scraperItems,
+          merged
+        )
+        await this.recordSyncCallbackInternal(batchId, 'scraper', result)
+        this.syncLogger.info(`[scraper] dispatch complete for batch ${batchId}`)
+      } catch (e: any) {
+        const reason = this.extractSyncErrorReason(e)
+        this.syncLogger.error(
+          `[scraper] dispatch failed for batch ${batchId}: ${reason}`
+        )
+        await this.recordSyncCallbackInternal(
+          batchId,
+          'scraper',
+          this.buildSyncBulkUpsertResultFromChunked(
+            params.scraperItems,
+            null,
+            reason
           )
         )
-        .catch(e =>
-          this.syncLogger.error(
-            `[scraper] dispatch failed for batch ${batchId}: ${this.extractSyncErrorReason(e)} — sweeper will mark stale`
-          )
-        )
-    } else {
-      // No eligible items or scraper not configured — record empty result so
-      // the batch can still complete instead of waiting forever.
-      this.recordSyncCallbackInternal(batchId, 'scraper', emptyResult).catch(
-        e => this.logger.error(`[scraper] synthetic record failed: ${e}`)
-      )
+      }
     }
 
-    // Dashboard dispatch — same pattern as scraper.
-    if (params.dashboardItems.length && this.dashboardJwtClient) {
-      this.dashboardJwtClient
-        .post(
-          '/api/property/sync-bulk-upsert',
-          { items: params.dashboardItems, batchId, callbackUrl },
-          { headers: authHeaders }
+    const dispatchDashboard = async () => {
+      if (!params.dashboardItems.length || !this.dashboardJwtClient) {
+        await this.recordSyncCallbackInternal(batchId, 'dashboard', emptyResult)
+        return
+      }
+      try {
+        const merged = await this.runDashboardBulkUpsertChunked(
+          params.dashboardItems
         )
-        .then(r =>
-          this.syncLogger.info(
-            `[dashboard] dispatch ack ${r.status} for batch ${batchId}`
+        const result = this.buildSyncBulkUpsertResultFromChunked(
+          params.dashboardItems,
+          merged
+        )
+        await this.recordSyncCallbackInternal(batchId, 'dashboard', result)
+        this.syncLogger.info(
+          `[dashboard] dispatch complete for batch ${batchId}`
+        )
+      } catch (e: any) {
+        const reason = this.extractSyncErrorReason(e)
+        this.syncLogger.error(
+          `[dashboard] dispatch failed for batch ${batchId}: ${reason}`
+        )
+        await this.recordSyncCallbackInternal(
+          batchId,
+          'dashboard',
+          this.buildSyncBulkUpsertResultFromChunked(
+            params.dashboardItems,
+            null,
+            reason
           )
         )
-        .catch(e =>
-          this.syncLogger.error(
-            `[dashboard] dispatch failed for batch ${batchId}: ${this.extractSyncErrorReason(e)} — sweeper will mark stale`
-          )
-        )
-    } else {
-      this.recordSyncCallbackInternal(batchId, 'dashboard', emptyResult).catch(
-        e => this.logger.error(`[dashboard] synthetic record failed: ${e}`)
-      )
+      }
     }
+
+    await Promise.all([dispatchScraper(), dispatchDashboard()])
 
     return batchId
   }
