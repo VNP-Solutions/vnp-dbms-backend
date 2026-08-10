@@ -8,9 +8,10 @@ import {
   NotFoundException
 } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
+import { Cron, CronExpression } from '@nestjs/schedule'
 import type { Priority } from '@prisma/client'
 import axios, { AxiosInstance } from 'axios'
-import { createHash } from 'crypto'
+import { createHash, randomUUID } from 'crypto'
 import * as XLSX from 'xlsx'
 import type { PaginatedResult } from '../../common/dto/query.dto'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
@@ -19,6 +20,7 @@ import { GlobalFilterCacheService } from '../../common/services/global-filter-ca
 import { SyncCommunicationService } from '../../common/services/sync-communication.service'
 import { EmailUtil } from '../../common/utils/email.util'
 import { EncryptionUtil } from '../../common/utils/encryption.util'
+import { ColoredLogger } from '../../common/utils/colored-logger.util'
 import {
   EXCEL_HISTORICAL_DATE_HEADERS,
   findExcelCellValue,
@@ -39,7 +41,9 @@ import {
   propertyIdentifierKey
 } from './property-uniqueness.util'
 import type {
+  SyncBatchAcceptedDto,
   SyncBulkDeleteResponseDto,
+  SyncBulkUpsertResponseDto,
   SyncBulkUpsertRowResult
 } from './property.dto'
 import {
@@ -72,6 +76,7 @@ const GLOBAL_FILTER_KEY = (userId: string) => `global-filter:all:${userId}`
 @Injectable()
 export class PropertyService implements IPropertyService {
   private readonly logger = new Logger(PropertyService.name)
+  private readonly syncLogger = new ColoredLogger('PropertyBulkSync')
 
   private async invalidateCaches(): Promise<void> {
     await this.globalFilterCache.invalidateAll()
@@ -103,6 +108,22 @@ export class PropertyService implements IPropertyService {
   private readonly dashboardJwtClient: AxiosInstance | null
   private readonly scraperClient: AxiosInstance | null
   private readonly scraperJwtClient: AxiosInstance | null
+  private readonly dashboardBulkChunkSize: number = parseInt(
+    process.env.SYNC_DASHBOARD_CHUNK_SIZE || '100',
+    10
+  )
+  private readonly dashboardBulkConcurrency: number = parseInt(
+    process.env.SYNC_DASHBOARD_CONCURRENCY || '6',
+    10
+  )
+  private readonly scraperBulkChunkSize: number = parseInt(
+    process.env.SYNC_SCRAPER_CHUNK_SIZE || '100',
+    10
+  )
+  private readonly scraperBulkConcurrency: number = parseInt(
+    process.env.SYNC_SCRAPER_CONCURRENCY || '6',
+    10
+  )
 
   constructor(
     @Inject('IPropertyRepository')
@@ -232,16 +253,16 @@ export class PropertyService implements IPropertyService {
     //   no priority         → legacy: calculate if _to + _crs present
     const runDateUpdates = await this.runDateCalculator.calcRunDatesForProperty(
       {
-        created_at:       property.created_at,
-        expedia_to:       encryptedData.expedia_to,
-        expedia_crs:      encryptedData.expedia_crs,
+        created_at: property.created_at,
+        expedia_to: encryptedData.expedia_to,
+        expedia_crs: encryptedData.expedia_crs,
         expedia_priority: encryptedData.expedia_priority,
-        booking_to:       encryptedData.booking_to,
-        booking_crs:      encryptedData.booking_crs,
+        booking_to: encryptedData.booking_to,
+        booking_crs: encryptedData.booking_crs,
         booking_priority: encryptedData.booking_priority,
-        agoda_to:         encryptedData.agoda_to,
-        agoda_crs:        encryptedData.agoda_crs,
-        agoda_priority:   encryptedData.agoda_priority
+        agoda_to: encryptedData.agoda_to,
+        agoda_crs: encryptedData.agoda_crs,
+        agoda_priority: encryptedData.agoda_priority
       },
       property.id
     )
@@ -822,16 +843,24 @@ export class PropertyService implements IPropertyService {
             whereConditions.push({ agoda_revised_date: { in: values } })
             break
           case 'expedia_scheduler_review_from':
-            whereConditions.push({ expedia_scheduler_review_from: { in: values } })
+            whereConditions.push({
+              expedia_scheduler_review_from: { in: values }
+            })
             break
           case 'expedia_scheduler_review_to':
-            whereConditions.push({ expedia_scheduler_review_to: { in: values } })
+            whereConditions.push({
+              expedia_scheduler_review_to: { in: values }
+            })
             break
           case 'expedia_scheduler_review_db_from':
-            whereConditions.push({ expedia_scheduler_review_db_from: { in: values } })
+            whereConditions.push({
+              expedia_scheduler_review_db_from: { in: values }
+            })
             break
           case 'expedia_scheduler_review_db_to':
-            whereConditions.push({ expedia_scheduler_review_db_to: { in: values } })
+            whereConditions.push({
+              expedia_scheduler_review_db_to: { in: values }
+            })
             break
           case 'expedia_run_date': {
             const dates = this.stringValuesForInClause(values)
@@ -870,16 +899,24 @@ export class PropertyService implements IPropertyService {
             whereConditions.push({ stripe_connected_email: { in: values } })
             break
           case 'discontinued_email_ids':
-            whereConditions.push({ discontinued_email_ids: { hasSome: values } })
+            whereConditions.push({
+              discontinued_email_ids: { hasSome: values }
+            })
             break
           case 'user_name_expedia':
-            whereConditions.push({ credentials: { some: { expediaUsername: { in: values } } } })
+            whereConditions.push({
+              credentials: { some: { expediaUsername: { in: values } } }
+            })
             break
           case 'user_name_booking':
-            whereConditions.push({ credentials: { some: { bookingUsername: { in: values } } } })
+            whereConditions.push({
+              credentials: { some: { bookingUsername: { in: values } } }
+            })
             break
           case 'user_name_agoda':
-            whereConditions.push({ credentials: { some: { agodaUsername: { in: values } } } })
+            whereConditions.push({
+              credentials: { some: { agodaUsername: { in: values } } }
+            })
             break
         }
       }
@@ -972,7 +1009,9 @@ export class PropertyService implements IPropertyService {
     const limit = usePagination ? take || 10 : data.length
 
     const applyFilter = (p: PropertyWithRelations) =>
-      columnList ? applyColumnFilter(p, columnList) as PropertyWithRelations : p
+      columnList
+        ? (applyColumnFilter(p, columnList) as PropertyWithRelations)
+        : p
 
     const shouldDecrypt = filterDto.masked === false
 
@@ -1179,7 +1218,7 @@ export class PropertyService implements IPropertyService {
 
     const columnList = await this.getRoleColumnList(user)
     return columnList
-      ? applyColumnFilter(property, columnList) as PropertyWithRelations
+      ? (applyColumnFilter(property, columnList) as PropertyWithRelations)
       : property
   }
 
@@ -1588,11 +1627,14 @@ export class PropertyService implements IPropertyService {
       this.getRoleColumnList(user)
     ])
     const list = await this.repo.findByPortfolioId(portfolioId)
-    const filtered = accessibleIds === 'all'
-      ? list
-      : list.filter(p => (accessibleIds as string[]).includes(p.id))
+    const filtered =
+      accessibleIds === 'all'
+        ? list
+        : list.filter(p => (accessibleIds as string[]).includes(p.id))
     return columnList
-      ? filtered.map(p => applyColumnFilter(p, columnList) as PropertyWithRelations)
+      ? filtered.map(
+          p => applyColumnFilter(p, columnList) as PropertyWithRelations
+        )
       : filtered
   }
 
@@ -1605,11 +1647,14 @@ export class PropertyService implements IPropertyService {
       this.getRoleColumnList(user)
     ])
     const list = await this.repo.findBySubportfolioId(subportfolioId)
-    const filtered = accessibleIds === 'all'
-      ? list
-      : list.filter(p => (accessibleIds as string[]).includes(p.id))
+    const filtered =
+      accessibleIds === 'all'
+        ? list
+        : list.filter(p => (accessibleIds as string[]).includes(p.id))
     return columnList
-      ? filtered.map(p => applyColumnFilter(p, columnList) as PropertyWithRelations)
+      ? filtered.map(
+          p => applyColumnFilter(p, columnList) as PropertyWithRelations
+        )
       : filtered
   }
 
@@ -2181,10 +2226,18 @@ export class PropertyService implements IPropertyService {
           bookingPriority: parseOtaPriority(['Booking Priority']),
           agodaPriority: parseOtaPriority(['Agoda Priority']),
           salesRep: r['Sales Rep'] ? String(r['Sales Rep']).trim() : undefined,
-          discontinuedEmailIds: r['Discontinued Email IDs'] ? String(r['Discontinued Email IDs']).trim() : undefined,
-          cybersourceMid: r['Cybersource MID'] ? String(r['Cybersource MID']).trim() : undefined,
-          adyenLocation: r['Adyen Location'] ? String(r['Adyen Location']).trim() : undefined,
-          stripeConnectedEmail: r['Stripe Connected Email'] ? String(r['Stripe Connected Email']).trim() : undefined,
+          discontinuedEmailIds: r['Discontinued Email IDs']
+            ? String(r['Discontinued Email IDs']).trim()
+            : undefined,
+          cybersourceMid: r['Cybersource MID']
+            ? String(r['Cybersource MID']).trim()
+            : undefined,
+          adyenLocation: r['Adyen Location']
+            ? String(r['Adyen Location']).trim()
+            : undefined,
+          stripeConnectedEmail: r['Stripe Connected Email']
+            ? String(r['Stripe Connected Email']).trim()
+            : undefined,
           notes: r['Notes'] ? String(r['Notes']).trim() : undefined
         } satisfies ImportPropertyRow
       })
@@ -2232,23 +2285,221 @@ export class PropertyService implements IPropertyService {
   async importFromExcelAndSync(
     file: Express.Multer.File,
     user: IUserWithPermissions
-  ): Promise<ImportPropertiesResult> {
-    const result = await this.importFromExcel(file, user)
+  ): Promise<SyncBatchAcceptedDto> {
+    if (!file) throw new BadRequestException('No file provided')
+    if (!file.buffer?.length)
+      throw new BadRequestException('File buffer is empty')
+
+    const batchId = randomUUID()
+    const filename = `import-sync-report-${new Date().toISOString().slice(0, 10)}.xlsx`
+    const userEmail = user?.email ?? user?.id ?? 'unknown'
+
+    // Persist a durable batch record up front so the caller gets a real
+    // batchId and a restart-detectable marker even before the import runs.
+    await this.prisma.syncBatch.create({
+      data: {
+        batch_id: batchId,
+        status: 'pending',
+        source: 'import',
+        user_email: userEmail,
+        filename,
+        rows: [] as any,
+        skipped_rows: [] as any,
+        expected: ['dashboard', 'scraper'],
+        received: {} as any,
+        dbms_summary: { status: 'importing' } as any
+      }
+    })
+
+    this.syncLogger.step(
+      `📤 BULK IMPORT ACCEPTED — batch=${batchId} file="${file.originalname}" user=${userEmail} (running in background)`
+    )
+
+    // Background the ENTIRE import + sync so the HTTP request returns
+    // immediately. The DBMS import itself can take minutes for large sheets;
+    // the dashboard/scraper sync happens afterwards and reports back via
+    // /api/property/sync-callback, at which point the email report is sent.
+    setImmediate(() => {
+      this.runFullAsyncImport({ file, user, batchId, filename }).catch(e =>
+        this.syncLogger.error(
+          `[async] import failed for batch ${batchId}: ${e?.message ?? e}`
+        )
+      )
+    })
+
+    return {
+      batchId,
+      status: 'accepted',
+      message: `Import started. You will receive an email report at ${userEmail} when the sync is complete. Track progress with GET /api/property/sync-batch/${batchId}.`
+    }
+  }
+
+  // Runs entirely in the background (dispatched via setImmediate from
+  // importFromExcelAndSync). Performs the DBMS import, records the import
+  // summary on the SyncBatch, then dispatches the dashboard/scraper sync
+  // (which is itself async/callback-driven). The email report is sent by
+  // finalizeSyncBatch once both services have called back (or the sweeper
+  // finalizes a stale batch).
+  private async runFullAsyncImport(params: {
+    file: Express.Multer.File
+    user: IUserWithPermissions
+    batchId: string
+    filename: string
+  }): Promise<void> {
+    const { file, user, batchId, filename } = params
+    const userEmail = user?.email ?? user?.id ?? 'unknown'
+
+    let result: ImportPropertiesResult
+    try {
+      result = await this.importFromExcel(file, user)
+    } catch (e: any) {
+      this.syncLogger.error(
+        `[async] importFromExcel failed for batch ${batchId}: ${e?.message ?? e}`
+      )
+      await this.prisma.syncBatch.update({
+        where: { batch_id: batchId },
+        data: {
+          status: 'failed',
+          dbms_summary: {
+            status: 'failed',
+            error: e?.message ?? String(e)
+          } as any,
+          completed_at: new Date()
+        }
+      })
+      // Surface the failure by email so the user isn't left waiting.
+      this.sendSyncBatchFailureEmail(userEmail, filename, batchId, e).catch(
+        err =>
+          this.syncLogger.error(
+            `[async] failure email for batch ${batchId} failed: ${err?.message ?? err}`
+          )
+      )
+      return
+    }
 
     const allProperties: any[] = [
       ...(result.properties ?? []),
       ...(result.existingProperties ?? [])
     ]
 
-    if (!allProperties.length) return result
+    await this.prisma.syncBatch.update({
+      where: { batch_id: batchId },
+      data: {
+        dbms_summary: {
+          status: 'imported',
+          created: result.properties?.length ?? 0,
+          existing: result.existingProperties?.length ?? 0,
+          skipped: result.skippedProperties?.length ?? 0,
+          total: allProperties.length
+        } as any
+      }
+    })
 
-    // Run per-property dashboard + scraper sync and collect row-level results
-    // Row numbers: start at 2 (row 1 = header), incrementing per property
-    // Skipped rows from import are interleaved so exact row number is approximate
+    if (!allProperties.length) {
+      this.syncLogger.warn(
+        `[async] batch ${batchId} — import produced no rows, nothing to sync`
+      )
+      await this.prisma.syncBatch.update({
+        where: { batch_id: batchId },
+        data: { status: 'complete', completed_at: new Date() }
+      })
+      return
+    }
+
+    this.syncLogger.info(
+      `DBMS import done: ${result.properties?.length ?? 0} created, ${result.existingProperties?.length ?? 0} existing, ${result.skippedProperties?.length ?? 0} skipped — starting sync for ${allProperties.length} properties`
+    )
+
+    await this.runAsyncSyncDispatch({
+      batchId,
+      source: 'import',
+      userEmail,
+      allProperties,
+      skippedProperties: result.skippedProperties ?? [],
+      filename
+    })
+  }
+
+  // Minimal failure notification email used when the DBMS import itself
+  // throws (e.g. malformed file). The full per-row report email is produced
+  // by finalizeSyncBatch for the success path.
+  private sendSyncBatchFailureEmail(
+    userEmail: string,
+    filename: string,
+    batchId: string,
+    error: any
+  ): Promise<void> {
+    const reason = error?.message ?? String(error)
+    const rows = [
+      {
+        row: 0,
+        name: 'Bulk import failed',
+        identifier: batchId,
+        action: 'failed' as const,
+        dbms: false,
+        dashboard: {
+          success: false,
+          reason: 'DBMS import failed — nothing synced'
+        },
+        parser: {
+          success: false,
+          reason: 'DBMS import failed — nothing synced'
+        },
+        error: reason
+      }
+    ]
+    const sheet = XLSX.utils.aoa_to_sheet([
+      [
+        'Row',
+        'Property Name',
+        'Identifier',
+        'Action',
+        'DBMS',
+        'Dashboard',
+        'Parser',
+        'Reason'
+      ],
+      ['0', 'Bulk import failed', batchId, 'failed', 'NO', 'NO', 'NO', reason]
+    ])
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, sheet, 'Sync Results')
+    const excelBuffer = XLSX.write(wb, {
+      type: 'buffer',
+      bookType: 'xlsx'
+    })
+    return this.emailUtil
+      .sendBulkSyncResultEmail(userEmail, rows, excelBuffer, filename)
+      .catch(e =>
+        this.syncLogger.error(
+          `[async] sendSyncBatchFailureEmail failed: ${e?.message ?? e}`
+        )
+      )
+  }
+
+  // Builds the bulk-upsert items + per-row context, persists a SyncBatch, and
+  // dispatches to dashboard/scraper (async, callback-driven). Runs in the
+  // background after the DBMS import/update so the HTTP response is not held
+  // open while credentials are fetched or while the other services sync.
+  private async runAsyncSyncDispatch(params: {
+    batchId: string
+    source: 'import' | 'bulk-update'
+    userEmail: string
+    allProperties: any[]
+    skippedProperties: any[]
+    filename: string
+  }): Promise<void> {
+    const {
+      batchId,
+      source,
+      userEmail,
+      allProperties,
+      skippedProperties,
+      filename
+    } = params
+
     let rowIndex = 2
-    // Build offset for skipped rows so row numbers roughly match the original Excel
     const skippedNames = new Set(
-      (result.skippedProperties ?? []).map((s: { name: string }) => s.name)
+      skippedProperties.map((s: { name: string }) => s.name)
     )
 
     const importRows = allProperties.map(p => {
@@ -2256,6 +2507,7 @@ export class PropertyService implements IPropertyService {
       return { property: p as PropertyWithRelations, row }
     })
 
+    this.syncLogger.info('Building scraper bulk-upsert items...')
     const scraperBulkItems = (
       await Promise.all(
         importRows.map(async ({ property, row }) =>
@@ -2263,134 +2515,52 @@ export class PropertyService implements IPropertyService {
         )
       )
     ).filter((item): item is Record<string, unknown> => item !== null)
+    this.syncLogger.info(
+      `Scraper items: ${scraperBulkItems.length}/${importRows.length} eligible (need portfolio_id)`
+    )
 
-    const parserBulkResult =
-      await this.syncBulkUpsertToScraper(scraperBulkItems)
-
-    const rowResults: SyncBulkUpsertRowResult[] = await Promise.all(
-      importRows.map(async ({ property: p, row }) => {
-        const identifier = String(
-          p.expedia_id ?? p.booking_id ?? p.agoda_id ?? p.id
+    this.syncLogger.info('Building dashboard bulk-upsert items...')
+    const dashboardBulkItems = (
+      await Promise.all(
+        importRows.map(async ({ property, row }) =>
+          this.buildDashboardBulkUpsertItem(property, row)
         )
-        const dashboardResult = await this.syncUpsertPropertyToDashboard(
-          p
-        ).catch(e => ({
-          success: false,
-          reason: e?.message ?? String(e)
-        }))
-        const parserResult = this.resolveParserBulkUpsertResult(
-          p.id,
-          parserBulkResult,
-          !!p.portfolio_id
-        )
+      )
+    ).filter((item): item is Record<string, unknown> => item !== null)
+    this.syncLogger.info(
+      `Dashboard items: ${dashboardBulkItems.length}/${importRows.length} eligible (need expedia_id + portfolio_id); ${importRows.length - dashboardBulkItems.length} will use single-property fallback`
+    )
 
-        return {
-          row,
-          parent_id: p.id,
-          name: p.name,
-          identifier,
-          action: skippedNames.has(p.name) ? 'updated' : 'created',
-          dbms: true,
-          dashboard: dashboardResult,
-          parser: parserResult
-        } as SyncBulkUpsertRowResult
+    const rowContext = this.buildSyncBatchRowContext(importRows, skippedNames)
+
+    const skippedRows = skippedProperties.map(
+      (s: { name: string; reason: string }) => ({
+        row: rowIndex++,
+        name: s.name,
+        reason: s.reason
       })
     )
 
-    // Add rows that were skipped entirely during DBMS import (DBMS = NO)
-    let skipIndex = rowIndex + allProperties.length
-    const skippedResults: SyncBulkUpsertRowResult[] = (
-      result.skippedProperties ?? []
-    ).map((s: { name: string; reason: string }) => ({
-      row: skipIndex++,
-      parent_id: s.name,
-      name: s.name,
-      identifier: s.name,
-      action: 'failed' as const,
-      dbms: false,
-      dashboard: { success: false, reason: 'Skipped — DBMS error' },
-      parser: { success: false, reason: 'Skipped — DBMS error' },
-      error: s.reason
-    }))
-
-    const allRowResults = [...rowResults, ...skippedResults].sort(
-      (a, b) => a.row - b.row
-    )
-
-    // Fire email asynchronously — don't block the response
-    const failedRows = allRowResults.filter(
-      r => !r.dbms || !r.dashboard.success || !r.parser.success
-    )
-    const defectiveRows = failedRows.map(r => {
-      const reasons: string[] = []
-      if (r.error) reasons.push(r.error)
-      if (
-        !r.dashboard.success &&
-        r.dashboard.reason &&
-        r.dashboard.reason !== 'Skipped — DBMS error'
-      )
-        reasons.push(`Dashboard: ${r.dashboard.reason}`)
-      if (
-        !r.parser.success &&
-        r.parser.reason &&
-        r.parser.reason !== 'Skipped — DBMS error'
-      )
-        reasons.push(`Parser: ${r.parser.reason}`)
-      const prop = allProperties.find(p => p.id === r.parent_id)
-      return {
-        Row: r.row,
-        'Property Name': r.name,
-        Identifier: r.identifier,
-        Portfolio: prop?.portfolio?.name ?? '',
-        'Expedia ID': prop?.expedia_id ?? '',
-        'Booking ID': prop?.booking_id ?? '',
-        'Agoda ID': prop?.agoda_id ?? '',
-        DBMS: r.dbms ? 'YES' : 'NO',
-        Dashboard: r.dashboard.success ? 'YES' : 'NO',
-        Parser: r.parser.success ? 'YES' : 'NO',
-        Reason: reasons.join('; ') || 'N/A'
-      }
+    await this.dispatchAsyncSyncBatch({
+      batchId,
+      source,
+      userEmail,
+      rows: rowContext,
+      skippedRows,
+      scraperItems: scraperBulkItems,
+      dashboardItems: dashboardBulkItems,
+      filename
     })
-
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(
-      wb,
-      XLSX.utils.json_to_sheet(
-        defectiveRows.length
-          ? defectiveRows
-          : [{ note: 'All rows synced successfully' }]
-      ),
-      'Sync Results'
-    )
-    const excelBuffer = Buffer.from(
-      XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
-    )
-    const filename = `import-sync-report-${new Date().toISOString().slice(0, 10)}.xlsx`
-
-    this.emailUtil
-      .sendBulkSyncResultEmail(user.email, allRowResults, excelBuffer, filename)
-      .catch(e =>
-        this.logger.error(
-          `[email] import sync report failed: ${e?.message ?? e}`
-        )
-      )
-
-    return result
   }
 
   async bulkUpdate(
     file: Express.Multer.File,
     user: IUserWithPermissions
-  ): Promise<BulkUpdateResultDto> {
-    if (!file) {
-      throw new BadRequestException('No file provided')
-    }
-
+  ): Promise<SyncBatchAcceptedDto> {
+    if (!file) throw new BadRequestException('No file provided')
     const buffer = file.buffer || (file as any).buffer
-    if (!buffer || buffer.length === 0) {
+    if (!buffer || buffer.length === 0)
       throw new BadRequestException('File buffer is empty')
-    }
-
     const nameLower = file.originalname.toLowerCase()
     if (
       !nameLower.endsWith('.xlsx') &&
@@ -2401,6 +2571,65 @@ export class PropertyService implements IPropertyService {
         'File must be an Excel or CSV file (.xlsx, .xls, or .csv)'
       )
     }
+
+    const batchId = randomUUID()
+    const filename = `bulk-update-sync-report-${new Date().toISOString().slice(0, 10)}.xlsx`
+    const userEmail = user?.email ?? user?.id ?? 'unknown'
+
+    await this.prisma.syncBatch.create({
+      data: {
+        batch_id: batchId,
+        status: 'pending',
+        source: 'bulk-update',
+        user_email: userEmail,
+        filename,
+        rows: [] as any,
+        skipped_rows: [] as any,
+        expected: ['dashboard', 'scraper'],
+        received: {} as any,
+        dbms_summary: { status: 'importing' } as any
+      }
+    })
+
+    this.syncLogger.step(
+      `🔄 BULK UPDATE ACCEPTED — batch=${batchId} file="${file.originalname}" user=${userEmail} (running in background)`
+    )
+
+    // Background the ENTIRE update loop + sync so the HTTP request returns
+    // immediately. The DBMS update itself can take minutes for large sheets;
+    // the dashboard/scraper sync happens afterwards and reports back via
+    // /api/property/sync-callback, at which point the email report is sent.
+    setImmediate(() => {
+      this.runFullAsyncBulkUpdate({ file, user, batchId, filename }).catch(e =>
+        this.syncLogger.error(
+          `[async] bulk-update failed for batch ${batchId}: ${e?.message ?? e}`
+        )
+      )
+    })
+
+    return {
+      batchId,
+      status: 'accepted',
+      message: `Bulk update started. You will receive an email report at ${userEmail} when the sync is complete. Track progress with GET /api/property/sync-batch/${batchId}.`
+    }
+  }
+
+  // Runs entirely in the background (dispatched via setImmediate from
+  // bulkUpdate). Performs the DBMS update loop, records the summary on the
+  // SyncBatch, then dispatches the dashboard/scraper sync (async,
+  // callback-driven). The email report is sent by finalizeSyncBatch once
+  // both services have called back (or the sweeper finalizes a stale batch).
+  private async runFullAsyncBulkUpdate(params: {
+    file: Express.Multer.File
+    user: IUserWithPermissions
+    batchId: string
+    filename: string
+  }): Promise<void> {
+    const { file, user, batchId, filename } = params
+    const userEmail = user?.email ?? user?.id ?? 'unknown'
+
+    const buffer = file.buffer || (file as any).buffer
+    const nameLower = file.originalname.toLowerCase()
 
     const result: BulkUpdateResultDto = {
       totalRows: 0,
@@ -2909,8 +3138,7 @@ export class PropertyService implements IPropertyService {
               result.errors.push({
                 row: rowNumber,
                 propertyName: existingProperty.name,
-                error:
-                  'Portfolio is required before assigning a Sub Portfolio'
+                error: 'Portfolio is required before assigning a Sub Portfolio'
               })
               result.failureCount++
               continue
@@ -3099,13 +3327,17 @@ export class PropertyService implements IPropertyService {
             'Expedia priority'
           ])
           if (expediaPriorityVal !== undefined)
-            updateData.expedia_priority = expediaPriorityVal.trim().toUpperCase()
+            updateData.expedia_priority = expediaPriorityVal
+              .trim()
+              .toUpperCase()
           const bookingPriorityVal = findValue(row, [
             'Booking Priority',
             'Booking priority'
           ])
           if (bookingPriorityVal !== undefined)
-            updateData.booking_priority = bookingPriorityVal.trim().toUpperCase()
+            updateData.booking_priority = bookingPriorityVal
+              .trim()
+              .toUpperCase()
           const agodaPriorityVal = findValue(row, [
             'Agoda Priority',
             'Agoda priority'
@@ -3456,21 +3688,41 @@ export class PropertyService implements IPropertyService {
             updateData.need_another_domain = needAnotherDomain
           const salesRep = findValue(row, ['Sales Rep', 'Sales rep'])
           if (salesRep !== undefined) updateData.sales_rep = salesRep
-          const discontinuedEmailIds = findValue(row, ['Discontinued Email IDs', 'Discontinued Email Ids'])
+          const discontinuedEmailIds = findValue(row, [
+            'Discontinued Email IDs',
+            'Discontinued Email Ids'
+          ])
           if (discontinuedEmailIds !== undefined) {
             updateData.discontinued_email_ids = discontinuedEmailIds
               .split(',')
               .map((e: string) => e.trim())
               .filter(Boolean)
           }
-          const cybersourceMid = findValue(row, ['Cybersource MID', 'Cybersource Mid'])
-          if (cybersourceMid !== undefined) updateData.cybersource_mid = cybersourceMid
-          const adyenLocation = findValue(row, ['Adyen Location', 'Adyen location'])
-          if (adyenLocation !== undefined) updateData.adyen_location = adyenLocation
-          const stripeConnectedEmail = findValue(row, ['Stripe Connected Email', 'Stripe connected email'])
-          if (stripeConnectedEmail !== undefined) updateData.stripe_connected_email = stripeConnectedEmail
-          const caseContactEmail = findValue(row, ['Case Contact Email', 'Case contact email', 'Primary Case Email'])
-          if (caseContactEmail !== undefined) updateData.primary_case_email = caseContactEmail
+          const cybersourceMid = findValue(row, [
+            'Cybersource MID',
+            'Cybersource Mid'
+          ])
+          if (cybersourceMid !== undefined)
+            updateData.cybersource_mid = cybersourceMid
+          const adyenLocation = findValue(row, [
+            'Adyen Location',
+            'Adyen location'
+          ])
+          if (adyenLocation !== undefined)
+            updateData.adyen_location = adyenLocation
+          const stripeConnectedEmail = findValue(row, [
+            'Stripe Connected Email',
+            'Stripe connected email'
+          ])
+          if (stripeConnectedEmail !== undefined)
+            updateData.stripe_connected_email = stripeConnectedEmail
+          const caseContactEmail = findValue(row, [
+            'Case Contact Email',
+            'Case contact email',
+            'Primary Case Email'
+          ])
+          if (caseContactEmail !== undefined)
+            updateData.primary_case_email = caseContactEmail
 
           // ── QP / FP credentials (stored on Property, encrypted) ───────────
           const qpUsername = findValue(row, ['Qp Username', 'QP Username'])
@@ -3739,8 +3991,23 @@ export class PropertyService implements IPropertyService {
         }
       }
 
-      // ── Post-loop: dashboard sync per property + parser bulk upsert ──
+      // ── Post-loop: record DBMS summary, then dispatch to dashboard + scraper ──
+      await this.prisma.syncBatch.update({
+        where: { batch_id: batchId },
+        data: {
+          dbms_summary: {
+            status: 'imported',
+            updated: result.successCount,
+            failed: result.failureCount,
+            total: result.totalRows
+          } as any
+        }
+      })
+
       if (syncQueue.length > 0) {
+        this.syncLogger.step(
+          `🔄 BULK UPDATE + SYNC START — ${syncQueue.length} properties queued for sync (batch ${batchId})`
+        )
         const updateRows = await Promise.all(
           syncQueue.map(async ({ rowNumber, propertyId }) => {
             const p = (await this.repo.findById(
@@ -3750,145 +4017,139 @@ export class PropertyService implements IPropertyService {
           })
         )
 
-        const scraperBulkItems = (
-          await Promise.all(
-            updateRows.map(async ({ property, rowNumber }) =>
-              property
-                ? this.buildScraperBulkUpsertItem(property, rowNumber)
-                : null
-            )
-          )
-        ).filter((item): item is Record<string, unknown> => item !== null)
+        const dbmsErrors = result.errors.map(e => ({
+          row: e.row,
+          name: e.propertyName,
+          reason: e.error
+        }))
 
-        const parserBulkResult =
-          await this.syncBulkUpsertToScraper(scraperBulkItems)
-
-        const rowResults: SyncBulkUpsertRowResult[] = await Promise.all(
-          updateRows.map(async ({ rowNumber, propertyId, property: p }) => {
-            const identifier = String(
-              p?.expedia_id ?? p?.booking_id ?? p?.agoda_id ?? propertyId
-            )
-            const dashboardResult = p
-              ? await this.syncUpsertPropertyToDashboard(p).catch(e => ({
-                  success: false,
-                  reason: e?.message ?? String(e)
-                }))
-              : {
-                  success: false,
-                  reason: 'Property not found after update'
-                }
-            const parserResult = p
-              ? this.resolveParserBulkUpsertResult(
-                  propertyId,
-                  parserBulkResult,
-                  !!p.portfolio_id
-                )
-              : {
-                  success: false,
-                  reason: 'Property not found after update'
-                }
-
-            return {
-              row: rowNumber,
-              parent_id: propertyId,
-              name: p?.name ?? propertyId,
-              identifier,
-              action: 'updated' as const,
-              dbms: true,
-              dashboard: dashboardResult,
-              parser: parserResult
-            }
-          })
-        )
-
-        // Add rows that failed at DBMS level (not found, no access, etc.)
-        const dbmsFailedResults: SyncBulkUpsertRowResult[] = result.errors.map(
-          e => ({
-            row: e.row,
-            parent_id: e.propertyName,
-            name: e.propertyName,
-            identifier: e.propertyName,
-            action: 'failed' as const,
-            dbms: false,
-            dashboard: { success: false, reason: 'Skipped — DBMS error' },
-            parser: { success: false, reason: 'Skipped — DBMS error' },
-            error: e.error
-          })
-        )
-
-        const allRowResults = [...dbmsFailedResults, ...rowResults].sort(
-          (a, b) => a.row - b.row
-        )
-
-        const failedRows = allRowResults.filter(
-          r => !r.dbms || !r.dashboard.success || !r.parser.success
-        )
-        const defectRows = failedRows.map(r => {
-          const reasons: string[] = []
-          if (r.error) reasons.push(r.error)
-          if (
-            !r.dashboard.success &&
-            r.dashboard.reason &&
-            r.dashboard.reason !== 'Skipped — DBMS error'
-          )
-            reasons.push(`Dashboard: ${r.dashboard.reason}`)
-          if (
-            !r.parser.success &&
-            r.parser.reason &&
-            r.parser.reason !== 'Skipped — DBMS error'
-          )
-            reasons.push(`Parser: ${r.parser.reason}`)
-          return {
-            Row: r.row,
-            'Property Name': r.name,
-            Identifier: r.identifier,
-            DBMS: r.dbms ? 'YES' : 'NO',
-            Dashboard: r.dashboard.success ? 'YES' : 'NO',
-            Parser: r.parser.success ? 'YES' : 'NO',
-            Reason: reasons.join('; ') || 'N/A'
-          }
+        // We're already running in the background, so dispatch directly
+        // (no extra setImmediate). Dashboard/scraper process in the
+        // background and POST results to /api/property/sync-callback; the
+        // email is sent once both report (or the sweeper finalizes a stale
+        // batch).
+        await this.runAsyncBulkUpdateDispatch({
+          batchId,
+          userEmail,
+          updateRows,
+          dbmsErrors,
+          filename
         })
 
-        const wb = XLSX.utils.book_new()
-        XLSX.utils.book_append_sheet(
-          wb,
-          XLSX.utils.json_to_sheet(
-            defectRows.length
-              ? defectRows
-              : [{ note: 'All rows synced successfully' }]
-          ),
-          'Sync Results'
+        this.syncLogger.success(
+          `🔄 BULK UPDATE dispatched — ${updateRows.length} properties (batch ${batchId})`
         )
-        const excelBuffer = Buffer.from(
-          XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
+      } else {
+        // Nothing to sync — mark the batch complete immediately.
+        await this.prisma.syncBatch.update({
+          where: { batch_id: batchId },
+          data: { status: 'complete', completed_at: new Date() }
+        })
+        this.syncLogger.warn(
+          `[async] batch ${batchId} — no properties queued for sync`
         )
-        const filename = `bulk-update-sync-report-${new Date().toISOString().slice(0, 10)}.xlsx`
-
-        this.emailUtil
-          .sendBulkSyncResultEmail(
-            user.email,
-            allRowResults,
-            excelBuffer,
-            filename
-          )
-          .catch(e =>
-            this.logger.error(
-              `[email] bulk-update sync report failed: ${e?.message ?? e}`
-            )
-          )
       }
 
       if (result.successCount > 0) {
         this.scheduleCacheWarm(user)
       }
-
-      return result
     } catch (error) {
-      if (error instanceof BadRequestException) throw error
-      throw new BadRequestException(
-        `Failed to process file: ${(error as Error).message}`
+      // We're in the background — can't throw to the caller. Record the
+      // failure on the batch and notify by email so the user isn't left
+      // waiting for a report that will never arrive.
+      const reason =
+        error instanceof Error ? error.message : 'Unknown error occurred'
+      this.syncLogger.error(
+        `[async] bulk-update failed for batch ${batchId}: ${reason}`
+      )
+      await this.prisma.syncBatch.update({
+        where: { batch_id: batchId },
+        data: {
+          status: 'failed',
+          dbms_summary: { status: 'failed', error: reason } as any,
+          completed_at: new Date()
+        }
+      })
+      this.sendSyncBatchFailureEmail(userEmail, filename, batchId, error).catch(
+        e =>
+          this.syncLogger.error(
+            `[async] failure email for batch ${batchId} failed: ${e?.message ?? e}`
+          )
       )
     }
+  }
+
+  // Bulk-update variant of runAsyncSyncDispatch: builds items + per-row context
+  // from the already-updated properties, updates the existing SyncBatch, and
+  // dispatches to dashboard/scraper (async, callback-driven). Runs in the
+  // background.
+  private async runAsyncBulkUpdateDispatch(params: {
+    batchId: string
+    userEmail: string
+    updateRows: Array<{
+      rowNumber: number
+      propertyId: string
+      property: PropertyWithRelations | null
+    }>
+    dbmsErrors: Array<{ row: number; name: string; reason: string }>
+    filename: string
+  }): Promise<void> {
+    const { batchId, userEmail, updateRows, dbmsErrors, filename } = params
+
+    const scraperBulkItems = (
+      await Promise.all(
+        updateRows.map(async ({ property, rowNumber }) =>
+          property ? this.buildScraperBulkUpsertItem(property, rowNumber) : null
+        )
+      )
+    ).filter((item): item is Record<string, unknown> => item !== null)
+    this.syncLogger.info(
+      `Scraper items: ${scraperBulkItems.length}/${updateRows.length} eligible`
+    )
+
+    const dashboardBulkItems = (
+      await Promise.all(
+        updateRows.map(async ({ property, rowNumber }) =>
+          property
+            ? this.buildDashboardBulkUpsertItem(property, rowNumber)
+            : null
+        )
+      )
+    ).filter((item): item is Record<string, unknown> => item !== null)
+    this.syncLogger.info(
+      `Dashboard items: ${dashboardBulkItems.length}/${updateRows.length} eligible; ${updateRows.length - dashboardBulkItems.length} will use single-property fallback`
+    )
+
+    const rowContext = updateRows
+      .filter(({ property }) => !!property)
+      .map(({ propertyId, rowNumber, property: p }) => ({
+        parentId: propertyId,
+        row: rowNumber,
+        action: 'updated' as const,
+        name: (p as PropertyWithRelations).name,
+        identifier: String(
+          (p as any).expedia_id ??
+            (p as any).booking_id ??
+            (p as any).agoda_id ??
+            propertyId
+        ),
+        portfolioName: (p as any).portfolio?.name ?? '',
+        expediaId: (p as any).expedia_id ?? null,
+        bookingId: (p as any).booking_id ?? null,
+        agodaId: (p as any).agoda_id ?? null,
+        hasPortfolioId: !!(p as any).portfolio_id
+      }))
+
+    await this.dispatchAsyncSyncBatch({
+      batchId,
+      source: 'bulk-update',
+      userEmail,
+      rows: rowContext,
+      skippedRows: dbmsErrors,
+      scraperItems: scraperBulkItems,
+      dashboardItems: dashboardBulkItems,
+      filename
+    })
   }
 
   async bulkDelete(
@@ -4049,7 +4310,8 @@ export class PropertyService implements IPropertyService {
 
   async getAllDataForGlobalFilter(user: IUserWithPermissions) {
     const cacheKey = GLOBAL_FILTER_KEY(user.id)
-    const cached = await this.redisService.get<AllDataForGlobalFilterResponse>(cacheKey)
+    const cached =
+      await this.redisService.get<AllDataForGlobalFilterResponse>(cacheKey)
     if (cached) {
       this.logger.log(
         `[CACHE HIT] global-filter:getAllDataForGlobalFilter — served from Redis (key: ${cacheKey})`
@@ -4364,8 +4626,7 @@ export class PropertyService implements IPropertyService {
         uniqueExpediaUsernames.add(cred.expediaUsername)
       if (cred?.bookingUsername)
         uniqueBookingUsernames.add(cred.bookingUsername)
-      if (cred?.agodaUsername)
-        uniqueAgodaUsernames.add(cred.agodaUsername)
+      if (cred?.agodaUsername) uniqueAgodaUsernames.add(cred.agodaUsername)
       if (property.expedia_service_fee)
         uniqueExpediaServiceFees.add(property.expedia_service_fee)
       if (property.priority)
@@ -4439,10 +4700,11 @@ export class PropertyService implements IPropertyService {
         )
       if (property.agoda_otp_number)
         uniqueAgodaOtpNumbers.add(property.agoda_otp_number)
-      if (property.sales_rep)
-        uniqueSalesReps.add(property.sales_rep)
+      if (property.sales_rep) uniqueSalesReps.add(property.sales_rep)
       if (Array.isArray(property.discontinued_email_ids)) {
-        property.discontinued_email_ids.forEach((e: string) => uniqueDiscontinuedEmailIds.add(e))
+        property.discontinued_email_ids.forEach((e: string) =>
+          uniqueDiscontinuedEmailIds.add(e)
+        )
       }
       if (property.cybersource_mid)
         uniqueCybersourceMids.add(property.cybersource_mid)
@@ -4611,7 +4873,7 @@ export class PropertyService implements IPropertyService {
       discontinued_email_ids: Array.from(uniqueDiscontinuedEmailIds).sort(),
       cybersource_mid: Array.from(uniqueCybersourceMids).sort(),
       adyen_location: Array.from(uniqueAdyenLocations).sort(),
-      stripe_connected_email: Array.from(uniqueStripeConnectedEmails).sort(),
+      stripe_connected_email: Array.from(uniqueStripeConnectedEmails).sort()
     } as AllDataForGlobalFilterResponse
 
     // Cache the aggregated result (same TTL as the property list cache)
@@ -4726,9 +4988,7 @@ export class PropertyService implements IPropertyService {
   ): { OR: Record<string, unknown>[] } | null {
     const priorities = [
       ...new Set(
-        values
-          .map(v => String(v).trim().toUpperCase())
-          .filter(Boolean)
+        values.map(v => String(v).trim().toUpperCase()).filter(Boolean)
       )
     ]
     if (priorities.length === 0) return null
@@ -4855,23 +5115,26 @@ export class PropertyService implements IPropertyService {
   private async syncBulkUpsertToScraper(
     items: Record<string, unknown>[]
   ): Promise<{
-    totalRows: number
-    createdCount: number
-    updatedCount: number
-    failureCount: number
-    errors: Array<{ row: number; parent_id: string; error: string }>
-    successfulUpserts: Array<{
-      parent_id: string
-      action: 'created' | 'updated'
-    }>
-  } | null> {
-    if (!items.length) return null
+    data: {
+      totalRows: number
+      createdCount: number
+      updatedCount: number
+      failureCount: number
+      errors: Array<{ row: number; parent_id: string; error: string }>
+      successfulUpserts: Array<{
+        parent_id: string
+        action: 'created' | 'updated'
+      }>
+    } | null
+    error?: string
+  }> {
+    if (!items.length) return { data: null }
 
     if (!this.scraperJwtClient) {
-      this.logger.warn(
-        '[sync] scraper JWT client disabled, skipping property sync-bulk-upsert'
-      )
-      return null
+      const reason =
+        'Scraper JWT client disabled — URL or JWT_COMMUNICATION_SECRET missing'
+      this.logger.warn(`[sync] ${reason}`)
+      return { data: null, error: reason }
     }
 
     try {
@@ -4884,13 +5147,890 @@ export class PropertyService implements IPropertyService {
       this.logger.log(
         `[sync] scraper property sync-bulk-upsert: ${JSON.stringify(data)}`
       )
-      return data
+      return { data }
     } catch (e: any) {
+      const reason = this.extractSyncErrorReason(e)
       this.logger.error(
-        `[sync] scraper property sync-bulk-upsert failed: ${e?.response?.data ? JSON.stringify(e.response.data) : (e?.message ?? e)}`
+        `[sync] scraper property sync-bulk-upsert failed: ${reason}`
       )
-      return null
+      return { data: null, error: reason }
     }
+  }
+
+  // Send scraper bulk-upsert items in chunks with bounded concurrency and a
+  // single retry per chunk. Mirrors runDashboardBulkUpsertChunked so the
+  // scraper sync no longer relies on one giant HTTP call that exceeds the
+  // sync timeout for large batches.
+  private async runScraperBulkUpsertChunked(
+    items: Record<string, unknown>[]
+  ): Promise<{
+    errors: Array<{ row: number; parent_id: string; error: string }>
+    successfulUpserts: Array<{
+      parent_id: string
+      action: 'created' | 'updated'
+    }>
+  } | null> {
+    if (!items.length) return null
+
+    const size = Math.max(1, this.scraperBulkChunkSize)
+    const concurrency = Math.max(1, this.scraperBulkConcurrency)
+
+    const chunks: Record<string, unknown>[][] = []
+    for (let i = 0; i < items.length; i += size) {
+      chunks.push(items.slice(i, i + size))
+    }
+
+    this.syncLogger.info(
+      `[scraper] chunking ${items.length} items → ${chunks.length} chunks (size=${size}, concurrency=${concurrency})`
+    )
+
+    const merged = {
+      errors: [] as Array<{ row: number; parent_id: string; error: string }>,
+      successfulUpserts: [] as Array<{
+        parent_id: string
+        action: 'created' | 'updated'
+      }>
+    }
+
+    let cursor = 0
+    const worker = async () => {
+      while (cursor < chunks.length) {
+        const myIndex = cursor++
+        const chunk = chunks[myIndex]
+
+        let chunkData: {
+          errors: Array<{ row: number; parent_id: string; error: string }>
+          successfulUpserts: Array<{
+            parent_id: string
+            action: 'created' | 'updated'
+          }>
+        } | null = null
+        let lastReason = 'unknown error'
+
+        const chunkStart = Date.now()
+        for (let attempt = 0; attempt < 2; attempt++) {
+          const { data, error } = await this.syncBulkUpsertToScraper(chunk)
+          if (data) {
+            chunkData = data
+            break
+          }
+          lastReason = error ?? 'unknown error'
+          if (attempt === 0) {
+            this.syncLogger.warn(
+              `[scraper] chunk #${myIndex + 1} failed (${lastReason}) — retrying...`
+            )
+            await new Promise(r => setTimeout(r, 500))
+          }
+        }
+
+        if (chunkData) {
+          if (Array.isArray(chunkData.errors))
+            merged.errors.push(...chunkData.errors)
+          if (Array.isArray(chunkData.successfulUpserts))
+            merged.successfulUpserts.push(...chunkData.successfulUpserts)
+          this.syncLogger.info(
+            `[scraper] chunk #${myIndex + 1} ok — +${chunkData.successfulUpserts?.length ?? 0} ok, ${chunkData.errors?.length ?? 0} err (${Date.now() - chunkStart}ms)`
+          )
+        } else {
+          for (const it of chunk) {
+            const row = (it as any).row ?? 0
+            const pid = (it as any).parent_id ?? 'Unknown'
+            merged.errors.push({
+              row,
+              parent_id: pid,
+              error: `Scraper chunk sync failed: ${lastReason}`
+            })
+          }
+          this.syncLogger.error(
+            `[scraper] chunk #${myIndex + 1} FAILED after retry — ${chunk.length} items marked failed (${lastReason})`
+          )
+        }
+      }
+    }
+
+    await Promise.all(
+      Array.from({ length: Math.min(concurrency, chunks.length) }, () =>
+        worker()
+      )
+    )
+
+    return merged
+  }
+
+  private async buildDashboardBulkUpsertItem(
+    property: PropertyWithRelations,
+    row: number
+  ): Promise<Record<string, unknown> | null> {
+    // The dashboard bulk endpoint requires both expedia_id and
+    // portfolio_parent_id (non-empty). Properties missing either are
+    // excluded from the bulk path and synced via the single-property path
+    // to preserve existing behavior for those edge cases.
+    if (!property.expedia_id || !property.portfolio_id) return null
+
+    const credentials = await this.credentialsService.findByPropertyId(
+      property.id
+    )
+
+    return {
+      row,
+      parent_id: property.id,
+      name: property.name,
+      address: property.hotel_address || 'N/A',
+      currency: property.currency?.code ?? 'USD',
+      ...(property.card_descriptor
+        ? { card_descriptor: property.card_descriptor }
+        : {}),
+      portfolio_parent_id: property.portfolio_id,
+      is_active: property.is_active,
+      expedia_id: String(property.expedia_id),
+      ...(credentials?.expediaUsername
+        ? { expedia_username: credentials.expediaUsername }
+        : {}),
+      ...(credentials?.expediaPassword
+        ? {
+            expedia_password: this.decryptCredentialValue(
+              credentials.expediaPassword
+            )
+          }
+        : {}),
+      ...(property.agoda_id != null
+        ? { agoda_id: String(property.agoda_id) }
+        : {}),
+      ...(credentials?.agodaUsername
+        ? { agoda_username: credentials.agodaUsername }
+        : {}),
+      ...(credentials?.agodaPassword
+        ? {
+            agoda_password: this.decryptCredentialValue(
+              credentials.agodaPassword
+            )
+          }
+        : {}),
+      ...(property.booking_id != null
+        ? { booking_id: String(property.booking_id) }
+        : {}),
+      ...(credentials?.bookingUsername
+        ? { booking_username: credentials.bookingUsername }
+        : {}),
+      ...(credentials?.bookingPassword
+        ? {
+            booking_password: this.decryptCredentialValue(
+              credentials.bookingPassword
+            )
+          }
+        : {})
+    }
+  }
+
+  private async syncBulkUpsertToDashboard(
+    items: Record<string, unknown>[]
+  ): Promise<{
+    data: {
+      totalRows: number
+      createdCount: number
+      updatedCount: number
+      failureCount: number
+      errors: Array<{ row: number; parent_id: string; error: string }>
+      successfulUpserts: Array<{
+        parent_id: string
+        action: 'created' | 'updated'
+      }>
+    } | null
+    error?: string
+  }> {
+    if (!items.length) return { data: null }
+
+    if (!this.dashboardJwtClient) {
+      const reason =
+        'Dashboard JWT client disabled — URL or JWT_COMMUNICATION_SECRET missing'
+      this.logger.warn(`[sync] ${reason}`)
+      return { data: null, error: reason }
+    }
+
+    try {
+      const r = await this.dashboardJwtClient.post(
+        '/api/property/sync-bulk-upsert',
+        items,
+        { headers: this.syncCommunication.createAuthHeaders() }
+      )
+      const data = r.data?.data ?? r.data
+      this.logger.log(
+        `[sync] dashboard property sync-bulk-upsert: ${JSON.stringify(data)}`
+      )
+      return { data }
+    } catch (e: any) {
+      const reason = this.extractSyncErrorReason(e)
+      this.logger.error(
+        `[sync] dashboard property sync-bulk-upsert failed: ${reason}`
+      )
+      return { data: null, error: reason }
+    }
+  }
+
+  // Send dashboard bulk-upsert items in chunks with bounded concurrency and
+  // a single retry per chunk. Merges per-row results from all chunks into one
+  // aggregate object so callers can resolve per-property outcomes exactly
+  // like the scraper bulk path.
+  private async runDashboardBulkUpsertChunked(
+    items: Record<string, unknown>[]
+  ): Promise<{
+    errors: Array<{ row: number; parent_id: string; error: string }>
+    successfulUpserts: Array<{
+      parent_id: string
+      action: 'created' | 'updated'
+    }>
+  } | null> {
+    if (!items.length) return null
+
+    const size = Math.max(1, this.dashboardBulkChunkSize)
+    const concurrency = Math.max(1, this.dashboardBulkConcurrency)
+
+    const chunks: Record<string, unknown>[][] = []
+    for (let i = 0; i < items.length; i += size) {
+      chunks.push(items.slice(i, i + size))
+    }
+
+    this.syncLogger.info(
+      `[dashboard] chunking ${items.length} items → ${chunks.length} chunks (size=${size}, concurrency=${concurrency})`
+    )
+
+    const merged = {
+      errors: [] as Array<{ row: number; parent_id: string; error: string }>,
+      successfulUpserts: [] as Array<{
+        parent_id: string
+        action: 'created' | 'updated'
+      }>
+    }
+
+    let cursor = 0
+    const worker = async () => {
+      while (cursor < chunks.length) {
+        const myIndex = cursor++
+        const chunk = chunks[myIndex]
+
+        let chunkData: {
+          errors: Array<{ row: number; parent_id: string; error: string }>
+          successfulUpserts: Array<{
+            parent_id: string
+            action: 'created' | 'updated'
+          }>
+        } | null = null
+        let lastReason = 'unknown error'
+
+        const chunkStart = Date.now()
+        for (let attempt = 0; attempt < 2; attempt++) {
+          const { data, error } = await this.syncBulkUpsertToDashboard(chunk)
+          if (data) {
+            chunkData = data
+            break
+          }
+          lastReason = error ?? 'unknown error'
+          if (attempt === 0) {
+            this.syncLogger.warn(
+              `[dashboard] chunk #${myIndex + 1} failed (${lastReason}) — retrying...`
+            )
+            await new Promise(r => setTimeout(r, 500))
+          }
+        }
+
+        if (chunkData) {
+          if (Array.isArray(chunkData.errors))
+            merged.errors.push(...chunkData.errors)
+          if (Array.isArray(chunkData.successfulUpserts))
+            merged.successfulUpserts.push(...chunkData.successfulUpserts)
+          this.syncLogger.info(
+            `[dashboard] chunk #${myIndex + 1} ok — +${chunkData.successfulUpserts?.length ?? 0} ok, ${chunkData.errors?.length ?? 0} err (${Date.now() - chunkStart}ms)`
+          )
+        } else {
+          for (const it of chunk) {
+            const row = (it as any).row ?? 0
+            const pid = (it as any).parent_id ?? 'Unknown'
+            merged.errors.push({
+              row,
+              parent_id: pid,
+              error: `Dashboard chunk sync failed: ${lastReason}`
+            })
+          }
+          this.syncLogger.error(
+            `[dashboard] chunk #${myIndex + 1} FAILED after retry — ${chunk.length} items marked failed (${lastReason})`
+          )
+        }
+      }
+    }
+
+    await Promise.all(
+      Array.from({ length: Math.min(concurrency, chunks.length) }, () =>
+        worker()
+      )
+    )
+
+    return merged
+  }
+
+  // ─── Async callback sync (long-term solution) ────────────────────────────
+  // The DBMS no longer blocks on dashboard/scraper sync results. After its own
+  // import/update it persists a SyncBatch (unique batchId + compact per-row
+  // context), dispatches bulk items to dashboard/scraper with that batchId, and
+  // returns to the caller immediately. Dashboard/scraper process in the
+  // background and POST per-row results to POST /api/property/sync-callback.
+  // Once both expected sources report (or the sweeper gives up on a stale
+  // batch), the DBMS reconstructs the per-row report, builds the defect Excel,
+  // and sends the email — matching the previous synchronous report, deferred.
+
+  private readonly syncBatchStaleMs = parseInt(
+    process.env.SYNC_BATCH_STALE_MS || '600000',
+    10
+  )
+
+  private buildSyncBatchRowContext(
+    importRows: Array<{ property: PropertyWithRelations; row: number }>,
+    skippedNames: Set<string>
+  ): Array<{
+    parentId: string
+    row: number
+    action: 'created' | 'updated'
+    name: string
+    identifier: string
+    portfolioName: string
+    expediaId: string | number | null
+    bookingId: string | number | null
+    agodaId: string | number | null
+    hasPortfolioId: boolean
+  }> {
+    return importRows.map(({ property: p, row }) => ({
+      parentId: p.id,
+      row,
+      action: skippedNames.has(p.name) ? 'updated' : 'created',
+      name: p.name,
+      identifier: String(p.expedia_id ?? p.booking_id ?? p.agoda_id ?? p.id),
+      portfolioName: (p as any).portfolio?.name ?? '',
+      expediaId: (p as any).expedia_id ?? null,
+      bookingId: (p as any).booking_id ?? null,
+      agodaId: (p as any).agoda_id ?? null,
+      hasPortfolioId: !!p.portfolio_id
+    }))
+  }
+
+  private async dispatchAsyncSyncBatch(params: {
+    batchId: string
+    source: 'import' | 'bulk-update'
+    userEmail: string
+    rows: ReturnType<PropertyService['buildSyncBatchRowContext']>
+    skippedRows: Array<{ row: number; name: string; reason: string }>
+    scraperItems: Record<string, unknown>[]
+    dashboardItems: Record<string, unknown>[]
+    filename: string
+  }): Promise<string> {
+    const batchId = params.batchId
+    const dbmsApiUrl = this.config.get('dbmsApiUrl', { infer: true }) ?? ''
+    const callbackUrl = dbmsApiUrl
+      ? `${dbmsApiUrl.replace(/\/$/, '')}/api/property/sync-callback`
+      : ''
+
+    // The batch was already created (pending, dbms_summary importing) when the
+    // request was accepted. Now that the DBMS import has produced the rows,
+    // store the per-row context so finalize can reconstruct the report.
+    await this.prisma.syncBatch.update({
+      where: { batch_id: batchId },
+      data: {
+        rows: params.rows as any,
+        skipped_rows: params.skippedRows as any
+      }
+    })
+
+    this.syncLogger.info(
+      `📦 Sync batch ${batchId} created — ${params.rows.length} rows, scraper items=${params.scraperItems.length}, dashboard items=${params.dashboardItems.length}, callback=${callbackUrl || '(none)'}`
+    )
+
+    const authHeaders = this.syncCommunication.createAuthHeaders()
+    const emptyResult: SyncBulkUpsertResponseDto = {
+      totalRows: 0,
+      createdCount: 0,
+      updatedCount: 0,
+      failureCount: 0,
+      errors: [],
+      successfulUpserts: []
+    }
+
+    // Scraper dispatch — only await the 202 ack; processing happens in the
+    // background on the scraper, which POSTs the result to callbackUrl.
+    if (params.scraperItems.length && this.scraperJwtClient) {
+      this.scraperJwtClient
+        .post(
+          '/properties/sync-bulk-upsert',
+          { items: params.scraperItems, batchId, callbackUrl },
+          { headers: authHeaders }
+        )
+        .then(r =>
+          this.syncLogger.info(
+            `[scraper] dispatch ack ${r.status} for batch ${batchId}`
+          )
+        )
+        .catch(e =>
+          this.syncLogger.error(
+            `[scraper] dispatch failed for batch ${batchId}: ${this.extractSyncErrorReason(e)} — sweeper will mark stale`
+          )
+        )
+    } else {
+      // No eligible items or scraper not configured — record empty result so
+      // the batch can still complete instead of waiting forever.
+      this.recordSyncCallbackInternal(batchId, 'scraper', emptyResult).catch(
+        e => this.logger.error(`[scraper] synthetic record failed: ${e}`)
+      )
+    }
+
+    // Dashboard dispatch — same pattern as scraper.
+    if (params.dashboardItems.length && this.dashboardJwtClient) {
+      this.dashboardJwtClient
+        .post(
+          '/api/property/sync-bulk-upsert',
+          { items: params.dashboardItems, batchId, callbackUrl },
+          { headers: authHeaders }
+        )
+        .then(r =>
+          this.syncLogger.info(
+            `[dashboard] dispatch ack ${r.status} for batch ${batchId}`
+          )
+        )
+        .catch(e =>
+          this.syncLogger.error(
+            `[dashboard] dispatch failed for batch ${batchId}: ${this.extractSyncErrorReason(e)} — sweeper will mark stale`
+          )
+        )
+    } else {
+      this.recordSyncCallbackInternal(batchId, 'dashboard', emptyResult).catch(
+        e => this.logger.error(`[dashboard] synthetic record failed: ${e}`)
+      )
+    }
+
+    return batchId
+  }
+
+  async recordSyncCallback(dto: {
+    batchId: string
+    source: 'dashboard' | 'scraper'
+    result: SyncBulkUpsertResponseDto
+  }): Promise<{ status: string; completed: boolean }> {
+    return this.recordSyncCallbackInternal(dto.batchId, dto.source, dto.result)
+  }
+
+  /// Query the status of a background sync batch by id. Used by the frontend
+  /// to poll progress after the import / bulk-update endpoints return
+  /// instantly with a batchId.
+  async getSyncBatchStatus(batchId: string): Promise<{
+    batchId: string
+    status: string
+    source?: string
+    userEmail?: string
+    filename?: string
+    dbmsSummary?: any
+    received?: any
+    createdAt?: Date
+    completedAt?: Date | null
+  }> {
+    const batch = await this.prisma.syncBatch.findUnique({
+      where: { batch_id: batchId }
+    })
+    if (!batch) {
+      throw new BadRequestException(`Sync batch ${batchId} not found`)
+    }
+    return {
+      batchId: batch.batch_id,
+      status: batch.status,
+      source: batch.source,
+      userEmail: batch.user_email,
+      filename: batch.filename,
+      dbmsSummary: batch.dbms_summary as any,
+      received: batch.received as any,
+      createdAt: batch.created_at,
+      completedAt: batch.completed_at
+    }
+  }
+
+  private async recordSyncCallbackInternal(
+    batchId: string,
+    source: 'dashboard' | 'scraper',
+    result: SyncBulkUpsertResponseDto
+  ): Promise<{ status: string; completed: boolean }> {
+    const batch = await this.prisma.syncBatch.findUnique({
+      where: { batch_id: batchId }
+    })
+    if (!batch) {
+      this.syncLogger.warn(
+        `[callback] batch ${batchId} not found (source=${source})`
+      )
+      return { status: 'not_found', completed: false }
+    }
+    if (batch.status === 'complete') {
+      return { status: 'already_complete', completed: true }
+    }
+
+    const received: Record<string, SyncBulkUpsertResponseDto> =
+      (batch.received as any) ?? {}
+    if (received[source]) {
+      // Idempotent: duplicate callback — keep the first result.
+      this.syncLogger.info(
+        `[callback] duplicate ${source} for batch ${batchId} — ignoring`
+      )
+      return { status: 'duplicate', completed: false }
+    }
+
+    received[source] = result
+    const haveAll = batch.expected.every(s => received[s])
+    // Use 'finalizing' (not 'complete') so finalizeSyncBatch's guard
+    // (which bails on 'complete') actually runs. finalize sets 'complete'
+    // at the end once the email has been sent.
+    const status = haveAll ? 'finalizing' : 'partial'
+
+    await this.prisma.syncBatch.update({
+      where: { id: batch.id },
+      data: { received: received as any, status }
+    })
+
+    this.syncLogger.info(
+      `[callback] ${source} recorded for batch ${batchId} — status=${status}`
+    )
+
+    if (haveAll) {
+      // Finalize in the background so the callback endpoint responds quickly.
+      this.finalizeSyncBatch(batch.id).catch(e =>
+        this.syncLogger.error(
+          `[finalize] batch ${batchId} failed: ${e?.message ?? e}`
+        )
+      )
+    }
+    return { status, completed: haveAll }
+  }
+
+  private async finalizeSyncBatch(batchDbId: string): Promise<void> {
+    const batch = await this.prisma.syncBatch.findUnique({
+      where: { id: batchDbId }
+    })
+    if (!batch || batch.status === 'complete') {
+      return
+    }
+
+    this.syncLogger.step(
+      `📧 Finalizing sync batch ${batch.batch_id} — building per-row report + sending email to ${batch.user_email}`
+    )
+
+    const received: Record<string, SyncBulkUpsertResponseDto> =
+      (batch.received as any) ?? {}
+    const rowsCtx: Array<{
+      parentId: string
+      row: number
+      action: 'created' | 'updated'
+      name: string
+      identifier: string
+      portfolioName: string
+      expediaId: string | number | null
+      bookingId: string | number | null
+      agodaId: string | number | null
+      hasPortfolioId: boolean
+    }> = (batch.rows as any) ?? []
+    const skippedRows: Array<{ row: number; name: string; reason: string }> =
+      (batch.skipped_rows as any) ?? []
+
+    const dashboardBulkResult = received.dashboard ?? null
+    const parserBulkResult = received.scraper ?? null
+
+    // Re-fetch the properties (with relations) so the existing resolve
+    // helpers — including the single-property fallback for ineligible rows —
+    // behave exactly as in the previous synchronous flow.
+    const properties = await this.repo.findByIds(rowsCtx.map(r => r.parentId))
+    const propertyMap = new Map(properties.map(p => [p.id, p]))
+
+    const rowResults: SyncBulkUpsertRowResult[] = await Promise.all(
+      rowsCtx.map(async ctx => {
+        const property = propertyMap.get(ctx.parentId)
+        if (!property) {
+          return {
+            row: ctx.row,
+            parent_id: ctx.parentId,
+            name: ctx.name,
+            identifier: ctx.identifier,
+            action: 'failed' as const,
+            dbms: false,
+            dashboard: {
+              success: false,
+              reason: 'Property not found during finalize'
+            },
+            parser: {
+              success: false,
+              reason: 'Property not found during finalize'
+            },
+            error: 'Property not found during finalize'
+          }
+        }
+        const dashboardResult = await this.resolveDashboardSyncResult(
+          property,
+          dashboardBulkResult
+        )
+        const parserResult = this.resolveParserBulkUpsertResult(
+          ctx.parentId,
+          parserBulkResult,
+          ctx.hasPortfolioId
+        )
+        return {
+          row: ctx.row,
+          parent_id: ctx.parentId,
+          name: ctx.name,
+          identifier: ctx.identifier,
+          action: ctx.action,
+          dbms: true,
+          dashboard: dashboardResult,
+          parser: parserResult
+        } as SyncBulkUpsertRowResult
+      })
+    )
+
+    const skippedResults: SyncBulkUpsertRowResult[] = skippedRows.map(s => ({
+      row: s.row,
+      parent_id: s.name,
+      name: s.name,
+      identifier: s.name,
+      action: 'failed' as const,
+      dbms: false,
+      dashboard: { success: false, reason: 'Skipped — DBMS error' },
+      parser: { success: false, reason: 'Skipped — DBMS error' },
+      error: s.reason
+    }))
+
+    const allRowResults = [...rowResults, ...skippedResults].sort(
+      (a, b) => a.row - b.row
+    )
+
+    await this.sendSyncBatchReportEmail(batch, allRowResults, rowsCtx)
+
+    await this.prisma.syncBatch.update({
+      where: { id: batch.id },
+      data: { status: 'complete', completed_at: new Date() }
+    })
+
+    const failedCount = allRowResults.filter(
+      r => !r.dbms || !r.dashboard.success || !r.parser.success
+    ).length
+    this.syncLogger.success(
+      `✅ SYNC BATCH ${batch.batch_id} FINALIZED — ${allRowResults.length} rows, ${failedCount} failed, email→${batch.user_email}`
+    )
+  }
+
+  private sendSyncBatchReportEmail(
+    batch: { user_email: string; filename: string },
+    allRowResults: SyncBulkUpsertRowResult[],
+    rowsCtx: Array<{
+      parentId: string
+      portfolioName: string
+      expediaId: string | number | null
+      bookingId: string | number | null
+      agodaId: string | number | null
+    }>
+  ): Promise<void> {
+    const ctxByParentId = new Map(rowsCtx.map(r => [r.parentId, r]))
+    const failedRows = allRowResults.filter(
+      r => !r.dbms || !r.dashboard.success || !r.parser.success
+    )
+    const defectiveRows = failedRows.map(r => {
+      const ctx = ctxByParentId.get(r.parent_id)
+      const reasons: string[] = []
+      if (r.error) reasons.push(r.error)
+      if (
+        !r.dashboard.success &&
+        r.dashboard.reason &&
+        r.dashboard.reason !== 'Skipped — DBMS error'
+      )
+        reasons.push(`Dashboard: ${r.dashboard.reason}`)
+      if (
+        !r.parser.success &&
+        r.parser.reason &&
+        r.parser.reason !== 'Skipped — DBMS error'
+      )
+        reasons.push(`Parser: ${r.parser.reason}`)
+      return {
+        Row: r.row,
+        'Property Name': r.name,
+        Identifier: r.identifier,
+        Portfolio: ctx?.portfolioName ?? '',
+        'Expedia ID': ctx?.expediaId ?? '',
+        'Booking ID': ctx?.bookingId ?? '',
+        'Agoda ID': ctx?.agodaId ?? '',
+        DBMS: r.dbms ? 'YES' : 'NO',
+        Dashboard: r.dashboard.success ? 'YES' : 'NO',
+        Parser: r.parser.success ? 'YES' : 'NO',
+        Reason: reasons.join('; ') || 'N/A'
+      }
+    })
+
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(
+      wb,
+      XLSX.utils.json_to_sheet(
+        defectiveRows.length
+          ? defectiveRows
+          : [{ note: 'All rows synced successfully' }]
+      ),
+      'Sync Results'
+    )
+    const excelBuffer = Buffer.from(
+      XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
+    )
+
+    return this.emailUtil
+      .sendBulkSyncResultEmail(
+        batch.user_email,
+        allRowResults,
+        excelBuffer,
+        batch.filename
+      )
+      .catch(e =>
+        this.logger.error(
+          `[email] sync batch report failed: ${e?.message ?? e}`
+        )
+      )
+  }
+
+  @Cron(CronExpression.EVERY_MINUTE)
+  async sweepStaleSyncBatches(): Promise<void> {
+    const staleBefore = new Date(Date.now() - this.syncBatchStaleMs)
+    const stale = await this.prisma.syncBatch.findMany({
+      where: {
+        // 'finalizing' is included so a batch whose finalize crashed (server
+        // restart mid-email) gets retried instead of stuck forever.
+        status: { in: ['pending', 'partial', 'finalizing'] },
+        created_at: { lt: staleBefore }
+      }
+    })
+    if (!stale.length) return
+
+    this.syncLogger.warn(
+      `[sweeper] ${stale.length} stale sync batch(es) — finalizing with missing sources marked failed`
+    )
+    const emptyResult: SyncBulkUpsertResponseDto = {
+      totalRows: 0,
+      createdCount: 0,
+      updatedCount: 0,
+      failureCount: 0,
+      errors: [],
+      successfulUpserts: []
+    }
+    for (const batch of stale) {
+      const dbmsSummary: { status?: string; error?: string } =
+        (batch.dbms_summary as any) ?? {}
+
+      // Case 1: the DBMS import itself never finished (e.g. the server
+      // restarted mid-import). There's no row context to build a per-row
+      // report from, so mark the batch failed and notify the user.
+      if (dbmsSummary.status === 'importing') {
+        this.syncLogger.warn(
+          `[sweeper] batch ${batch.batch_id} — DBMS import was interrupted (still "importing"); marking failed`
+        )
+        await this.prisma.syncBatch.update({
+          where: { id: batch.id },
+          data: {
+            status: 'failed',
+            dbms_summary: {
+              ...dbmsSummary,
+              status: 'failed',
+              error: 'DBMS import interrupted (server restart?)'
+            } as any,
+            completed_at: new Date()
+          }
+        })
+        this.sendSyncBatchFailureEmail(
+          batch.user_email,
+          batch.filename,
+          batch.batch_id,
+          new Error(
+            'The DBMS import was interrupted before it could finish (the server may have restarted). No properties were synced. Please re-upload the file.'
+          )
+        ).catch(e =>
+          this.syncLogger.error(
+            `[sweeper] failure email for batch ${batch.batch_id} failed: ${e?.message ?? e}`
+          )
+        )
+        continue
+      }
+
+      // Case 2: the DBMS import finished but one or both downstream services
+      // never called back. Fill missing sources with an empty (all-failed)
+      // result and finalize so the user still gets a report.
+      const received: Record<string, SyncBulkUpsertResponseDto> =
+        (batch.received as any) ?? {}
+      let changed = false
+      for (const source of batch.expected) {
+        if (!received[source]) {
+          received[source] = emptyResult
+          changed = true
+        }
+      }
+      if (changed) {
+        await this.prisma.syncBatch.update({
+          where: { id: batch.id },
+          data: { received: received as any, status: 'finalizing' }
+        })
+      }
+      this.finalizeSyncBatch(batch.id).catch(e =>
+        this.syncLogger.error(
+          `[sweeper] finalize batch ${batch.batch_id} failed: ${e?.message ?? e}`
+        )
+      )
+    }
+  }
+
+  private resolveDashboardBulkUpsertResult(
+    parentId: string,
+    bulkResult: {
+      errors?: Array<{ parent_id: string; error: string }>
+      successfulUpserts?: Array<{ parent_id: string; action: string }>
+    } | null
+  ): { success: boolean; reason?: string } {
+    if (!this.dashboardJwtClient) {
+      return {
+        success: false,
+        reason:
+          'Dashboard JWT client disabled — URL or JWT_COMMUNICATION_SECRET missing'
+      }
+    }
+    if (!bulkResult) {
+      return {
+        success: false,
+        reason: 'Dashboard bulk upsert was not attempted or failed entirely'
+      }
+    }
+
+    const rowError = bulkResult.errors?.find(e => e.parent_id === parentId)
+    if (rowError) {
+      return { success: false, reason: rowError.error }
+    }
+
+    if (bulkResult.successfulUpserts?.some(u => u.parent_id === parentId)) {
+      return { success: true }
+    }
+
+    return {
+      success: false,
+      reason: 'Property was not reported in dashboard bulk upsert response'
+    }
+  }
+
+  // Properties without expedia_id or portfolio_id are excluded from the bulk
+  // path (the dashboard bulk endpoint requires both). Fall back to the
+  // single-property sync for those so existing behavior is preserved.
+  private async resolveDashboardSyncResult(
+    property: PropertyWithRelations,
+    bulkResult: {
+      errors?: Array<{ parent_id: string; error: string }>
+      successfulUpserts?: Array<{ parent_id: string; action: string }>
+    } | null
+  ): Promise<{ success: boolean; reason?: string }> {
+    const eligibleForBulk = !!property.expedia_id && !!property.portfolio_id
+    if (!eligibleForBulk) {
+      return this.syncUpsertPropertyToDashboard(property).catch(e => ({
+        success: false,
+        reason: e?.message ?? String(e)
+      }))
+    }
+    return this.resolveDashboardBulkUpsertResult(property.id, bulkResult)
   }
 
   private async syncUpsertPropertyToScraper(

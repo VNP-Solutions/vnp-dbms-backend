@@ -1,8 +1,27 @@
-import { BillingType, Currency, Frequency, Note, Priority, Processor, Property, ServiceType } from '@prisma/client'
+import {
+  BillingType,
+  Currency,
+  Frequency,
+  Note,
+  Priority,
+  Processor,
+  Property,
+  ServiceType
+} from '@prisma/client'
 import { PaginatedResult } from '../../common/dto/query.dto'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
-import type { SyncBulkDeleteResponseDto } from './property.dto'
-import { BulkUpdateResultDto, CreatePropertyDto, ExportPropertyExcelDto, PropertyFilterDto, SyncBulkDeleteBodyDto, SyncByOtaDto, UpdatePropertyDto } from './property.dto'
+import type {
+  SyncBatchAcceptedDto,
+  SyncBulkDeleteResponseDto
+} from './property.dto'
+import {
+  CreatePropertyDto,
+  ExportPropertyExcelDto,
+  PropertyFilterDto,
+  SyncBulkDeleteBodyDto,
+  SyncByOtaDto,
+  UpdatePropertyDto
+} from './property.dto'
 
 export type PropertyWithRelations = Property & {
   portfolio: { id: string; name: string }
@@ -23,7 +42,10 @@ export type PropertyWithRelations = Property & {
   agoda_processor: Processor | null
   priority: Priority | null
   total_notes: number
-  notes: Pick<Note, 'id' | 'text' | 'is_done' | 'user_id' | 'created_at' | 'updated_at'>[]
+  notes: Pick<
+    Note,
+    'id' | 'text' | 'is_done' | 'user_id' | 'created_at' | 'updated_at'
+  >[]
 }
 
 export interface ImportPropertyRow {
@@ -139,11 +161,11 @@ export interface ImportPropertyRow {
   bookingPriority?: string
   agodaPriority?: string
   salesRep?: string
-  discontinuedEmailIds?: string   // comma-separated in Excel, stored as array
+  discontinuedEmailIds?: string // comma-separated in Excel, stored as array
   cybersourceMid?: string
   adyenLocation?: string
   stripeConnectedEmail?: string
-  notes?: string                  // semicolon-separated note texts in Excel, each becomes a Note record
+  notes?: string // semicolon-separated note texts in Excel, each becomes a Note record
 }
 
 export interface ImportPropertiesResult {
@@ -165,8 +187,6 @@ export interface BulkDeleteResult {
   successCount: number
   skippedCount: number
 }
-
-
 
 export interface AllDataForGlobalFilterResponse {
   expedia_id: string[]
@@ -276,9 +296,15 @@ export interface AllDataForGlobalFilterResponse {
 
 export interface IPropertyRepository {
   create(data: CreatePropertyDto): Promise<PropertyWithRelations>
-  findAll(queryOptions: { where: any; skip?: number; take?: number; orderBy?: any }): Promise<PropertyWithRelations[]>
+  findAll(queryOptions: {
+    where: any
+    skip?: number
+    take?: number
+    orderBy?: any
+  }): Promise<PropertyWithRelations[]>
   count(where: any): Promise<number>
   findById(id: string): Promise<PropertyWithRelations | null>
+  findByIds(ids: string[]): Promise<PropertyWithRelations[]>
   findByName(name: string): Promise<Property | null>
   update(id: string, data: UpdatePropertyDto): Promise<PropertyWithRelations>
   delete(id: string): Promise<Property>
@@ -290,8 +316,15 @@ export interface IPropertyRepository {
     portfolios: { id: string; name: string }[]
     subportfolios: { id: string; name: string; portfolio_id: string }[]
   }>
-  importProperties(rows: ImportPropertyRow[], userId?: string): Promise<ImportPropertiesResult>
-  findIdsByOtaIds(ota: { expedia_id?: number | null; booking_id?: number | null; agoda_id?: number | null }): Promise<string[]>;
+  importProperties(
+    rows: ImportPropertyRow[],
+    userId?: string
+  ): Promise<ImportPropertiesResult>
+  findIdsByOtaIds(ota: {
+    expedia_id?: number | null
+    booking_id?: number | null
+    agoda_id?: number | null
+  }): Promise<string[]>
 }
 
 export type PropertyContact = {
@@ -317,19 +350,50 @@ export type PropertyContact = {
 }
 
 export interface IPropertyService {
-  create(data: CreatePropertyDto, user: IUserWithPermissions): Promise<PropertyWithRelations>
-  createAndSync(data: CreatePropertyDto, user: IUserWithPermissions): Promise<PropertyWithRelations>
-  findAllWithFilters(filterDto: PropertyFilterDto, user: IUserWithPermissions): Promise<PaginatedResult<PropertyWithRelations>>
+  create(
+    data: CreatePropertyDto,
+    user: IUserWithPermissions
+  ): Promise<PropertyWithRelations>
+  createAndSync(
+    data: CreatePropertyDto,
+    user: IUserWithPermissions
+  ): Promise<PropertyWithRelations>
+  findAllWithFilters(
+    filterDto: PropertyFilterDto,
+    user: IUserWithPermissions
+  ): Promise<PaginatedResult<PropertyWithRelations>>
   findAllCached(user: IUserWithPermissions): Promise<PropertyWithRelations[]>
   refreshCache(user: IUserWithPermissions): Promise<{ message: string }>
-  findOne(id: string, user: IUserWithPermissions): Promise<PropertyWithRelations>
-  update(id: string, data: UpdatePropertyDto, user: IUserWithPermissions): Promise<PropertyWithRelations>
-  updateAndSync(id: string, data: UpdatePropertyDto, user: IUserWithPermissions): Promise<PropertyWithRelations>
-  syncBulkDelete(body: SyncBulkDeleteBodyDto): Promise<SyncBulkDeleteResponseDto>
+  findOne(
+    id: string,
+    user: IUserWithPermissions
+  ): Promise<PropertyWithRelations>
+  update(
+    id: string,
+    data: UpdatePropertyDto,
+    user: IUserWithPermissions
+  ): Promise<PropertyWithRelations>
+  updateAndSync(
+    id: string,
+    data: UpdatePropertyDto,
+    user: IUserWithPermissions
+  ): Promise<PropertyWithRelations>
+  syncBulkDelete(
+    body: SyncBulkDeleteBodyDto
+  ): Promise<SyncBulkDeleteResponseDto>
   remove(id: string, user: IUserWithPermissions): Promise<{ message: string }>
-  bulkDelete(ids: string[], user: IUserWithPermissions): Promise<BulkDeleteResult>
-  findByPortfolioId(portfolioId: string, user: IUserWithPermissions): Promise<PropertyWithRelations[]>
-  findBySubportfolioId(subportfolioId: string, user: IUserWithPermissions): Promise<PropertyWithRelations[]>
+  bulkDelete(
+    ids: string[],
+    user: IUserWithPermissions
+  ): Promise<BulkDeleteResult>
+  findByPortfolioId(
+    portfolioId: string,
+    user: IUserWithPermissions
+  ): Promise<PropertyWithRelations[]>
+  findBySubportfolioId(
+    subportfolioId: string,
+    user: IUserWithPermissions
+  ): Promise<PropertyWithRelations[]>
   getDropdown(user: IUserWithPermissions): Promise<{
     portfolios: { id: string; name: string }[]
     subportfolios: { id: string; name: string; portfolio_id: string }[]
@@ -347,16 +411,59 @@ export interface IPropertyService {
   bulkUpdate(
     file: Express.Multer.File,
     user: IUserWithPermissions
-  ): Promise<BulkUpdateResultDto>
-  getAllDataForGlobalFilter(user: IUserWithPermissions): Promise<AllDataForGlobalFilterResponse>
-  exportToExcelAndEmail(dto: ExportPropertyExcelDto, user: IUserWithPermissions): Promise<{ message: string }>
-  transferPortfolio(id: string, portfolioId: string, password: string, user: IUserWithPermissions): Promise<PropertyWithRelations>
-  syncByOta(dto: SyncByOtaDto): Promise<{ status: string; id?: string; candidates?: string[] }>
-  bulkTransferPortfolio(ids: string[], portfolioId: string, password: string, user: IUserWithPermissions): Promise<BulkTransferResult>
-  importFromExcelAndSync(file: Express.Multer.File, user: IUserWithPermissions): Promise<ImportPropertiesResult>
-  removeAndSync(id: string, user: IUserWithPermissions): Promise<{ message: string }>
+  ): Promise<SyncBatchAcceptedDto>
+  getAllDataForGlobalFilter(
+    user: IUserWithPermissions
+  ): Promise<AllDataForGlobalFilterResponse>
+  exportToExcelAndEmail(
+    dto: ExportPropertyExcelDto,
+    user: IUserWithPermissions
+  ): Promise<{ message: string }>
+  transferPortfolio(
+    id: string,
+    portfolioId: string,
+    password: string,
+    user: IUserWithPermissions
+  ): Promise<PropertyWithRelations>
+  syncByOta(
+    dto: SyncByOtaDto
+  ): Promise<{ status: string; id?: string; candidates?: string[] }>
+  bulkTransferPortfolio(
+    ids: string[],
+    portfolioId: string,
+    password: string,
+    user: IUserWithPermissions
+  ): Promise<BulkTransferResult>
+  importFromExcelAndSync(
+    file: Express.Multer.File,
+    user: IUserWithPermissions
+  ): Promise<SyncBatchAcceptedDto>
+  /// Query the status of a background sync batch by id (for polling).
+  getSyncBatchStatus(batchId: string): Promise<{
+    batchId: string
+    status: string
+    source?: string
+    userEmail?: string
+    filename?: string
+    dbmsSummary?: any
+    received?: any
+    createdAt?: Date
+    completedAt?: Date | null
+  }>
+  removeAndSync(
+    id: string,
+    user: IUserWithPermissions
+  ): Promise<{ message: string }>
   getContact(id: string, user: IUserWithPermissions): Promise<PropertyContact>
   getContactExternal(id: string): Promise<PropertyContact>
+  /// Receive an async sync result callback from the dashboard or scraper.
+  /// Stores the result; when all expected sources have reported, builds the
+  /// per-row email report and sends it. Idempotent per (batchId, source).
+  recordSyncCallback(dto: {
+    batchId: string
+    source: 'dashboard' | 'scraper'
+    result: import('./property.dto').SyncBulkUpsertResponseDto
+  }): Promise<{ status: string; completed: boolean }>
 }
 
 export interface BulkTransferResult {
@@ -371,6 +478,6 @@ export interface ImportPropertiesResult {
   credentialsCreated: number
   propertiesSkipped: number
   properties: any[]
-  existingProperties?: any[]   // existed on DBMS — still attempt parser sync
+  existingProperties?: any[] // existed on DBMS — still attempt parser sync
   skippedProperties: Array<{ name: string; reason: string }>
 }
