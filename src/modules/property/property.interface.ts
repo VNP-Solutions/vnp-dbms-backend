@@ -176,6 +176,12 @@ export interface ImportPropertiesResult {
   skippedProperties: Array<{ name: string; reason: string }>
   /** Portfolios auto-created during import (for dashboard/scraper sync). */
   createdPortfolios?: Array<{ id: string; name: string }>
+  /** Subportfolios auto-created during import (for scraper sync). */
+  createdSubportfolios?: Array<{
+    id: string
+    name: string
+    portfolio_id: string
+  }>
 }
 
 export interface GetPropertyCredentialResult {
@@ -326,6 +332,12 @@ export interface IPropertyRepository {
     portfolioName: string
   ): Promise<
     { id: string; name: string; created: boolean } | { error: string }
+  >
+  resolveOrCreateSubportfolio(
+    subName: string,
+    portfolioId: string
+  ): Promise<
+    { id: string; created: boolean } | { error: string }
   >
   findIdsByOtaIds(ota: {
     expedia_id?: number | null

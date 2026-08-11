@@ -1,11 +1,11 @@
 import {
-  BadRequestException,
-  ConflictException,
-  Inject,
-  Injectable,
-  Logger,
-  NotFoundException,
-  OnModuleInit
+    BadRequestException,
+    ConflictException,
+    Inject,
+    Injectable,
+    Logger,
+    NotFoundException,
+    OnModuleInit
 } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import axios, { AxiosInstance } from 'axios'
@@ -13,25 +13,25 @@ import { createHash } from 'crypto'
 import * as XLSX from 'xlsx'
 import type { PaginatedResult } from '../../common/dto/query.dto'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
+import { GlobalFilterCacheService } from '../../common/services/global-filter-cache.service'
 import { SyncCommunicationService } from '../../common/services/sync-communication.service'
 import { QueryBuilder } from '../../common/utils/query-builder.util'
 import type { Configuration } from '../../config/configuration'
 import type { UploadAndCreateFileDto } from '../file-upload/file-upload.dto'
 import type { IFileUploadService } from '../file-upload/file-upload.interface'
 import { PrismaService } from '../prisma/prisma.service'
-import { GlobalFilterCacheService } from '../../common/services/global-filter-cache.service'
 import { RedisService } from '../redis/redis.service'
 import {
-  CreatePortfolioDto,
-  PortfolioQueryDto,
-  UpdatePortfolioDto
+    CreatePortfolioDto,
+    PortfolioQueryDto,
+    UpdatePortfolioDto
 } from './portfolio.dto'
 import type {
-  ImportPortfoliosResult,
-  IPortfolioRepository,
-  IPortfolioService,
-  PortfolioContact,
-  PortfolioWithCounts
+    ImportPortfoliosResult,
+    IPortfolioRepository,
+    IPortfolioService,
+    PortfolioContact,
+    PortfolioWithCounts
 } from './portfolio.interface'
 
 const CACHE_TTL_ITEM = 5 * 60 * 1000 // 5 minutes for individual records
@@ -1213,6 +1213,45 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
     } else {
       this.logger.warn(
         '[sync] scraper disabled — skipping portfolio bulk-upsert sync'
+      )
+    }
+  }
+
+  /**
+   * Sync subportfolios created during property import/update to the scraper.
+   * Dashboard has no subportfolio entity — scraper only.
+   */
+  async syncSubportfoliosBulkUpsertToScraper(
+    items: Array<{ id: string; name: string; portfolio_id: string }>
+  ): Promise<void> {
+    if (!items.length) return
+
+    const unique = [
+      ...new Map(items.map(item => [item.id, item])).values()
+    ]
+
+    const parserItems = unique.map(({ id, name, portfolio_id }) => ({
+      row: 0,
+      parent_id: id,
+      portfolio_parent_id: portfolio_id,
+      name
+    }))
+
+    if (this.scraperClient) {
+      await this.postSync(
+        this.scraperClient,
+        '/sub-portfolio/sync-bulk-upsert',
+        { items: parserItems } as unknown as Record<string, unknown>,
+        'scraper',
+        'bulk-upsert-subportfolio'
+      ).catch(e =>
+        this.logger.error(
+          `[sync] scraper subportfolio bulk-upsert failed: ${e?.message ?? e}`
+        )
+      )
+    } else {
+      this.logger.warn(
+        '[sync] scraper disabled — skipping subportfolio bulk-upsert sync'
       )
     }
   }

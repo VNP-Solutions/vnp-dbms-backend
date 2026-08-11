@@ -536,6 +536,11 @@ export class PropertyRepository implements IPropertyRepository {
     const skippedProperties: Array<{ name: string; reason: string }> = []
     const existingProperties: any[] = []
     const createdPortfolios: Array<{ id: string; name: string }> = []
+    const createdSubportfolios: Array<{
+      id: string
+      name: string
+      portfolio_id: string
+    }> = []
     const seenIdentifiersInBatch = new Set<string>()
 
     for (const row of rows) {
@@ -575,8 +580,7 @@ export class PropertyRepository implements IPropertyRepository {
       if (row.subportfolioName) {
         const subResult = await this.resolveOrCreateSubportfolio(
           row.subportfolioName,
-          portfolio.id,
-          logger
+          portfolio.id
         )
         if ('error' in subResult) {
           skippedProperties.push({
@@ -587,6 +591,13 @@ export class PropertyRepository implements IPropertyRepository {
           continue
         }
         subportfolioId = subResult.id
+        if (subResult.created) {
+          createdSubportfolios.push({
+            id: subResult.id,
+            name: row.subportfolioName.trim(),
+            portfolio_id: portfolio.id
+          })
+        }
       }
 
       // Check if property already exists
@@ -652,14 +663,29 @@ export class PropertyRepository implements IPropertyRepository {
           )
         }
 
+        const existingUpdates: { subportfolio_id?: string; portfolio_id?: string } =
+          {}
         if (subportfolioId) {
+          existingUpdates.subportfolio_id = subportfolioId
+        }
+        if (portfolio.id !== existingProp.portfolio_id) {
+          existingUpdates.portfolio_id = portfolio.id
+        }
+        if (Object.keys(existingUpdates).length) {
           await this.prisma.property.update({
             where: { id: existingProp.id },
-            data: { subportfolio_id: subportfolioId }
+            data: existingUpdates
           })
-          logger.log(
-            `Subportfolio assigned to existing property "${propertyName}"`
-          )
+          if (existingUpdates.subportfolio_id) {
+            logger.log(
+              `Subportfolio assigned to existing property "${propertyName}"`
+            )
+          }
+          if (existingUpdates.portfolio_id) {
+            logger.log(
+              `Portfolio reassigned on existing property "${propertyName}"`
+            )
+          }
         }
 
         const linkedSubportfolio = subportfolioId
@@ -1188,7 +1214,8 @@ export class PropertyRepository implements IPropertyRepository {
       properties: createdProperties,
       existingProperties,
       skippedProperties,
-      createdPortfolios
+      createdPortfolios,
+      createdSubportfolios
     }
   }
 
@@ -1294,11 +1321,11 @@ export class PropertyRepository implements IPropertyRepository {
     }
   }
 
-  private async resolveOrCreateSubportfolio(
+  async resolveOrCreateSubportfolio(
     subName: string,
-    portfolioId: string,
-    logger: Logger
-  ): Promise<{ id: string } | { error: string }> {
+    portfolioId: string
+  ): Promise<{ id: string; created: boolean } | { error: string }> {
+    const logger = new Logger(PropertyRepository.name)
     const trimmed = subName.trim()
     if (!trimmed) return { error: 'Subportfolio name is empty' }
 
@@ -1311,15 +1338,17 @@ export class PropertyRepository implements IPropertyRepository {
           data: { name: trimmed, portfolio_id: portfolioId }
         })
         logger.log(`Subportfolio "${trimmed}" created during import`)
+        return { id: subportfolio.id, created: true }
       } catch (err: any) {
         logger.error(`Error creating subportfolio "${trimmed}": ${err.message}`)
         return { error: `Error creating subportfolio: ${err.message}` }
       }
-    } else if (subportfolio.portfolio_id !== portfolioId) {
+    }
+    if (subportfolio.portfolio_id !== portfolioId) {
       return {
         error: `Subportfolio "${trimmed}" belongs to a different portfolio`
       }
     }
-    return { id: subportfolio.id }
+    return { id: subportfolio.id, created: false }
   }
 }

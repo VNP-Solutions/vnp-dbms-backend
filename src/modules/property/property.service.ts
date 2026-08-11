@@ -1,11 +1,11 @@
 import {
-  BadRequestException,
-  ConflictException,
-  ForbiddenException,
-  Inject,
-  Injectable,
-  Logger,
-  NotFoundException
+    BadRequestException,
+    ConflictException,
+    ForbiddenException,
+    Inject,
+    Injectable,
+    Logger,
+    NotFoundException
 } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { Cron, CronExpression } from '@nestjs/schedule'
@@ -15,18 +15,18 @@ import { createHash, randomUUID } from 'crypto'
 import * as XLSX from 'xlsx'
 import type { PaginatedResult } from '../../common/dto/query.dto'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
-import { RunDateCalculatorService } from '../../common/services/run-date-calculator.service'
 import { GlobalFilterCacheService } from '../../common/services/global-filter-cache.service'
+import { RunDateCalculatorService } from '../../common/services/run-date-calculator.service'
 import { SyncCommunicationService } from '../../common/services/sync-communication.service'
+import { ColoredLogger } from '../../common/utils/colored-logger.util'
 import { EmailUtil } from '../../common/utils/email.util'
 import { EncryptionUtil } from '../../common/utils/encryption.util'
-import { ColoredLogger } from '../../common/utils/colored-logger.util'
 import {
-  EXCEL_HISTORICAL_DATE_HEADERS,
-  findExcelCellValue,
-  findExcelDateValue,
-  mapPropertyToExcelRow,
-  writePropertyExportBuffer
+    EXCEL_HISTORICAL_DATE_HEADERS,
+    findExcelCellValue,
+    findExcelDateValue,
+    mapPropertyToExcelRow,
+    writePropertyExportBuffer
 } from '../../common/utils/property-excel.util'
 import type { Configuration } from '../../config/configuration'
 import type { IAuthRepository } from '../auth/auth.interface'
@@ -35,37 +35,37 @@ import { PrismaService } from '../prisma/prisma.service'
 import type { IPropertyCredentialsService } from '../property-credentials/property-credentials.interface'
 import { RedisService } from '../redis/redis.service'
 import type { ISubportfolioService } from '../subportfolio/subportfolio.interface'
+import { applyColumnFilter } from './property-column-filter.util'
 import {
-  collectPropertyUniqueConflicts,
-  normalizePropertyIdentifier,
-  propertyIdentifierKey
+    collectPropertyUniqueConflicts,
+    normalizePropertyIdentifier,
+    propertyIdentifierKey
 } from './property-uniqueness.util'
 import type {
-  SyncBatchAcceptedDto,
-  SyncBulkDeleteResponseDto,
-  SyncBulkUpsertResponseDto,
-  SyncBulkUpsertRowResult
+    SyncBatchAcceptedDto,
+    SyncBulkDeleteResponseDto,
+    SyncBulkUpsertResponseDto,
+    SyncBulkUpsertRowResult
 } from './property.dto'
 import {
-  BulkUpdateResultDto,
-  CreatePropertyDto,
-  ExportPropertyExcelDto,
-  GetPropertyCredentialDto,
-  PropertyFilterDto,
-  RequiredFieldType,
-  SyncBulkDeleteBodyDto,
-  SyncByOtaDto,
-  UpdatePropertyDto
+    BulkUpdateResultDto,
+    CreatePropertyDto,
+    ExportPropertyExcelDto,
+    GetPropertyCredentialDto,
+    PropertyFilterDto,
+    RequiredFieldType,
+    SyncBulkDeleteBodyDto,
+    SyncByOtaDto,
+    UpdatePropertyDto
 } from './property.dto'
-import { applyColumnFilter } from './property-column-filter.util'
 import type {
-  AllDataForGlobalFilterResponse,
-  ImportPropertiesResult,
-  ImportPropertyRow,
-  IPropertyRepository,
-  IPropertyService,
-  PropertyContact,
-  PropertyWithRelations
+    AllDataForGlobalFilterResponse,
+    ImportPropertiesResult,
+    ImportPropertyRow,
+    IPropertyRepository,
+    IPropertyService,
+    PropertyContact,
+    PropertyWithRelations
 } from './property.interface'
 
 const CACHE_TTL_ITEM = 5 * 60 * 1000 // 5 minutes for individual records
@@ -2397,6 +2397,23 @@ export class PropertyService implements IPropertyService {
         )
     }
 
+    const subportfoliosToSync = this.collectSubportfoliosForScraperSync(
+      allProperties,
+      result.createdSubportfolios ?? []
+    )
+    if (subportfoliosToSync.length) {
+      this.syncLogger.info(
+        `Syncing ${subportfoliosToSync.length} subportfolio(s) to scraper...`
+      )
+      await this.portfolioService
+        .syncSubportfoliosBulkUpsertToScraper(subportfoliosToSync)
+        .catch(e =>
+          this.syncLogger.error(
+            `[sync] subportfolio bulk-upsert after property import failed: ${e?.message ?? e}`
+          )
+        )
+    }
+
     await this.prisma.syncBatch.update({
       where: { batch_id: batchId },
       data: {
@@ -2657,6 +2674,11 @@ export class PropertyService implements IPropertyService {
     // Tracks successfully updated properties for post-loop sync
     const syncQueue: Array<{ rowNumber: number; propertyId: string }> = []
     const createdPortfolioIds: string[] = []
+    const createdSubportfolios: Array<{
+      id: string
+      name: string
+      portfolio_id: string
+    }> = []
 
     // Helper to find a column value with flexible header matching (case-insensitive, strips asterisks)
     const findValue = (
@@ -3163,33 +3185,27 @@ export class PropertyService implements IPropertyService {
               continue
             }
             const subName = subportfolioName.trim()
-            let subportfolio = await this.prisma.subportfolio.findUnique({
-              where: { name: subName }
-            })
-            if (!subportfolio) {
-              try {
-                subportfolio = await this.prisma.subportfolio.create({
-                  data: { name: subName, portfolio_id: portfolioId }
-                })
-              } catch (err: any) {
-                result.errors.push({
-                  row: rowNumber,
-                  propertyName: existingProperty.name,
-                  error: `Error creating subportfolio: ${err.message}`
-                })
-                result.failureCount++
-                continue
-              }
-            } else if (subportfolio.portfolio_id !== portfolioId) {
+            const subResult = await this.repo.resolveOrCreateSubportfolio(
+              subName,
+              portfolioId
+            )
+            if ('error' in subResult) {
               result.errors.push({
                 row: rowNumber,
                 propertyName: existingProperty.name,
-                error: `Subportfolio "${subName}" belongs to a different portfolio`
+                error: subResult.error
               })
               result.failureCount++
               continue
             }
-            updateData.subportfolio_id = subportfolio.id
+            if (subResult.created) {
+              createdSubportfolios.push({
+                id: subResult.id,
+                name: subName,
+                portfolio_id: portfolioId
+              })
+            }
+            updateData.subportfolio_id = subResult.id
           }
 
           // Case management contact
@@ -4019,6 +4035,30 @@ export class PropertyService implements IPropertyService {
           .catch(e =>
             this.syncLogger.error(
               `[sync] portfolio bulk-upsert after property bulk-update failed: ${e?.message ?? e}`
+            )
+          )
+      }
+
+      if (createdSubportfolios.length) {
+        this.syncLogger.info(
+          `Syncing ${createdSubportfolios.length} auto-created subportfolio(s) to scraper...`
+        )
+      }
+      const updateRowsForSubSync = await Promise.all(
+        syncQueue.map(async ({ propertyId }) =>
+          this.repo.findById(propertyId)
+        )
+      )
+      const subportfoliosToSync = this.collectSubportfoliosForScraperSync(
+        updateRowsForSubSync.filter(Boolean) as PropertyWithRelations[],
+        createdSubportfolios
+      )
+      if (subportfoliosToSync.length) {
+        await this.portfolioService
+          .syncSubportfoliosBulkUpsertToScraper(subportfoliosToSync)
+          .catch(e =>
+            this.syncLogger.error(
+              `[sync] subportfolio bulk-upsert after property bulk-update failed: ${e?.message ?? e}`
             )
           )
       }
@@ -5046,6 +5086,32 @@ export class PropertyService implements IPropertyService {
     }
   }
 
+  private collectSubportfoliosForScraperSync(
+    properties: Array<{
+      subportfolio_id?: string | null
+      portfolio_id?: string | null
+      subportfolio?: { id: string; name: string; portfolio_id: string } | null
+    }>,
+    created: Array<{ id: string; name: string; portfolio_id: string }>
+  ): Array<{ id: string; name: string; portfolio_id: string }> {
+    const map = new Map<string, { id: string; name: string; portfolio_id: string }>()
+    for (const item of created) {
+      if (item.id) map.set(item.id, item)
+    }
+    for (const property of properties) {
+      const sub = property.subportfolio
+      const subId = property.subportfolio_id ?? sub?.id
+      if (!subId) continue
+      map.set(subId, {
+        id: subId,
+        name: sub?.name ?? subId,
+        portfolio_id:
+          sub?.portfolio_id ?? property.portfolio_id ?? ''
+      })
+    }
+    return [...map.values()].filter(item => item.portfolio_id)
+  }
+
   private async buildScraperBulkUpsertItem(
     property: PropertyWithRelations,
     row: number
@@ -5061,6 +5127,12 @@ export class PropertyService implements IPropertyService {
       parent_id: property.id,
       portfolio_parent_id: property.portfolio_id,
       name: property.name,
+      ...(property.subportfolio_id
+        ? { sub_portfolio_parent_id: property.subportfolio_id }
+        : {}),
+      ...(property.subportfolio?.name
+        ? { sub_portfolio_name: property.subportfolio.name }
+        : {}),
       ...(property.expedia_id != null
         ? { expedia_id: property.expedia_id }
         : {}),
@@ -6161,6 +6233,12 @@ export class PropertyService implements IPropertyService {
     const payload = {
       name: property.name,
       portfolio_parent_id: property.portfolio_id,
+      ...(property.subportfolio_id
+        ? { sub_portfolio_parent_id: property.subportfolio_id }
+        : {}),
+      ...(property.subportfolio?.name
+        ? { sub_portfolio_name: property.subportfolio.name }
+        : {}),
       ...(property.expedia_id != null
         ? { expedia_id: property.expedia_id }
         : {}),

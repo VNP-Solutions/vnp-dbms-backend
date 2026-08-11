@@ -6,8 +6,8 @@ import * as nodemailer from 'nodemailer'
 import { URL } from 'url'
 import { Configuration } from '../../config/configuration'
 import type {
-  AttachmentUrlDto,
-  EmailAttachment
+    AttachmentUrlDto,
+    EmailAttachment
 } from '../../modules/email/email.dto'
 import { PrismaService } from '../../modules/prisma/prisma.service'
 

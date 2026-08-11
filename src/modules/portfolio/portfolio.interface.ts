@@ -1,9 +1,9 @@
 import { Currency, File, Portfolio, ServiceType } from '@prisma/client'
 import { PaginatedResult } from '../../common/dto/query.dto'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
-import { CreatePortfolioDto, PortfolioQueryDto, UpdatePortfolioDto } from './portfolio.dto'
-import type { FileWithRelations } from '../file-upload/file-upload.interface'
 import type { UploadAndCreateFileDto } from '../file-upload/file-upload.dto'
+import type { FileWithRelations } from '../file-upload/file-upload.interface'
+import { CreatePortfolioDto, PortfolioQueryDto, UpdatePortfolioDto } from './portfolio.dto'
 
 export type PortfolioContractUrl = {
   id: string
@@ -102,4 +102,8 @@ export interface IPortfolioService {
   removeAndSync(id: string, user: IUserWithPermissions): Promise<{ message: string }>
   /** Sync portfolios (e.g. auto-created during property import) to dashboard + scraper. */
   syncPortfoliosBulkUpsertByIds(portfolioIds: string[]): Promise<void>
+  /** Sync subportfolios (e.g. auto-created during property import) to scraper. */
+  syncSubportfoliosBulkUpsertToScraper(
+    items: Array<{ id: string; name: string; portfolio_id: string }>
+  ): Promise<void>
 }
