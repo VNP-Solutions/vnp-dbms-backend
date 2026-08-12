@@ -18,6 +18,7 @@ import { SyncCommunicationService } from '../../common/services/sync-communicati
 import { QueryBuilder } from '../../common/utils/query-builder.util'
 import {
   SYNC_HTTP_TIMEOUT_MS,
+  UPLOAD_JOB_HTTP_TIMEOUT_MS,
   type Configuration
 } from '../../config/configuration'
 import type { UploadAndCreateFileDto } from '../file-upload/file-upload.dto'
@@ -923,25 +924,17 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
 
     await this.globalFilterCache.invalidateAll()
 
-    // ── Dashboard & parser bulk-upsert sync ───────────────────────────────────
-    if (portfolios.length) {
-      await this.syncPortfoliosBulkUpsert(
-        portfolios.map(
-          ({
-            row_no,
-            portfolio: p,
-            service_type_name,
-            currency_code,
-            file_count
-          }) => ({
-            row: row_no,
-            portfolio: p,
-            service_type_name,
-            currency_code,
-            file_count
-          })
-        ),
-        'bulk-upsert-import'
+    // ── Dashboard & scraper sync — one portfolio at a time ─────────────────
+    // Uses the long upload-job timeout (not the 15s SYNC_TIMEOUT_MS env
+    // default) since this loop can run for a while over many portfolios.
+    for (const { portfolio: p } of portfolios) {
+      await this.syncUpsertPortfolioToScraperAndDashboard(
+        p.id,
+        UPLOAD_JOB_HTTP_TIMEOUT_MS
+      ).catch(e =>
+        this.logger.error(
+          `[sync] portfolio upsert after bulk import failed for "${p.name}": ${e?.message ?? e}`
+        )
       )
     }
 
@@ -1087,16 +1080,97 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
     target: string,
     operation = 'create'
   ): Promise<void> {
+    await this.postSyncResult(client, path, body, target, operation)
+  }
+
+  /** Same as postSync but returns the outcome instead of only logging it. */
+  private async postSyncResult(
+    client: AxiosInstance | null,
+    path: string,
+    body: Record<string, unknown>,
+    target: string,
+    operation = 'create',
+    timeoutMs?: number
+  ): Promise<{ success: boolean; reason?: string }> {
+    if (!client) {
+      const reason = `${target} sync disabled — URL missing or auth not configured`
+      this.logger.warn(`[sync] ${reason}`)
+      return { success: false, reason }
+    }
     try {
-      const r = await client.post(path, body)
+      const r = await client.post(
+        path,
+        body,
+        timeoutMs !== undefined ? { timeout: timeoutMs } : undefined
+      )
       this.logger.log(
         `[sync] ${target} portfolio ${operation}: ${JSON.stringify(r.data)}`
       )
+      return { success: true }
     } catch (e: any) {
-      this.logger.error(
-        `[sync] ${target} portfolio ${operation} failed: ${e?.response?.data ? JSON.stringify(e.response.data) : (e?.message ?? e)}`
-      )
+      const reason = e?.response?.data
+        ? JSON.stringify(e.response.data)
+        : (e?.message ?? String(e))
+      this.logger.error(`[sync] ${target} portfolio ${operation} failed: ${reason}`)
+      return { success: false, reason }
     }
+  }
+
+  /**
+   * Single-portfolio upsert to scraper + dashboard, used by the property
+   * bulk import/update upload-job pipeline (see PropertyService). Unlike
+   * fanOutPortfolioCreate/queueUpsertSync this never throws — every target
+   * reports its own { success, reason } so the caller can persist granular
+   * per-system status for the frontend to poll.
+   */
+  async syncUpsertPortfolioToScraperAndDashboard(
+    portfolioId: string,
+    timeoutMs?: number
+  ): Promise<{
+    scraper: { success: boolean; reason?: string }
+    dashboard: { success: boolean; reason?: string }
+  }> {
+    const portfolio = await this.prisma.portfolio.findUnique({
+      where: { id: portfolioId },
+      include: {
+        service_type: { select: { type: true } },
+        currency: { select: { code: true } }
+      }
+    })
+    if (!portfolio) {
+      const reason = `Portfolio ${portfolioId} not found`
+      return {
+        scraper: { success: false, reason },
+        dashboard: { success: false, reason }
+      }
+    }
+
+    const [scraper, dashboard] = await Promise.all([
+      this.postSyncResult(
+        this.scraperClient,
+        `/portfolios/sync-upsert/${portfolio.id}`,
+        { name: portfolio.name },
+        'scraper',
+        'upsert',
+        timeoutMs
+      ),
+      this.postSyncResult(
+        this.dashboardClient,
+        `/api/portfolio/sync-upsert/${portfolio.id}`,
+        {
+          name: portfolio.name,
+          service_type: portfolio.service_type?.type ?? '',
+          currency: portfolio.currency?.code ?? 'USD',
+          is_active: portfolio.is_active,
+          is_commissionable: portfolio.is_commissionable
+        },
+        'dashboard',
+        'upsert',
+        timeoutMs
+      )
+    ])
+
+    return { scraper, dashboard }
   }
 
   async createAndSync(data: CreatePortfolioDto, user: IUserWithPermissions) {
@@ -1112,150 +1186,4 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
     return full ?? portfolio
   }
 
-  /**
-   * Sync portfolios created elsewhere (e.g. property bulk import/update) to
-   * dashboard and scraper via bulk-upsert endpoints.
-   */
-  async syncPortfoliosBulkUpsertByIds(portfolioIds: string[]): Promise<void> {
-    const uniqueIds = [...new Set(portfolioIds.filter(Boolean))]
-    if (!uniqueIds.length) return
-
-    const portfolios = await this.prisma.portfolio.findMany({
-      where: { id: { in: uniqueIds } },
-      include: {
-        service_type: { select: { type: true } },
-        currency: { select: { code: true } }
-      }
-    })
-
-    if (!portfolios.length) {
-      this.logger.warn(
-        `[sync] no portfolios found for bulk-upsert sync (ids: ${uniqueIds.join(', ')})`
-      )
-      return
-    }
-
-    await this.syncPortfoliosBulkUpsert(
-      portfolios.map((p, index) => ({
-        row: index + 1,
-        portfolio: p,
-        service_type_name: p.service_type?.type ?? 'OTA',
-        currency_code: p.currency?.code ?? 'USD',
-        file_count: 0
-      })),
-      'bulk-upsert-property-import'
-    )
-  }
-
-  private async syncPortfoliosBulkUpsert(
-    items: Array<{
-      row: number
-      portfolio: {
-        id: string
-        name: string
-        is_active: boolean
-        is_commissionable: boolean
-      }
-      service_type_name: string
-      currency_code: string
-      file_count: number
-    }>,
-    operationLabel: string
-  ): Promise<void> {
-    if (!items.length) return
-
-    const dashboardItems = items.map(
-      ({ row, portfolio: p, service_type_name, currency_code, file_count }) => ({
-        row,
-        parent_id: p.id,
-        name: p.name,
-        service_type: service_type_name,
-        currency: currency_code,
-        is_active: p.is_active,
-        is_commissionable: p.is_commissionable,
-        file_count
-      })
-    )
-
-    const parserItems = items.map(({ row, portfolio: p }) => ({
-      row,
-      parent_id: p.id,
-      name: p.name
-    }))
-
-    if (this.dashboardClient) {
-      await this.postSync(
-        this.dashboardClient,
-        '/api/portfolio/sync-bulk-upsert',
-        { items: dashboardItems } as unknown as Record<string, unknown>,
-        'dashboard',
-        operationLabel
-      ).catch(e =>
-        this.logger.error(
-          `[sync] dashboard portfolio bulk-upsert failed: ${e?.message ?? e}`
-        )
-      )
-    } else {
-      this.logger.warn(
-        '[sync] dashboard disabled — skipping portfolio bulk-upsert sync'
-      )
-    }
-
-    if (this.scraperClient) {
-      await this.postSync(
-        this.scraperClient,
-        '/portfolios/sync-bulk-upsert',
-        { items: parserItems } as unknown as Record<string, unknown>,
-        'scraper',
-        operationLabel
-      ).catch(e =>
-        this.logger.error(
-          `[sync] scraper portfolio bulk-upsert failed: ${e?.message ?? e}`
-        )
-      )
-    } else {
-      this.logger.warn(
-        '[sync] scraper disabled — skipping portfolio bulk-upsert sync'
-      )
-    }
-  }
-
-  /**
-   * Sync subportfolios created during property import/update to the scraper.
-   * Dashboard has no subportfolio entity — scraper only.
-   */
-  async syncSubportfoliosBulkUpsertToScraper(
-    items: Array<{ id: string; name: string; portfolio_id: string }>
-  ): Promise<void> {
-    if (!items.length) return
-
-    const unique = [
-      ...new Map(items.map(item => [item.id, item])).values()
-    ]
-
-    const parserItems = unique.map(({ id, name, portfolio_id }) => ({
-      row: 0,
-      parent_id: id,
-      portfolio_parent_id: portfolio_id,
-      name
-    }))
-
-    if (this.scraperClient) {
-      await this.postSync(
-        this.scraperClient,
-        '/sub-portfolio/sync-bulk-upsert',
-        { items: parserItems } as unknown as Record<string, unknown>,
-        'scraper',
-        'bulk-upsert-subportfolio'
-      ).catch(e =>
-        this.logger.error(
-          `[sync] scraper subportfolio bulk-upsert failed: ${e?.message ?? e}`
-        )
-      )
-    } else {
-      this.logger.warn(
-        '[sync] scraper disabled — skipping subportfolio bulk-upsert sync'
-      )
-    }
-  }
 }

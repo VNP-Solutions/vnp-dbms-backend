@@ -100,10 +100,18 @@ export interface IPortfolioService {
   createAndSync(data: CreatePortfolioDto, user: IUserWithPermissions): Promise<Portfolio>
   updateAndSync(id: string, data: UpdatePortfolioDto, user: IUserWithPermissions): Promise<Portfolio>
   removeAndSync(id: string, user: IUserWithPermissions): Promise<{ message: string }>
-  /** Sync portfolios (e.g. auto-created during property import) to dashboard + scraper. */
-  syncPortfoliosBulkUpsertByIds(portfolioIds: string[]): Promise<void>
-  /** Sync subportfolios (e.g. auto-created during property import) to scraper. */
-  syncSubportfoliosBulkUpsertToScraper(
-    items: Array<{ id: string; name: string; portfolio_id: string }>
-  ): Promise<void>
+  /**
+   * Single-portfolio upsert to scraper + dashboard, used by the property
+   * bulk import/update upload-job pipeline. Never throws — each target's
+   * outcome is reported independently so the caller can track per-system
+   * status. `timeoutMs`, when provided, overrides the client's default
+   * axios timeout for this call only (see UPLOAD_JOB_HTTP_TIMEOUT_MS).
+   */
+  syncUpsertPortfolioToScraperAndDashboard(
+    portfolioId: string,
+    timeoutMs?: number
+  ): Promise<{
+    scraper: { success: boolean; reason?: string }
+    dashboard: { success: boolean; reason?: string }
+  }>
 }
