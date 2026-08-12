@@ -28,7 +28,10 @@ import {
     mapPropertyToExcelRow,
     writePropertyExportBuffer
 } from '../../common/utils/property-excel.util'
-import type { Configuration } from '../../config/configuration'
+import {
+  SYNC_HTTP_TIMEOUT_MS,
+  type Configuration
+} from '../../config/configuration'
 import type { IAuthRepository } from '../auth/auth.interface'
 import type { IPortfolioService } from '../portfolio/portfolio.interface'
 import { PrismaService } from '../prisma/prisma.service'
@@ -145,7 +148,7 @@ export class PropertyService implements IPropertyService {
     private readonly runDateCalculator: RunDateCalculatorService,
     private readonly globalFilterCache: GlobalFilterCacheService
   ) {
-    const timeout = this.config.get('syncTimeoutMs', { infer: true }) ?? 15000
+    const timeout = SYNC_HTTP_TIMEOUT_MS
     const dashUrl =
       this.config.get('dashboardBackendUrl', { infer: true }) ?? ''
     const dashTok =
@@ -5660,6 +5663,100 @@ export class PropertyService implements IPropertyService {
     }))
   }
 
+  private async dispatchAsyncBulkUpsertToDashboard(
+    batchId: string,
+    callbackUrl: string,
+    items: Record<string, unknown>[]
+  ): Promise<{ accepted: boolean; error?: string }> {
+    if (!items.length) return { accepted: true }
+    if (!callbackUrl) {
+      return {
+        accepted: false,
+        error: 'callbackUrl missing (set DBMS_API_URL)'
+      }
+    }
+    if (!this.dashboardJwtClient) {
+      return {
+        accepted: false,
+        error:
+          'Dashboard JWT client disabled — URL or JWT_COMMUNICATION_SECRET missing'
+      }
+    }
+
+    try {
+      const r = await this.dashboardJwtClient.post(
+        '/api/property/sync-bulk-upsert',
+        { items, batchId, callbackUrl },
+        { headers: this.syncCommunication.createAuthHeaders() }
+      )
+      const data = r.data?.data ?? r.data
+      if (data?.status === 'accepted') {
+        this.syncLogger.info(
+          `[dashboard] async dispatch accepted for batch ${batchId} (${items.length} items)`
+        )
+        return { accepted: true }
+      }
+      const reason = `Unexpected response: ${JSON.stringify(data)}`
+      this.syncLogger.error(
+        `[dashboard] async dispatch rejected for batch ${batchId}: ${reason}`
+      )
+      return { accepted: false, error: reason }
+    } catch (e: any) {
+      const reason = this.extractSyncErrorReason(e)
+      this.syncLogger.error(
+        `[dashboard] async dispatch failed for batch ${batchId}: ${reason}`
+      )
+      return { accepted: false, error: reason }
+    }
+  }
+
+  private async dispatchAsyncBulkUpsertToScraper(
+    batchId: string,
+    callbackUrl: string,
+    items: Record<string, unknown>[]
+  ): Promise<{ accepted: boolean; error?: string }> {
+    if (!items.length) return { accepted: true }
+    if (!callbackUrl) {
+      return {
+        accepted: false,
+        error: 'callbackUrl missing (set DBMS_API_URL)'
+      }
+    }
+    if (!this.scraperJwtClient) {
+      return {
+        accepted: false,
+        error:
+          'Scraper JWT client disabled — URL or JWT_COMMUNICATION_SECRET missing'
+      }
+    }
+
+    try {
+      const r = await this.scraperJwtClient.post(
+        '/properties/sync-bulk-upsert',
+        { items, batchId, callbackUrl },
+        { headers: this.syncCommunication.createAuthHeaders() }
+      )
+      const data = r.data?.data ?? r.data
+      if (data?.status === 'accepted') {
+        this.syncLogger.info(
+          `[scraper] async dispatch accepted for batch ${batchId} (${items.length} items)`
+        )
+        return { accepted: true }
+      }
+      const reason = `Unexpected response: ${JSON.stringify(data)}`
+      this.syncLogger.error(
+        `[scraper] async dispatch rejected for batch ${batchId}: ${reason}`
+      )
+      return { accepted: false, error: reason }
+    } catch (e: any) {
+      const reason = this.extractSyncErrorReason(e)
+      this.syncLogger.error(
+        `[scraper] async dispatch failed for batch ${batchId}: ${reason}`
+      )
+      return { accepted: false, error: reason }
+    }
+  }
+
   private async dispatchAsyncSyncBatch(params: {
     batchId: string
     source: 'import' | 'bulk-update'
@@ -5700,70 +5797,49 @@ export class PropertyService implements IPropertyService {
       successfulUpserts: []
     }
 
-    // Dashboard/scraper property sync-bulk-upsert expects a raw items array
-    // (not { items, batchId, callbackUrl }). Run chunked sync synchronously and
-    // record results as callbacks until those services support async dispatch.
+    // POST { items, batchId, callbackUrl } so dashboard/scraper return
+    // immediately and POST results back to /api/property/sync-callback.
     const dispatchScraper = async () => {
-      if (!params.scraperItems.length || !this.scraperJwtClient) {
+      if (!params.scraperItems.length) {
         await this.recordSyncCallbackInternal(batchId, 'scraper', emptyResult)
         return
       }
-      try {
-        const merged = await this.runScraperBulkUpsertChunked(
-          params.scraperItems
-        )
-        const result = this.buildSyncBulkUpsertResultFromChunked(
-          params.scraperItems,
-          merged
-        )
-        await this.recordSyncCallbackInternal(batchId, 'scraper', result)
-        this.syncLogger.info(`[scraper] dispatch complete for batch ${batchId}`)
-      } catch (e: any) {
-        const reason = this.extractSyncErrorReason(e)
-        this.syncLogger.error(
-          `[scraper] dispatch failed for batch ${batchId}: ${reason}`
-        )
+      const { accepted, error } = await this.dispatchAsyncBulkUpsertToScraper(
+        batchId,
+        callbackUrl,
+        params.scraperItems
+      )
+      if (!accepted) {
         await this.recordSyncCallbackInternal(
           batchId,
           'scraper',
           this.buildSyncBulkUpsertResultFromChunked(
             params.scraperItems,
             null,
-            reason
+            error ?? 'Async dispatch failed'
           )
         )
       }
     }
 
     const dispatchDashboard = async () => {
-      if (!params.dashboardItems.length || !this.dashboardJwtClient) {
+      if (!params.dashboardItems.length) {
         await this.recordSyncCallbackInternal(batchId, 'dashboard', emptyResult)
         return
       }
-      try {
-        const merged = await this.runDashboardBulkUpsertChunked(
-          params.dashboardItems
-        )
-        const result = this.buildSyncBulkUpsertResultFromChunked(
-          params.dashboardItems,
-          merged
-        )
-        await this.recordSyncCallbackInternal(batchId, 'dashboard', result)
-        this.syncLogger.info(
-          `[dashboard] dispatch complete for batch ${batchId}`
-        )
-      } catch (e: any) {
-        const reason = this.extractSyncErrorReason(e)
-        this.syncLogger.error(
-          `[dashboard] dispatch failed for batch ${batchId}: ${reason}`
-        )
+      const { accepted, error } = await this.dispatchAsyncBulkUpsertToDashboard(
+        batchId,
+        callbackUrl,
+        params.dashboardItems
+      )
+      if (!accepted) {
         await this.recordSyncCallbackInternal(
           batchId,
           'dashboard',
           this.buildSyncBulkUpsertResultFromChunked(
             params.dashboardItems,
             null,
-            reason
+            error ?? 'Async dispatch failed'
           )
         )
       }

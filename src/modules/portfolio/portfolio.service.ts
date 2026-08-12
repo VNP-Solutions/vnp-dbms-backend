@@ -16,7 +16,10 @@ import type { IUserWithPermissions } from '../../common/interfaces/permission.in
 import { GlobalFilterCacheService } from '../../common/services/global-filter-cache.service'
 import { SyncCommunicationService } from '../../common/services/sync-communication.service'
 import { QueryBuilder } from '../../common/utils/query-builder.util'
-import type { Configuration } from '../../config/configuration'
+import {
+  SYNC_HTTP_TIMEOUT_MS,
+  type Configuration
+} from '../../config/configuration'
 import type { UploadAndCreateFileDto } from '../file-upload/file-upload.dto'
 import type { IFileUploadService } from '../file-upload/file-upload.interface'
 import { PrismaService } from '../prisma/prisma.service'
@@ -56,7 +59,7 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
     private readonly config: ConfigService<Configuration, true>,
     private readonly syncCommunication: SyncCommunicationService
   ) {
-    const timeout = this.config.get('syncTimeoutMs', { infer: true }) ?? 15000
+    const timeout = SYNC_HTTP_TIMEOUT_MS
     const dashUrl =
       this.config.get('dashboardBackendUrl', { infer: true }) ?? ''
     const scrUrl = this.config.get('scraperBackendUrl', { infer: true }) ?? ''

@@ -5,7 +5,7 @@ services:
       dockerfile: Dockerfile
     container_name: vnp-api
     ports:
-      - "${PORT:-8080}:8080"
+      - "${PORT:-8080}:8001"
     env_file:
       - .env
     environment:
