@@ -11,8 +11,8 @@ import {
 import { PaginatedResult } from '../../common/dto/query.dto'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
 import type {
-  SyncBatchAcceptedDto,
-  SyncBulkDeleteResponseDto
+  SyncBulkDeleteResponseDto,
+  UploadJobAcceptedDto
 } from './property.dto'
 import {
   CreatePropertyDto,
@@ -22,6 +22,52 @@ import {
   SyncByOtaDto,
   UpdatePropertyDto
 } from './property.dto'
+
+/** Per-system entity state shown to the frontend while an upload job runs. */
+export type EntitySyncState =
+  | 'pending'
+  | 'processing'
+  | 'created'
+  | 'skipped'
+  | 'failed'
+
+export interface EntitySyncStatus {
+  state: EntitySyncState
+  reason?: string
+}
+
+/** One portfolio or property row tracked within an upload job. */
+export interface UploadJobEntity {
+  /** Excel row number (1-based, header excluded) — null when not tied to a single row (e.g. a portfolio referenced by several rows). */
+  row: number | null
+  name: string
+  dbms: EntitySyncStatus
+  scraper: EntitySyncStatus
+  dashboard: EntitySyncStatus
+}
+
+export type UploadJobStatus =
+  | 'pending'
+  | 'processing_portfolios'
+  | 'processing_properties'
+  | 'complete'
+  | 'failed'
+
+/** Live status document for a bulk import / bulk-update background job, persisted in Redis. */
+export interface UploadJobData {
+  jobId: string
+  source: 'import' | 'bulk-update'
+  filename: string
+  userId: string
+  userEmail: string
+  status: UploadJobStatus
+  error?: string
+  portfolios: { total: number; items: UploadJobEntity[] }
+  properties: { total: number; items: UploadJobEntity[] }
+  createdAt: string
+  updatedAt: string
+  completedAt?: string
+}
 
 export type PropertyWithRelations = Property & {
   portfolio: { id: string; name: string }
@@ -176,6 +222,12 @@ export interface ImportPropertiesResult {
   skippedProperties: Array<{ name: string; reason: string }>
   /** Portfolios auto-created during import (for dashboard/scraper sync). */
   createdPortfolios?: Array<{ id: string; name: string }>
+  /** Subportfolios auto-created during import (for scraper sync). */
+  createdSubportfolios?: Array<{
+    id: string
+    name: string
+    portfolio_id: string
+  }>
 }
 
 export interface GetPropertyCredentialResult {
@@ -327,6 +379,12 @@ export interface IPropertyRepository {
   ): Promise<
     { id: string; name: string; created: boolean } | { error: string }
   >
+  resolveOrCreateSubportfolio(
+    subName: string,
+    portfolioId: string
+  ): Promise<
+    { id: string; created: boolean } | { error: string }
+  >
   findIdsByOtaIds(ota: {
     expedia_id?: number | null
     booking_id?: number | null
@@ -418,7 +476,7 @@ export interface IPropertyService {
   bulkUpdate(
     file: Express.Multer.File,
     user: IUserWithPermissions
-  ): Promise<SyncBatchAcceptedDto>
+  ): Promise<UploadJobAcceptedDto>
   getAllDataForGlobalFilter(
     user: IUserWithPermissions
   ): Promise<AllDataForGlobalFilterResponse>
@@ -444,33 +502,17 @@ export interface IPropertyService {
   importFromExcelAndSync(
     file: Express.Multer.File,
     user: IUserWithPermissions
-  ): Promise<SyncBatchAcceptedDto>
-  /// Query the status of a background sync batch by id (for polling).
-  getSyncBatchStatus(batchId: string): Promise<{
-    batchId: string
-    status: string
-    source?: string
-    userEmail?: string
-    filename?: string
-    dbmsSummary?: any
-    received?: any
-    createdAt?: Date
-    completedAt?: Date | null
-  }>
+  ): Promise<UploadJobAcceptedDto>
+  /// Query the live status of a background upload job (for FE polling).
+  getUploadJobStatus(jobId: string): Promise<UploadJobData | undefined>
+  /// Query the most recent upload job started by this user (for page refresh).
+  getLatestUploadJobForUser(userId: string): Promise<UploadJobData | undefined>
   removeAndSync(
     id: string,
     user: IUserWithPermissions
   ): Promise<{ message: string }>
   getContact(id: string, user: IUserWithPermissions): Promise<PropertyContact>
   getContactExternal(id: string): Promise<PropertyContact>
-  /// Receive an async sync result callback from the dashboard or scraper.
-  /// Stores the result; when all expected sources have reported, builds the
-  /// per-row email report and sends it. Idempotent per (batchId, source).
-  recordSyncCallback(dto: {
-    batchId: string
-    source: 'dashboard' | 'scraper'
-    result: import('./property.dto').SyncBulkUpsertResponseDto
-  }): Promise<{ status: string; completed: boolean }>
 }
 
 export interface BulkTransferResult {

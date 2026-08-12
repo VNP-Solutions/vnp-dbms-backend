@@ -2108,160 +2108,14 @@ export class AgodaCheckPropertiesDto {
   items: AgodaCheckPropertyItemDto[]
 }
 
-// ─── Sync Bulk Upsert (external JWT endpoint) ────────────────────────────────
-
-export class SyncBulkUpsertItemDto {
-  @ApiProperty({
-    example: 2,
-    description: 'Excel row number for error reporting'
-  })
-  @IsInt()
-  row: number
-
-  @ApiProperty({
-    example: 'property-parent-123',
-    description: 'DBMS property ID — used to find/create the property'
-  })
-  @IsString()
-  @IsNotEmpty()
-  parent_id: string
-
-  @ApiProperty({ example: 'Grand Hotel' })
-  @IsString()
-  @IsNotEmpty()
-  name: string
-
-  @ApiProperty({
-    example: 'portfolio-parent-123',
-    description: 'DBMS portfolio ID'
-  })
-  @IsString()
-  @IsNotEmpty()
-  portfolio_parent_id: string
-
-  @ApiPropertyOptional({ example: '123 Main Street, New York, NY 10001' })
-  @IsString()
-  @IsOptional()
-  address?: string
-
-  @ApiPropertyOptional({ example: 'USD', description: 'ISO currency code' })
-  @IsString()
-  @IsOptional()
-  currency?: string
-
-  @ApiPropertyOptional({ example: 'GRAND HOTEL NY' })
-  @IsString()
-  @IsOptional()
-  card_descriptor?: string
-
-  @ApiPropertyOptional({ example: true })
-  @Transform(({ value }) => {
-    if (value === 'true') return true
-    if (value === 'false') return false
-    return value
-  })
-  @IsBoolean()
-  @IsOptional()
-  is_active?: boolean
-
-  @ApiPropertyOptional({ example: 'EXP123456' })
-  @IsString()
-  @IsOptional()
-  expedia_id?: string
-
-  @ApiPropertyOptional({ example: 'hotel@expedia.com' })
-  @IsString()
-  @IsOptional()
-  expedia_username?: string
-
-  @ApiPropertyOptional({ example: 'secret' })
-  @IsString()
-  @IsOptional()
-  expedia_password?: string
-
-  @ApiPropertyOptional({ example: 'AGD123456' })
-  @IsString()
-  @IsOptional()
-  agoda_id?: string
-
-  @ApiPropertyOptional({ example: 'hotel@agoda.com' })
-  @IsString()
-  @IsOptional()
-  agoda_username?: string
-
-  @ApiPropertyOptional({ example: 'secret' })
-  @IsString()
-  @IsOptional()
-  agoda_password?: string
-
-  @ApiPropertyOptional({ example: 'BKG123456' })
-  @IsString()
-  @IsOptional()
-  booking_id?: string
-
-  @ApiPropertyOptional({ example: 'hotel@booking.com' })
-  @IsString()
-  @IsOptional()
-  booking_username?: string
-
-  @ApiPropertyOptional({ example: 'secret' })
-  @IsString()
-  @IsOptional()
-  booking_password?: string
-}
-
-export interface SyncBulkUpsertRowResult {
-  row: number
-  parent_id: string
-  name: string
-  identifier: string
-  action: 'created' | 'updated' | 'failed'
-  dbms: boolean
-  dashboard: { success: boolean; reason?: string }
-  parser: { success: boolean; reason?: string }
-  error?: string
-}
-
-export interface SyncBulkUpsertResponseDto {
-  totalRows: number
-  createdCount: number
-  updatedCount: number
-  failureCount: number
-  errors: Array<{ row: number; parent_id: string; error: string }>
-  successfulUpserts: Array<{ parent_id: string; action: 'created' | 'updated' }>
-}
-
-/// Body POSTed by the dashboard / scraper back to the DBMS once they finish
-/// processing an async bulk upsert in the background. `result` mirrors the
-/// shape those services already return from their sync-bulk-upsert endpoint.
-export class SyncCallbackDto {
-  @ApiProperty({
-    description: 'Batch id assigned by the DBMS when dispatching'
-  })
-  @IsString()
-  @IsNotEmpty()
-  batchId: string
-
-  @ApiProperty({
-    enum: ['dashboard', 'scraper'],
-    description: 'Which service is reporting'
-  })
-  @IsIn(['dashboard', 'scraper'])
-  source: 'dashboard' | 'scraper'
-
-  @ApiProperty({ description: 'Per-row outcome of the bulk upsert' })
-  @IsObject()
-  result: SyncBulkUpsertResponseDto
-}
-
-/// Response returned immediately by the DBMS bulk import / bulk update
+/// Response returned immediately by the DBMS bulk import / bulk-update
 /// endpoints once the work has been accepted for background processing. The
-/// caller no longer waits for the (potentially many-minute) DBMS import or
-/// the dashboard/scraper sync — the per-row report is delivered by email
-/// (and is queryable via GET /property/sync-batch/:batchId) when complete.
-export class SyncBatchAcceptedDto {
-  @ApiProperty({ description: 'Unique id assigned to this sync batch' })
-  batchId: string
+/// caller no longer waits for the (potentially many-hour) DBMS import or the
+/// dashboard/scraper sync — per-portfolio/per-property progress is queryable
+/// via GET /property/upload-job/:jobId while it runs in the background.
+export class UploadJobAcceptedDto {
+  @ApiProperty({ description: 'Unique id assigned to this upload job' })
+  jobId: string
 
   @ApiProperty({
     example: 'accepted',
@@ -2271,7 +2125,7 @@ export class SyncBatchAcceptedDto {
 
   @ApiProperty({
     example:
-      'Import started. You will receive an email report when the sync is complete.',
+      'Import started. Track progress with GET /property/upload-job/{jobId}.',
     description: 'Human-readable note about what happens next'
   })
   message: string

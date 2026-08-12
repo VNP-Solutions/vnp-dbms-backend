@@ -54,7 +54,6 @@ import {
   SyncBulkDeleteBodyDto,
   TransferPropertyDto,
   SyncByOtaDto,
-  SyncCallbackDto,
   UpdatePropertyDto
 } from './property.dto'
 import type { IPropertyService } from './property.interface'
@@ -225,6 +224,29 @@ export class PropertyController {
       throw new BadRequestException('Excel file is required')
     }
     return this.propertyService.bulkUpdate(file, user)
+  }
+
+  @Get('upload-job/current')
+  @ApiOperation({
+    summary: 'Get the most recent bulk import/update job started by the caller',
+    description:
+      'Useful to resume watching progress after a page refresh. Returns undefined if the caller has no job in the last 24 hours.'
+  })
+  @ApiResponse({ status: 200, description: 'Latest upload job status (or empty body if none)' })
+  getCurrentUploadJob(@CurrentUser() user: IUserWithPermissions) {
+    return this.propertyService.getLatestUploadJobForUser(user.id)
+  }
+
+  @Get('upload-job/:jobId')
+  @ApiOperation({
+    summary: 'Poll the live status of a background bulk import / bulk-update job',
+    description:
+      'The import and bulk-update endpoints return instantly with a jobId. Poll this endpoint to watch per-portfolio and per-property progress across DBMS, scraper and dashboard (state: pending | processing | created | skipped | failed). Job status is retained in Redis for 24 hours after completion; a fresh file upload always starts a new job.'
+  })
+  @ApiResponse({ status: 200, description: 'Upload job status' })
+  @ApiResponse({ status: 404, description: 'Job not found (expired or unknown jobId)' })
+  getUploadJob(@Param('jobId') jobId: string) {
+    return this.propertyService.getUploadJobStatus(jobId)
   }
 
   @Post('filter')
@@ -991,36 +1013,6 @@ export class PropertySyncController {
   @ApiOperation({ summary: 'Internal: sync property from scraper by OTA id' })
   syncByOta(@Body() dto: SyncByOtaDto) {
     return this.propertyService.syncByOta(dto)
-  }
-
-  @Post('sync-callback')
-  @UseGuards(ExternalJwtGuard)
-  @ApiHeader({
-    name: 'Authorization',
-    description: 'Bearer JWT signed with JWT_COMMUNICATION_SECRET'
-  })
-  @ApiOperation({
-    summary:
-      'Internal: receive async bulk-upsert result from dashboard/scraper',
-    description:
-      'Dashboard/scraper POST their per-row bulk-upsert result here after finishing a background sync. When all expected sources for a batch have reported, the DBMS assembles and sends the email report.'
-  })
-  async syncCallback(@Body() dto: SyncCallbackDto) {
-    return this.propertyService.recordSyncCallback(dto)
-  }
-
-  @Get('sync-batch/:batchId')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @ApiOperation({
-    summary: 'Poll the status of a background bulk import / bulk update sync',
-    description:
-      'The import and bulk-update endpoints now return instantly with a batchId. Use this endpoint to poll progress (status: pending | partial | complete | failed) and the DBMS-side summary.'
-  })
-  @ApiResponse({ status: 200, description: 'Batch status' })
-  @ApiResponse({ status: 404, description: 'Batch not found' })
-  syncBatchStatus(@Param('batchId') batchId: string) {
-    return this.propertyService.getSyncBatchStatus(batchId)
   }
 
   @Post('expedia-check/trigger-lambda')

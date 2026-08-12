@@ -2,6 +2,29 @@ import { resolveCookieDomain, resolveCookieSettings } from './cookie.config'
 import { normalizeCorsOrigin } from './cors.config'
 import { NodeEnvironment } from './configuration.schema'
 
+/** Axios timeout for dashboard/scraper bulk-sync HTTP calls (per chunk). */
+export const SYNC_HTTP_TIMEOUT_MS = 3 * 60 * 60 * 1000
+
+/**
+ * Axios timeout dedicated to the background upload-job pipeline (portfolio /
+ * property bulk import & bulk-update sync-upsert calls). Deliberately kept
+ * as its own constant — NOT derived from env/SYNC_HTTP_TIMEOUT_MS — because
+ * this background job is expected to run for a long time and a single
+ * sync-upsert call within it should not be aborted early.
+ */
+export const UPLOAD_JOB_HTTP_TIMEOUT_MS = 6 * 60 * 60 * 1000
+
+/**
+ * How many properties' worth of scraper+dashboard sync-upsert calls run
+ * concurrently within the upload-job pipeline. DBMS create/update for each
+ * row still happens strictly one at a time (fast, local, and avoids racing
+ * on inline subportfolio-by-name creation) — only the slow, network-bound
+ * scraper/dashboard calls are batched. Keep this modest: scraper and
+ * dashboard each do their own per-item work (credential decrypt, currency
+ * resolution, etc.) and we don't want to hammer either with a large burst.
+ */
+export const UPLOAD_JOB_SYNC_CHUNK_SIZE = 5
+
 export interface Configuration {
   port: number
   app: {
@@ -68,10 +91,10 @@ export interface Configuration {
   dashboardBackendUrl: string
   dashboardServiceToken: string
   scraperServiceToken: string
-  syncTimeoutMs: number
   serviceToken: string
-  /// This DBMS backend's own reachable base URL (used ONLY to build the
-  /// sync-callback URL that dashboard/scraper POST their results to).
+  /// This DBMS backend's own reachable base URL. Currently unused now that
+  /// bulk sync uses direct polling (GET /property/upload-job/:jobId)
+  /// instead of a callback URL; kept for potential future use.
   /// Separate from PUBLIC_API_URL (used for cookie-domain resolution).
   dbmsApiUrl: string
   runDateCapacity: {
@@ -196,7 +219,6 @@ export default (): Configuration => {
     dashboardBackendUrl: process.env.DASHBOARD_BACKEND_URL || '',
     dashboardServiceToken: process.env.DASHBOARD_SERVICE_TOKEN || '',
     scraperServiceToken: process.env.SCRAPER_SERVICE_TOKEN || '',
-    syncTimeoutMs: parseInt(process.env.SYNC_TIMEOUT_MS || '15000', 10),
     serviceToken: process.env.SERVICE_TOKEN || '',
     dbmsApiUrl: process.env.DBMS_API_URL || '',
     runDateCapacity: {
