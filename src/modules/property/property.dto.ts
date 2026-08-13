@@ -1665,8 +1665,8 @@ export class GlobalFilterSubportfolioDto {
   @ApiProperty()
   name: string
 
-  @ApiProperty()
-  portfolio_id: string
+  @ApiProperty({ nullable: true, required: false })
+  portfolio_id: string | null
 }
 
 /**

@@ -1323,32 +1323,30 @@ export class PropertyRepository implements IPropertyRepository {
 
   async resolveOrCreateSubportfolio(
     subName: string,
-    portfolioId: string
+    portfolioId?: string
   ): Promise<{ id: string; created: boolean } | { error: string }> {
     const logger = new Logger(PropertyRepository.name)
     const trimmed = subName.trim()
     if (!trimmed) return { error: 'Subportfolio name is empty' }
 
-    let subportfolio = await this.prisma.subportfolio.findUnique({
+    const subportfolio = await this.prisma.subportfolio.findUnique({
       where: { name: trimmed }
     })
     if (!subportfolio) {
       try {
-        subportfolio = await this.prisma.subportfolio.create({
+        const created = await this.prisma.subportfolio.create({
           data: { name: trimmed, portfolio_id: portfolioId }
         })
         logger.log(`Subportfolio "${trimmed}" created during import`)
-        return { id: subportfolio.id, created: true }
+        return { id: created.id, created: true }
       } catch (err: any) {
         logger.error(`Error creating subportfolio "${trimmed}": ${err.message}`)
         return { error: `Error creating subportfolio: ${err.message}` }
       }
     }
-    if (subportfolio.portfolio_id !== portfolioId) {
-      return {
-        error: `Subportfolio "${trimmed}" belongs to a different portfolio`
-      }
-    }
+    // Subportfolios are standalone labels — a property may reference an existing
+    // subportfolio regardless of which portfolio (if any) it was originally
+    // created under. No ownership check here; just resolve and use it.
     return { id: subportfolio.id, created: false }
   }
 }

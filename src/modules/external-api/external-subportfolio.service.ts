@@ -67,8 +67,8 @@ export class ExternalSubportfolioService {
     return subportfolios.map(sub => ({
       id: sub.id,
       name: sub.name,
-      portfolio_id: sub.portfolio.id,
-      portfolio_name: sub.portfolio.name,
+      portfolio_id: sub.portfolio?.id ?? null,
+      portfolio_name: sub.portfolio?.name ?? null,
       description: sub.description || undefined,
       is_active: true,
       total_properties: sub.properties.length
@@ -108,7 +108,11 @@ export class ExternalSubportfolioService {
       return null
     }
 
+    // A subportfolio no longer has to belong to a portfolio, so only apply the
+    // portfolio-scoped access restriction when it actually has one — access via
+    // the direct subportfolio_ids check above already covers the rest.
     if (
+      subportfolio.portfolio_id &&
       accessibleResources.portfolio_ids !== 'all' &&
       !accessibleResources.portfolio_ids.includes(subportfolio.portfolio_id)
     ) {
@@ -118,8 +122,8 @@ export class ExternalSubportfolioService {
     return {
       id: subportfolio.id,
       name: subportfolio.name,
-      portfolio_id: subportfolio.portfolio.id,
-      portfolio_name: subportfolio.portfolio.name,
+      portfolio_id: subportfolio.portfolio?.id ?? null,
+      portfolio_name: subportfolio.portfolio?.name ?? null,
       description: subportfolio.description || undefined,
       is_active: true,
       total_properties: subportfolio.properties.length

@@ -318,7 +318,19 @@ export class PropertyService implements IPropertyService {
       item.dbms.state = 'processing'
       await this.saveUploadJob(job)
 
-      const res = await this.repo.resolveOrCreatePortfolio(item.name)
+      let res: Awaited<ReturnType<typeof this.repo.resolveOrCreatePortfolio>>
+      try {
+        res = await this.repo.resolveOrCreatePortfolio(item.name)
+      } catch (e: any) {
+        // A transient DB error (e.g. a stale pooled connection after an idle
+        // gap) here shouldn't abort every remaining portfolio/property in the
+        // job — just mark this one failed and move on to the next.
+        item.dbms = { state: 'failed', reason: e?.message ?? String(e) }
+        item.scraper = { state: 'skipped', reason: 'DBMS failed' }
+        item.dashboard = { state: 'skipped', reason: 'DBMS failed' }
+        await this.saveUploadJob(job)
+        continue
+      }
       if ('error' in res) {
         item.dbms = { state: 'failed', reason: res.error }
         item.scraper = { state: 'skipped', reason: 'DBMS failed' }
@@ -2623,7 +2635,21 @@ export class PropertyService implements IPropertyService {
         const skippedInfo = result.skippedProperties?.[0]
 
         if (createdProp) {
-          await this.applyRunDateCalcAndPersist(createdProp)
+          try {
+            await this.applyRunDateCalcAndPersist(createdProp)
+          } catch (e: any) {
+            // The property itself was already created successfully in DBMS —
+            // only this follow-up run-date calculation failed, most likely a
+            // transient DB/network blip (e.g. a stale pooled connection after
+            // an idle gap). Don't let that take down the whole job: mark this
+            // row as created-but-unsynced and move on to the next row.
+            item.dbms = { state: 'created' }
+            const reason = `Run-date calculation failed: ${e?.message ?? String(e)}`
+            item.scraper = { state: 'failed', reason }
+            item.dashboard = { state: 'failed', reason }
+            await this.saveUploadJob(job)
+            continue
+          }
           item.dbms = { state: 'created' }
         } else if (existingProp) {
           item.dbms = {
@@ -2642,13 +2668,21 @@ export class PropertyService implements IPropertyService {
         }
 
         const propertyId = (createdProp ?? existingProp).id
-        const full = await this.repo.findById(propertyId)
+        let full: PropertyWithRelations | null = null
+        let loadError: string | null = null
+        try {
+          full = await this.repo.findById(propertyId)
+        } catch (e: any) {
+          // Same idea — a transient DB error fetching the full row for sync
+          // shouldn't abort every remaining row in the job.
+          loadError = `Failed to load property after create: ${e?.message ?? String(e)}`
+        }
         if (full) {
           item.dashboard.state = 'processing'
           item.scraper.state = 'processing'
           pendingSync.push({ item, full })
         } else {
-          const reason = 'Property not found after create'
+          const reason = loadError ?? 'Property not found after create'
           item.dashboard = { state: 'failed', reason }
           item.scraper = { state: 'failed', reason }
         }
@@ -2953,13 +2987,22 @@ export class PropertyService implements IPropertyService {
           item.dbms = { state: 'created' }
 
           const queued = syncQueue[syncQueue.length - 1]
-          const full = queued ? await this.repo.findById(queued.propertyId) : null
+          let full: PropertyWithRelations | null = null
+          let loadError: string | null = null
+          try {
+            full = queued ? await this.repo.findById(queued.propertyId) : null
+          } catch (e: any) {
+            // A transient DB error (e.g. a stale pooled connection after an
+            // idle gap) fetching the full row for sync shouldn't abort every
+            // remaining row in the job — just mark this one unsynced.
+            loadError = `Failed to load property after update: ${e?.message ?? String(e)}`
+          }
           if (full) {
             item.dashboard.state = 'processing'
             item.scraper.state = 'processing'
             pendingSync.push({ item, full })
           } else {
-            const reason = 'Property not found after update'
+            const reason = loadError ?? 'Property not found after update'
             item.dashboard = { state: 'failed', reason }
             item.scraper = { state: 'failed', reason }
           }
@@ -4493,7 +4536,7 @@ export class PropertyService implements IPropertyService {
     const portfolioIdSet = new Set<string>()
     const subportfolioMap = new Map<
       string,
-      { id: string; name: string; portfolio_id: string }
+      { id: string; name: string; portfolio_id: string | null }
     >()
     const serviceTypeMap = new Map<string, any>()
     const currencyMap = new Map<string, any>()
@@ -5116,9 +5159,22 @@ export class PropertyService implements IPropertyService {
       return { success: false, reason }
     }
 
-    const credentials = await this.credentialsService.findByPropertyId(
-      property.id
-    )
+    // This method must never throw (it always returns { success, reason })
+    // since callers rely on that to keep processing the rest of an upload
+    // job — a transient DB error (e.g. a stale pooled connection after an
+    // idle gap) here shouldn't take down every remaining row.
+    let credentials: Awaited<
+      ReturnType<typeof this.credentialsService.findByPropertyId>
+    >
+    try {
+      credentials = await this.credentialsService.findByPropertyId(
+        property.id
+      )
+    } catch (e: any) {
+      const reason = `Failed to load credentials: ${e?.message ?? String(e)}`
+      this.logger.error(`[sync] scraper property upsert failed: ${reason}`)
+      return { success: false, reason }
+    }
 
     const safeDecrypt = (val: string | null | undefined): string => {
       if (!val) return ''
@@ -5334,9 +5390,22 @@ export class PropertyService implements IPropertyService {
       return { success: false, reason }
     }
 
-    const credentials = await this.credentialsService.findByPropertyId(
-      property.id
-    )
+    // This method must never throw (it always returns { success, reason })
+    // since callers rely on that to keep processing the rest of an upload
+    // job — a transient DB error (e.g. a stale pooled connection after an
+    // idle gap) here shouldn't take down every remaining row.
+    let credentials: Awaited<
+      ReturnType<typeof this.credentialsService.findByPropertyId>
+    >
+    try {
+      credentials = await this.credentialsService.findByPropertyId(
+        property.id
+      )
+    } catch (e: any) {
+      const reason = `Failed to load credentials: ${e?.message ?? String(e)}`
+      this.logger.error(`[sync] dashboard property upsert failed: ${reason}`)
+      return { success: false, reason }
+    }
 
     const safeDecrypt = (val: string | null | undefined): string => {
       if (!val) return ''

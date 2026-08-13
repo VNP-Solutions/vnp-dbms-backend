@@ -317,11 +317,14 @@ model Portfolio {
 }
 
 model Subportfolio {
-  id           String    @id @default(auto()) @map("_id") @db.ObjectId
-  name         String    @unique
+  id           String     @id @default(auto()) @map("_id") @db.ObjectId
+  name         String     @unique
   description  String?
-  portfolio_id String    @db.ObjectId
-  portfolio    Portfolio @relation(fields: [portfolio_id], references: [id], onDelete: Cascade)
+  // Optional: a subportfolio is a standalone label and is no longer required to
+  // belong to (or match) any particular portfolio — properties may reference a
+  // subportfolio regardless of which portfolio they're under.
+  portfolio_id String?    @db.ObjectId
+  portfolio    Portfolio? @relation(fields: [portfolio_id], references: [id], onDelete: Cascade)
 
   properties                   Property[]
   userFeatureAccessPermissions UserFeatureAccessPermission[]
