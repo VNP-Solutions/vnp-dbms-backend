@@ -62,6 +62,7 @@ import {
 } from './property.dto'
 import type {
     AllDataForGlobalFilterResponse,
+    EntitySyncState,
     EntitySyncStatus,
     ImportPropertiesResult,
     ImportPropertyRow,
@@ -210,6 +211,21 @@ export class PropertyService implements IPropertyService {
     return { state: 'pending' }
   }
 
+  /** An item counts as "processed" (done, for progress-bar purposes) once every
+   *  system it goes through has reached a terminal state — no longer pending/processing. */
+  private static readonly TERMINAL_STATES: ReadonlySet<EntitySyncState> = new Set([
+    'created',
+    'skipped',
+    'failed'
+  ])
+  private static isEntityProcessed(item: UploadJobEntity): boolean {
+    return (
+      PropertyService.TERMINAL_STATES.has(item.dbms.state) &&
+      PropertyService.TERMINAL_STATES.has(item.scraper.state) &&
+      PropertyService.TERMINAL_STATES.has(item.dashboard.state)
+    )
+  }
+
   private newUploadJob(
     jobId: string,
     source: 'import' | 'bulk-update',
@@ -225,14 +241,20 @@ export class PropertyService implements IPropertyService {
       userId,
       userEmail,
       status: 'pending',
-      portfolios: { total: 0, items: [] },
-      properties: { total: 0, items: [] },
+      portfolios: { total: 0, processed: 0, items: [] },
+      properties: { total: 0, processed: 0, items: [] },
       createdAt: now,
       updatedAt: now
     }
   }
 
   private async saveUploadJob(job: UploadJobData): Promise<void> {
+    job.portfolios.processed = job.portfolios.items.filter(item =>
+      PropertyService.isEntityProcessed(item)
+    ).length
+    job.properties.processed = job.properties.items.filter(item =>
+      PropertyService.isEntityProcessed(item)
+    ).length
     job.updatedAt = new Date().toISOString()
     await this.redisService.set(
       PropertyService.uploadJobKey(job.jobId),
@@ -266,6 +288,22 @@ export class PropertyService implements IPropertyService {
     )
     if (!jobId) return undefined
     return this.getUploadJobStatus(jobId)
+  }
+
+  /**
+   * Sends the final "here's what happened" report email once a background
+   * upload job reaches `complete` or `failed`. Swallows its own errors —
+   * a broken mailer must never take down a job that otherwise finished
+   * fine (the frontend already has the full detail via polling regardless).
+   */
+  private async sendUploadJobReportEmail(job: UploadJobData): Promise<void> {
+    try {
+      await this.emailUtil.sendUploadJobReportEmail(job.userEmail, job)
+    } catch (e: any) {
+      this.syncLogger.error(
+        `[async] failed to send upload job report email for job ${job.jobId}: ${e?.message ?? e}`
+      )
+    }
   }
 
   /**
@@ -2633,6 +2671,7 @@ export class PropertyService implements IPropertyService {
       await this.saveUploadJob(job)
       await this.invalidateCaches()
       this.scheduleCacheWarm(user)
+      await this.sendUploadJobReportEmail(job)
     } catch (e: any) {
       job.status = 'failed'
       job.error = e?.message ?? String(e)
@@ -2641,6 +2680,7 @@ export class PropertyService implements IPropertyService {
       this.syncLogger.error(
         `[async] import job ${jobId} failed: ${job.error}`
       )
+      await this.sendUploadJobReportEmail(job)
     }
   }
 
@@ -4181,6 +4221,7 @@ export class PropertyService implements IPropertyService {
       if (result.successCount > 0) {
         this.scheduleCacheWarm(user)
       }
+      await this.sendUploadJobReportEmail(job)
     } catch (error) {
       // We're in the background — can't throw to the caller. Record the
       // failure on the job so the frontend (polling) surfaces it.
@@ -4191,6 +4232,7 @@ export class PropertyService implements IPropertyService {
       job.error = reason
       job.completedAt = new Date().toISOString()
       await this.saveUploadJob(job)
+      await this.sendUploadJobReportEmail(job)
     }
   }
 

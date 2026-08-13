@@ -62,8 +62,11 @@ export interface UploadJobData {
   userEmail: string
   status: UploadJobStatus
   error?: string
-  portfolios: { total: number; items: UploadJobEntity[] }
-  properties: { total: number; items: UploadJobEntity[] }
+  /** `processed` = how many items have reached a terminal state (created/skipped/failed)
+   *  across DBMS + scraper + dashboard — use with `total` to render a progress bar.
+   *  `total` is 0 until the file has been parsed (before that, there's nothing to show yet). */
+  portfolios: { total: number; processed: number; items: UploadJobEntity[] }
+  properties: { total: number; processed: number; items: UploadJobEntity[] }
   createdAt: string
   updatedAt: string
   completedAt?: string
