@@ -4,12 +4,24 @@ import * as http from 'http'
 import * as https from 'https'
 import * as nodemailer from 'nodemailer'
 import { URL } from 'url'
+import * as XLSX from 'xlsx'
 import { Configuration } from '../../config/configuration'
 import type {
     AttachmentUrlDto,
     EmailAttachment
 } from '../../modules/email/email.dto'
 import { PrismaService } from '../../modules/prisma/prisma.service'
+
+/** Mirrors property.interface.ts's UploadJobEntity — kept as a local, loose
+ *  shape here (rather than importing from the property module) so this
+ *  generic email utility doesn't depend on a specific feature module. */
+interface UploadJobEntitySummary {
+  row: number | null
+  name: string
+  dbms: { state: string; reason?: string }
+  scraper: { state: string; reason?: string }
+  dashboard: { state: string; reason?: string }
+}
 
 @Injectable()
 export class EmailUtil {
@@ -968,6 +980,187 @@ VNP Solutions Team`
       console.log('✓ Property sync result email sent:', { to: recipientEmail, messageId: info.messageId })
     } catch (error) {
       console.error('✗ Failed to send property sync result email:', error)
+    }
+  }
+
+  /**
+   * Sent once a background bulk-upload job (import or bulk-update) finishes
+   * — successfully or not — since the old `SyncBatch` callback report email
+   * this replaces was the only place users learned the outcome without
+   * actively watching the UI. The frontend also polls
+   * GET /property/upload-job/current for live progress, so this email is
+   * just a "you can stop watching, here's the final tally" summary.
+   */
+  async sendUploadJobReportEmail(
+    recipientEmail: string,
+    job: {
+      source: 'import' | 'bulk-update'
+      filename: string
+      error?: string
+      portfolios: { total: number; items: UploadJobEntitySummary[] }
+      properties: { total: number; items: UploadJobEntitySummary[] }
+    }
+  ): Promise<void> {
+    // Parse NestJS/axios error strings into readable text.
+    // Handles both plain strings and JSON like {"message":["field must not be empty"],...}
+    const cleanReason = (raw: string | undefined): string => {
+      if (!raw) return ''
+      try {
+        const parsed = JSON.parse(raw)
+        const msgs: string[] = Array.isArray(parsed?.message)
+          ? parsed.message
+          : typeof parsed?.message === 'string'
+            ? [parsed.message]
+            : []
+        if (msgs.length) return msgs.join(', ')
+        if (typeof parsed?.error === 'string') return parsed.error
+      } catch { /* not JSON, use as-is */ }
+      return raw
+    }
+
+    const colorFor = (state: string): string => {
+      if (state === 'created') return '#28a745'
+      if (state === 'skipped') return '#f0ad4e'
+      if (state === 'failed') return '#dc3545'
+      return '#888' // pending/processing — shouldn't normally appear once the job is finished
+    }
+
+    const countIssues = (items: UploadJobEntitySummary[]): number =>
+      items.filter(
+        i =>
+          i.dbms.state === 'failed' ||
+          i.scraper.state === 'failed' ||
+          i.dashboard.state === 'failed'
+      ).length
+
+    const rowsFor = (items: UploadJobEntitySummary[]): string =>
+      items
+        .map(item => {
+          const reasons: string[] = []
+          if (item.dbms.reason) reasons.push(`DBMS: ${cleanReason(item.dbms.reason)}`)
+          if (item.scraper.reason)
+            reasons.push(`Scraper: ${cleanReason(item.scraper.reason)}`)
+          if (item.dashboard.reason)
+            reasons.push(`Dashboard: ${cleanReason(item.dashboard.reason)}`)
+          return `
+        <tr>
+          <td style="padding:6px 10px;border:1px solid #ddd;">${item.row ?? '-'}</td>
+          <td style="padding:6px 10px;border:1px solid #ddd;">${item.name}</td>
+          <td style="padding:6px 10px;border:1px solid #ddd;text-align:center;color:${colorFor(item.dbms.state)}"><strong>${item.dbms.state}</strong></td>
+          <td style="padding:6px 10px;border:1px solid #ddd;text-align:center;color:${colorFor(item.scraper.state)}"><strong>${item.scraper.state}</strong></td>
+          <td style="padding:6px 10px;border:1px solid #ddd;text-align:center;color:${colorFor(item.dashboard.state)}"><strong>${item.dashboard.state}</strong></td>
+          <td style="padding:6px 10px;border:1px solid #ddd;font-size:12px;color:${reasons.length ? '#c0392b' : '#666'};">${reasons.length ? reasons.join('; ') : '-'}</td>
+        </tr>`
+        })
+        .join('')
+
+    const sectionTable = (title: string, items: UploadJobEntitySummary[]): string => {
+      if (!items.length) return ''
+      return `
+        <h4 style="margin:20px 0 6px;">${title} (${items.length})</h4>
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <tr style="background:#f4f4f4;">
+            <th style="padding:8px 10px;border:1px solid #ddd;text-align:left;">Row</th>
+            <th style="padding:8px 10px;border:1px solid #ddd;text-align:left;">Name</th>
+            <th style="padding:8px 10px;border:1px solid #ddd;text-align:center;">DBMS</th>
+            <th style="padding:8px 10px;border:1px solid #ddd;text-align:center;">Scraper</th>
+            <th style="padding:8px 10px;border:1px solid #ddd;text-align:center;">Dashboard</th>
+            <th style="padding:8px 10px;border:1px solid #ddd;text-align:left;">Reason</th>
+          </tr>
+          ${rowsFor(items)}
+        </table>`
+    }
+
+    const portfolioIssues = countIssues(job.portfolios.items)
+    const propertyIssues = countIssues(job.properties.items)
+    const totalIssues = portfolioIssues + propertyIssues
+    const actionLabel = job.source === 'import' ? 'Import' : 'Bulk Update'
+
+    // Builds a fresh workbook containing only the rows that failed
+    // somewhere (DBMS, scraper, or dashboard) — same idea as the old
+    // sync-batch report: a small, focused sheet the user can act on,
+    // rather than re-sending their whole original file back to them.
+    const isFailed = (item: UploadJobEntitySummary): boolean =>
+      item.dbms.state === 'failed' ||
+      item.scraper.state === 'failed' ||
+      item.dashboard.state === 'failed'
+
+    const toDefectiveRow = (type: string, item: UploadJobEntitySummary) => {
+      const reasons: string[] = []
+      if (item.dbms.reason) reasons.push(`DBMS: ${cleanReason(item.dbms.reason)}`)
+      if (item.scraper.reason)
+        reasons.push(`Scraper: ${cleanReason(item.scraper.reason)}`)
+      if (item.dashboard.reason)
+        reasons.push(`Dashboard: ${cleanReason(item.dashboard.reason)}`)
+      return {
+        Type: type,
+        Row: item.row ?? '',
+        Name: item.name,
+        DBMS: item.dbms.state,
+        Scraper: item.scraper.state,
+        Dashboard: item.dashboard.state,
+        Reason: reasons.join('; ') || 'N/A'
+      }
+    }
+
+    const attachments: EmailAttachment[] = []
+    if (totalIssues > 0) {
+      const defectiveRows = [
+        ...job.portfolios.items.filter(isFailed).map(i => toDefectiveRow('Portfolio', i)),
+        ...job.properties.items.filter(isFailed).map(i => toDefectiveRow('Property', i))
+      ]
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(
+        wb,
+        XLSX.utils.json_to_sheet(defectiveRows),
+        'Sync Issues'
+      )
+      const excelBuffer = Buffer.from(
+        XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
+      )
+      const filenameBase = job.filename.replace(/\.[^./]+$/, '') || 'upload'
+      attachments.push({
+        filename: `${filenameBase}-issues.xlsx`,
+        content: excelBuffer,
+        contentType:
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      })
+    }
+
+    const mailOptions: any = {
+      from: this.configService.get('smtp.email', { infer: true }),
+      to: recipientEmail,
+      subject: `${actionLabel} Report — ${job.filename} — ${job.portfolios.total} portfolios, ${job.properties.total} properties (${totalIssues} issue${totalIssues === 1 ? '' : 's'})`,
+      text: `${actionLabel} finished for "${job.filename}".\n\nPortfolios: ${job.portfolios.total} (${portfolioIssues} issues)\nProperties: ${job.properties.total} (${propertyIssues} issues)${job.error ? `\n\nJob error: ${job.error}` : ''}`,
+      html: `
+        <div style="font-family:Arial,sans-serif;padding:20px;max-width:1000px;margin:0 auto;">
+          <h3 style="margin-bottom:4px;">${actionLabel} Report</h3>
+          <p style="margin-top:0;color:#555;">File: <strong>${job.filename}</strong></p>
+          <p style="color:#555;">
+            Portfolios: <strong>${job.portfolios.total}</strong>
+            (<span style="color:${portfolioIssues ? '#dc3545' : '#28a745'}">${portfolioIssues} issue${portfolioIssues === 1 ? '' : 's'}</span>)
+            &nbsp;|&nbsp;
+            Properties: <strong>${job.properties.total}</strong>
+            (<span style="color:${propertyIssues ? '#dc3545' : '#28a745'}">${propertyIssues} issue${propertyIssues === 1 ? '' : 's'}</span>)
+          </p>
+          ${job.error ? `<p style="color:#dc3545;"><strong>Job error:</strong> ${job.error}</p>` : ''}
+          ${sectionTable('Portfolios', job.portfolios.items)}
+          ${sectionTable('Properties', job.properties.items)}
+          ${attachments.length ? '<p style="margin-top:16px;color:#888;font-size:12px;">An Excel file listing only the rows that failed is attached for correction.</p>' : ''}
+          <p style="margin-top:20px;font-size:12px;color:#888;">VNP Solutions DBMS</p>
+        </div>
+      `,
+      ...(attachments.length && { attachments })
+    }
+
+    try {
+      const info = await this.transporter.sendMail(mailOptions)
+      console.log('✓ Upload job report email sent:', {
+        to: recipientEmail,
+        messageId: info.messageId
+      })
+    } catch (error) {
+      console.error('✗ Failed to send upload job report email:', error)
     }
   }
 
