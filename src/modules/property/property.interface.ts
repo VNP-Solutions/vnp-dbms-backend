@@ -74,7 +74,7 @@ export interface UploadJobData {
 
 export type PropertyWithRelations = Property & {
   portfolio: { id: string; name: string }
-  subportfolio: { id: string; name: string; portfolio_id: string } | null
+  subportfolio: { id: string; name: string; portfolio_id: string | null } | null
   currency: Currency | null
   service_type: ServiceType | null
   expedia_service_type: ServiceType | null
@@ -371,7 +371,7 @@ export interface IPropertyRepository {
   getAccessiblePropertyIds(userId: string): Promise<string[] | 'all'>
   getDropdownPortfoliosAndSubportfolios(userId: string): Promise<{
     portfolios: { id: string; name: string }[]
-    subportfolios: { id: string; name: string; portfolio_id: string }[]
+    subportfolios: { id: string; name: string; portfolio_id: string | null }[]
   }>
   importProperties(
     rows: ImportPropertyRow[],
@@ -384,7 +384,7 @@ export interface IPropertyRepository {
   >
   resolveOrCreateSubportfolio(
     subName: string,
-    portfolioId: string
+    portfolioId?: string
   ): Promise<
     { id: string; created: boolean } | { error: string }
   >
@@ -464,7 +464,7 @@ export interface IPropertyService {
   ): Promise<PropertyWithRelations[]>
   getDropdown(user: IUserWithPermissions): Promise<{
     portfolios: { id: string; name: string }[]
-    subportfolios: { id: string; name: string; portfolio_id: string }[]
+    subportfolios: { id: string; name: string; portfolio_id: string | null }[]
   }>
   getPropertyCredential(dto: {
     email: string

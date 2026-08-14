@@ -14,7 +14,7 @@ export type SubportfolioWithCounts = SubportfolioWithPortfolio & {
 export type GlobalFilterSubportfolioRow = {
   id: string
   name: string
-  portfolio_id: string
+  portfolio_id: string | null
 }
 
 export interface ISubportfolioRepository {

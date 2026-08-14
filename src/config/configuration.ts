@@ -25,6 +25,19 @@ export const UPLOAD_JOB_HTTP_TIMEOUT_MS = 6 * 60 * 60 * 1000
  */
 export const UPLOAD_JOB_SYNC_CHUNK_SIZE = 5
 
+/**
+ * Bound (via Promise.race, see `withTimeout`) on individual Prisma/Mongo calls
+ * made inside the upload-job pipeline (DBMS create/update, run-date persist,
+ * post-write findById reload, portfolio/subportfolio resolution). This exists
+ * because Prisma's MongoDB connector does NOT support `socketTimeoutMS` — a
+ * stale/dead pooled connection (dropped by a NAT/firewall/Atlas after being
+ * idle between rows) can otherwise hang a Prisma call forever with no error.
+ * Kept short relative to UPLOAD_JOB_HTTP_TIMEOUT_MS since these are local
+ * Mongo reads/writes, not slow third-party syncs — if one doesn't respond in
+ * this window, it's stuck, not just slow.
+ */
+export const UPLOAD_JOB_DB_TIMEOUT_MS = 30 * 1000
+
 export interface Configuration {
   port: number
   app: {
