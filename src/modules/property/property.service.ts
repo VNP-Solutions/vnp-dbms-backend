@@ -27,8 +27,10 @@ import {
     mapPropertyToExcelRow,
     writePropertyExportBuffer
 } from '../../common/utils/property-excel.util'
+import { withTimeout } from '../../common/utils/promise-timeout.util'
 import {
   SYNC_HTTP_TIMEOUT_MS,
+  UPLOAD_JOB_DB_TIMEOUT_MS,
   UPLOAD_JOB_HTTP_TIMEOUT_MS,
   UPLOAD_JOB_SYNC_CHUNK_SIZE,
   type Configuration
@@ -320,7 +322,11 @@ export class PropertyService implements IPropertyService {
 
       let res: Awaited<ReturnType<typeof this.repo.resolveOrCreatePortfolio>>
       try {
-        res = await this.repo.resolveOrCreatePortfolio(item.name)
+        res = await withTimeout(
+          this.repo.resolveOrCreatePortfolio(item.name),
+          UPLOAD_JOB_DB_TIMEOUT_MS,
+          `resolveOrCreatePortfolio("${item.name}")`
+        )
       } catch (e: any) {
         // A transient DB error (e.g. a stale pooled connection after an idle
         // gap) here shouldn't abort every remaining portfolio/property in the
@@ -2621,7 +2627,11 @@ export class PropertyService implements IPropertyService {
 
         let result: ImportPropertiesResult
         try {
-          result = await this.repo.importProperties([rows[i]], user.id)
+          result = await withTimeout(
+            this.repo.importProperties([rows[i]], user.id),
+            UPLOAD_JOB_DB_TIMEOUT_MS,
+            `importProperties(row ${item.row})`
+          )
         } catch (e: any) {
           item.dbms = { state: 'failed', reason: e?.message ?? String(e) }
           item.scraper = { state: 'skipped', reason: 'DBMS failed' }
@@ -2636,7 +2646,11 @@ export class PropertyService implements IPropertyService {
 
         if (createdProp) {
           try {
-            await this.applyRunDateCalcAndPersist(createdProp)
+            await withTimeout(
+              this.applyRunDateCalcAndPersist(createdProp),
+              UPLOAD_JOB_DB_TIMEOUT_MS,
+              `applyRunDateCalcAndPersist(row ${item.row})`
+            )
           } catch (e: any) {
             // The property itself was already created successfully in DBMS —
             // only this follow-up run-date calculation failed, most likely a
@@ -2671,10 +2685,16 @@ export class PropertyService implements IPropertyService {
         let full: PropertyWithRelations | null = null
         let loadError: string | null = null
         try {
-          full = await this.repo.findById(propertyId)
+          full = await withTimeout(
+            this.repo.findById(propertyId),
+            UPLOAD_JOB_DB_TIMEOUT_MS,
+            `findById(row ${item.row})`
+          )
         } catch (e: any) {
-          // Same idea — a transient DB error fetching the full row for sync
-          // shouldn't abort every remaining row in the job.
+          // Same idea — a transient DB error (or a hang on a stale pooled
+          // connection — Prisma's Mongo connector doesn't support
+          // socketTimeoutMS, hence withTimeout) fetching the full row for
+          // sync shouldn't abort every remaining row in the job.
           loadError = `Failed to load property after create: ${e?.message ?? String(e)}`
         }
         if (full) {
@@ -2990,11 +3010,18 @@ export class PropertyService implements IPropertyService {
           let full: PropertyWithRelations | null = null
           let loadError: string | null = null
           try {
-            full = queued ? await this.repo.findById(queued.propertyId) : null
+            full = queued
+              ? await withTimeout(
+                  this.repo.findById(queued.propertyId),
+                  UPLOAD_JOB_DB_TIMEOUT_MS,
+                  `findById(row ${rowIndex + 2})`
+                )
+              : null
           } catch (e: any) {
-            // A transient DB error (e.g. a stale pooled connection after an
-            // idle gap) fetching the full row for sync shouldn't abort every
-            // remaining row in the job — just mark this one unsynced.
+            // A transient DB error (or a hang on a stale pooled connection —
+            // Prisma's Mongo connector doesn't support socketTimeoutMS, hence
+            // withTimeout) fetching the full row for sync shouldn't abort
+            // every remaining row in the job — just mark this one unsynced.
             loadError = `Failed to load property after update: ${e?.message ?? String(e)}`
           }
           if (full) {
@@ -3068,21 +3095,29 @@ export class PropertyService implements IPropertyService {
           const rowLabel = normalizedRowIdentifier ?? propertyName!
 
           if (normalizedRowIdentifier) {
-            existingProperty = await this.prisma.property.findFirst({
-              where: {
-                property_identifier: {
-                  equals: normalizedRowIdentifier,
-                  mode: 'insensitive'
+            existingProperty = await withTimeout(
+              this.prisma.property.findFirst({
+                where: {
+                  property_identifier: {
+                    equals: normalizedRowIdentifier,
+                    mode: 'insensitive'
+                  }
                 }
-              }
-            })
+              }),
+              UPLOAD_JOB_DB_TIMEOUT_MS,
+              `findFirst by identifier (row ${rowNumber})`
+            )
             if (existingProperty) {
               matchedByIdentifier = true
             }
           }
 
           if (!existingProperty && propertyName) {
-            existingProperty = await this.repo.findByName(propertyName)
+            existingProperty = await withTimeout(
+              this.repo.findByName(propertyName),
+              UPLOAD_JOB_DB_TIMEOUT_MS,
+              `findByName (row ${rowNumber})`
+            )
           }
 
           if (!existingProperty) {
@@ -3375,8 +3410,10 @@ export class PropertyService implements IPropertyService {
             'Portfolio name'
           ])
           if (portfolioName) {
-            const portfolioResult = await this.repo.resolveOrCreatePortfolio(
-              portfolioName
+            const portfolioResult = await withTimeout(
+              this.repo.resolveOrCreatePortfolio(portfolioName),
+              UPLOAD_JOB_DB_TIMEOUT_MS,
+              `resolveOrCreatePortfolio(row ${rowNumber})`
             )
             if ('error' in portfolioResult) {
               result.errors.push({
@@ -3411,9 +3448,10 @@ export class PropertyService implements IPropertyService {
               continue
             }
             const subName = subportfolioName.trim()
-            const subResult = await this.repo.resolveOrCreateSubportfolio(
-              subName,
-              portfolioId
+            const subResult = await withTimeout(
+              this.repo.resolveOrCreateSubportfolio(subName, portfolioId),
+              UPLOAD_JOB_DB_TIMEOUT_MS,
+              `resolveOrCreateSubportfolio(row ${rowNumber})`
             )
             if ('error' in subResult) {
               result.errors.push({
@@ -4170,7 +4208,11 @@ export class PropertyService implements IPropertyService {
               continue
             }
 
-            await this.repo.update(propertyId, updateData)
+            await withTimeout(
+              this.repo.update(propertyId, updateData),
+              UPLOAD_JOB_DB_TIMEOUT_MS,
+              `update property (row ${rowNumber})`
+            )
           }
 
           // Apply credentials update
@@ -4209,18 +4251,29 @@ export class PropertyService implements IPropertyService {
               credentialsData.agodaSecondaryPassword =
                 this.encryptionUtil.encrypt(agodaSecondaryPassword)
 
-            const existingCredentials =
-              await this.credentialsService.findByPropertyId(propertyId)
+            const existingCredentials = await withTimeout(
+              this.credentialsService.findByPropertyId(propertyId),
+              UPLOAD_JOB_DB_TIMEOUT_MS,
+              `findByPropertyId (row ${rowNumber})`
+            )
             if (existingCredentials) {
-              await this.credentialsService.update(
-                existingCredentials.id,
-                credentialsData
+              await withTimeout(
+                this.credentialsService.update(
+                  existingCredentials.id,
+                  credentialsData
+                ),
+                UPLOAD_JOB_DB_TIMEOUT_MS,
+                `update credentials (row ${rowNumber})`
               )
             } else {
-              await this.credentialsService.create({
-                ...credentialsData,
-                property_id: propertyId
-              })
+              await withTimeout(
+                this.credentialsService.create({
+                  ...credentialsData,
+                  property_id: propertyId
+                }),
+                UPLOAD_JOB_DB_TIMEOUT_MS,
+                `create credentials (row ${rowNumber})`
+              )
             }
           }
 
