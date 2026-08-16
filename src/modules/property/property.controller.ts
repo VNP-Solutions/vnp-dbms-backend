@@ -186,10 +186,12 @@ export class PropertyController {
 
     Optional credential columns (username and password must be provided together):
     - Expedia Username / Expedia Password
-    - Agoda Username / Agoda Password
     - Booking Username / Booking Password
     - Expedia Secondary Username / Expedia Secondary Password
     - Booking Secondary Username / Booking Secondary Password
+
+    Optional Agoda credential columns (independent — either may be given on its own; Agoda is not password-authenticated, the password is stored only):
+    - Agoda Username / Agoda Password
     - Agoda Secondary Username / Agoda Secondary Password
 
     Note: Empty cells are ignored — existing values are preserved.
@@ -241,7 +243,7 @@ export class PropertyController {
   @ApiOperation({
     summary: 'Poll the live status of a background bulk import / bulk-update job',
     description:
-      'The import and bulk-update endpoints return instantly with a jobId. Poll this endpoint to watch per-portfolio and per-property progress across DBMS, scraper and dashboard (state: pending | processing | created | skipped | failed). Job status is retained in Redis for 24 hours after completion; a fresh file upload always starts a new job.'
+      'The import and bulk-update endpoints return instantly with a jobId. Poll this endpoint to watch per-portfolio and per-property progress across DBMS, scraper and dashboard (state: pending | processing | created | updated | skipped | failed). Job status is retained in Redis for 24 hours after completion; a fresh file upload always starts a new job.'
   })
   @ApiResponse({ status: 200, description: 'Upload job status' })
   @ApiResponse({ status: 404, description: 'Job not found (expired or unknown jobId)' })
