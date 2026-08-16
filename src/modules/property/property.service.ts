@@ -4100,21 +4100,14 @@ export class PropertyService implements IPropertyService {
             'Agoda secondary password'
           ])
 
-          // Validate credential pairs: if one is provided, the other must be too
+          // Validate credential pairs: if one is provided, the other must be
+          // too. Agoda is exempt — it isn't password-authenticated, so its
+          // password column is pure storage and both fields stand alone.
           if (!!expediaUsername !== !!expediaPassword) {
             result.errors.push({
               row: rowNumber,
               propertyName: existingProperty.name,
               error: 'Expedia username and password must be provided together'
-            })
-            result.failureCount++
-            continue
-          }
-          if (!!agodaUsername !== !!agodaPassword) {
-            result.errors.push({
-              row: rowNumber,
-              propertyName: existingProperty.name,
-              error: 'Agoda username and password must be provided together'
             })
             result.failureCount++
             continue
@@ -4144,16 +4137,6 @@ export class PropertyService implements IPropertyService {
               propertyName: existingProperty.name,
               error:
                 'Booking secondary username and password must be provided together'
-            })
-            result.failureCount++
-            continue
-          }
-          if (!!agodaSecondaryUsername !== !!agodaSecondaryPassword) {
-            result.errors.push({
-              row: rowNumber,
-              propertyName: existingProperty.name,
-              error:
-                'Agoda secondary username and password must be provided together'
             })
             result.failureCount++
             continue
