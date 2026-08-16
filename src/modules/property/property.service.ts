@@ -217,6 +217,7 @@ export class PropertyService implements IPropertyService {
    *  system it goes through has reached a terminal state — no longer pending/processing. */
   private static readonly TERMINAL_STATES: ReadonlySet<EntitySyncState> = new Set([
     'created',
+    'updated',
     'skipped',
     'failed'
   ])
@@ -350,15 +351,18 @@ export class PropertyService implements IPropertyService {
       }
       await this.saveUploadJob(job)
 
+      // The downstream call is an upsert, so label it to match what actually
+      // happened in DBMS — an already-existing portfolio reports as updated.
+      const syncState: EntitySyncState = res.created ? 'created' : 'updated'
       const sync = await this.portfolioService.syncUpsertPortfolioToScraperAndDashboard(
         res.id,
         UPLOAD_JOB_HTTP_TIMEOUT_MS
       )
       item.scraper = sync.scraper.success
-        ? { state: 'created' }
+        ? { state: syncState }
         : { state: 'failed', reason: sync.scraper.reason }
       item.dashboard = sync.dashboard.success
-        ? { state: 'created' }
+        ? { state: syncState }
         : { state: 'failed', reason: sync.dashboard.reason }
       await this.saveUploadJob(job)
     }
@@ -391,11 +395,15 @@ export class PropertyService implements IPropertyService {
     )
 
     for (const { item, dashboardResult, scraperResult } of settled) {
+      // Mirror the DBMS outcome: only a freshly created property reports as
+      // created downstream — an updated or pre-existing one reports as updated.
+      const syncState: EntitySyncState =
+        item.dbms.state === 'created' ? 'created' : 'updated'
       item.dashboard = dashboardResult.success
-        ? { state: 'created' }
+        ? { state: syncState }
         : { state: 'failed', reason: dashboardResult.reason }
       item.scraper = scraperResult.success
-        ? { state: 'created' }
+        ? { state: syncState }
         : { state: 'failed', reason: scraperResult.reason }
     }
     await this.saveUploadJob(job)
@@ -3004,7 +3012,7 @@ export class PropertyService implements IPropertyService {
         if (!item) return
 
         if (result.successCount > checkpointSuccessCount) {
-          item.dbms = { state: 'created' }
+          item.dbms = { state: 'updated' }
 
           const queued = syncQueue[syncQueue.length - 1]
           let full: PropertyWithRelations | null = null

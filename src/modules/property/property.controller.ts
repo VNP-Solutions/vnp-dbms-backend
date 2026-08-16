@@ -243,7 +243,7 @@ export class PropertyController {
   @ApiOperation({
     summary: 'Poll the live status of a background bulk import / bulk-update job',
     description:
-      'The import and bulk-update endpoints return instantly with a jobId. Poll this endpoint to watch per-portfolio and per-property progress across DBMS, scraper and dashboard (state: pending | processing | created | skipped | failed). Job status is retained in Redis for 24 hours after completion; a fresh file upload always starts a new job.'
+      'The import and bulk-update endpoints return instantly with a jobId. Poll this endpoint to watch per-portfolio and per-property progress across DBMS, scraper and dashboard (state: pending | processing | created | updated | skipped | failed). Job status is retained in Redis for 24 hours after completion; a fresh file upload always starts a new job.'
   })
   @ApiResponse({ status: 200, description: 'Upload job status' })
   @ApiResponse({ status: 404, description: 'Job not found (expired or unknown jobId)' })

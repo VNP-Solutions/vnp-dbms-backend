@@ -1020,6 +1020,7 @@ VNP Solutions Team`
 
     const colorFor = (state: string): string => {
       if (state === 'created') return '#28a745'
+      if (state === 'updated') return '#0d6efd'
       if (state === 'skipped') return '#f0ad4e'
       if (state === 'failed') return '#dc3545'
       return '#888' // pending/processing — shouldn't normally appear once the job is finished
