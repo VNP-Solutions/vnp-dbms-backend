@@ -28,6 +28,7 @@ export type EntitySyncState =
   | 'pending'
   | 'processing'
   | 'created'
+  | 'updated'
   | 'skipped'
   | 'failed'
 
@@ -62,7 +63,7 @@ export interface UploadJobData {
   userEmail: string
   status: UploadJobStatus
   error?: string
-  /** `processed` = how many items have reached a terminal state (created/skipped/failed)
+  /** `processed` = how many items have reached a terminal state (created/updated/skipped/failed)
    *  across DBMS + scraper + dashboard — use with `total` to render a progress bar.
    *  `total` is 0 until the file has been parsed (before that, there's nothing to show yet). */
   portfolios: { total: number; processed: number; items: UploadJobEntity[] }
