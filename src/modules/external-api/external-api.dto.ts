@@ -272,8 +272,8 @@ export interface ExternalPropertyDto {
 export interface ExternalSubportfolioDto {
   id: string
   name: string
-  portfolio_id: string
-  portfolio_name: string
+  portfolio_id: string | null
+  portfolio_name: string | null
   description?: string
   is_active: boolean
   total_properties: number

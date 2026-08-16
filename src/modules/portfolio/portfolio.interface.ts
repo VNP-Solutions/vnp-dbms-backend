@@ -1,9 +1,9 @@
 import { Currency, File, Portfolio, ServiceType } from '@prisma/client'
 import { PaginatedResult } from '../../common/dto/query.dto'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
-import { CreatePortfolioDto, PortfolioQueryDto, UpdatePortfolioDto } from './portfolio.dto'
-import type { FileWithRelations } from '../file-upload/file-upload.interface'
 import type { UploadAndCreateFileDto } from '../file-upload/file-upload.dto'
+import type { FileWithRelations } from '../file-upload/file-upload.interface'
+import { CreatePortfolioDto, PortfolioQueryDto, UpdatePortfolioDto } from './portfolio.dto'
 
 export type PortfolioContractUrl = {
   id: string
@@ -100,4 +100,18 @@ export interface IPortfolioService {
   createAndSync(data: CreatePortfolioDto, user: IUserWithPermissions): Promise<Portfolio>
   updateAndSync(id: string, data: UpdatePortfolioDto, user: IUserWithPermissions): Promise<Portfolio>
   removeAndSync(id: string, user: IUserWithPermissions): Promise<{ message: string }>
+  /**
+   * Single-portfolio upsert to scraper + dashboard, used by the property
+   * bulk import/update upload-job pipeline. Never throws — each target's
+   * outcome is reported independently so the caller can track per-system
+   * status. `timeoutMs`, when provided, overrides the client's default
+   * axios timeout for this call only (see UPLOAD_JOB_HTTP_TIMEOUT_MS).
+   */
+  syncUpsertPortfolioToScraperAndDashboard(
+    portfolioId: string,
+    timeoutMs?: number
+  ): Promise<{
+    scraper: { success: boolean; reason?: string }
+    dashboard: { success: boolean; reason?: string }
+  }>
 }

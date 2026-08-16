@@ -4,12 +4,24 @@ import * as http from 'http'
 import * as https from 'https'
 import * as nodemailer from 'nodemailer'
 import { URL } from 'url'
+import * as XLSX from 'xlsx'
 import { Configuration } from '../../config/configuration'
 import type {
-  AttachmentUrlDto,
-  EmailAttachment
+    AttachmentUrlDto,
+    EmailAttachment
 } from '../../modules/email/email.dto'
 import { PrismaService } from '../../modules/prisma/prisma.service'
+
+/** Mirrors property.interface.ts's UploadJobEntity — kept as a local, loose
+ *  shape here (rather than importing from the property module) so this
+ *  generic email utility doesn't depend on a specific feature module. */
+interface UploadJobEntitySummary {
+  row: number | null
+  name: string
+  dbms: { state: string; reason?: string }
+  scraper: { state: string; reason?: string }
+  dashboard: { state: string; reason?: string }
+}
 
 @Injectable()
 export class EmailUtil {
@@ -971,23 +983,24 @@ VNP Solutions Team`
     }
   }
 
-  async sendBulkSyncResultEmail(
+  /**
+   * Sent once a background bulk-upload job (import or bulk-update) finishes
+   * — successfully or not — since the old `SyncBatch` callback report email
+   * this replaces was the only place users learned the outcome without
+   * actively watching the UI. The frontend also polls
+   * GET /property/upload-job/current for live progress, so this email is
+   * just a "you can stop watching, here's the final tally" summary.
+   */
+  async sendUploadJobReportEmail(
     recipientEmail: string,
-    rows: Array<{
-      row: number
-      name: string
-      identifier: string
-      action: 'created' | 'updated' | 'failed'
-      dbms: boolean
-      dashboard: { success: boolean; reason?: string }
-      parser: { success: boolean; reason?: string }
+    job: {
+      source: 'import' | 'bulk-update'
+      filename: string
       error?: string
-    }>,
-    excelBuffer: Buffer,
-    excelFilename: string
+      portfolios: { total: number; items: UploadJobEntitySummary[] }
+      properties: { total: number; items: UploadJobEntitySummary[] }
+    }
   ): Promise<void> {
-    const fmt = (ok: boolean) => ok ? 'YES' : 'NO'
-
     // Parse NestJS/axios error strings into readable text.
     // Handles both plain strings and JSON like {"message":["field must not be empty"],...}
     const cleanReason = (raw: string | undefined): string => {
@@ -1005,77 +1018,156 @@ VNP Solutions Team`
       return raw
     }
 
-    const totalRows = rows.length
-    const failedRows = rows.filter(r => !r.dbms || !r.dashboard.success || !r.parser.success)
-    const createdCount = rows.filter(r => r.action === 'created').length
-    const updatedCount = rows.filter(r => r.action === 'updated').length
+    const colorFor = (state: string): string => {
+      if (state === 'created') return '#28a745'
+      if (state === 'skipped') return '#f0ad4e'
+      if (state === 'failed') return '#dc3545'
+      return '#888' // pending/processing — shouldn't normally appear once the job is finished
+    }
 
-    const textLines = rows.map(r => {
-      const reasons: string[] = []
-      if (r.error) reasons.push(`DBMS: ${cleanReason(r.error)}`)
-      if (!r.dashboard.success && r.dashboard.reason) reasons.push(`Dashboard: ${cleanReason(r.dashboard.reason)}`)
-      if (!r.parser.success && r.parser.reason) reasons.push(`Parser: ${cleanReason(r.parser.reason)}`)
-      const reasonStr = reasons.length ? reasons.join(' | ') : 'N/A'
-      return `Row ${r.row} | ${r.name} | ${r.identifier} | DBMS - ${fmt(r.dbms)} | DASHBOARD - ${fmt(r.dashboard.success)} | PARSER - ${fmt(r.parser.success)} | REASON: ${reasonStr}`
-    }).join('\n')
+    const outcomeSummary = (failed: number, skipped: number): string =>
+      `<span style="color:${failed ? '#dc3545' : '#28a745'}">${failed} failed</span>, ` +
+      `<span style="color:${skipped ? '#f0ad4e' : '#28a745'}">${skipped} skipped</span>`
 
-    const tableRows = rows.map(r => {
-      const reasons: string[] = []
-      if (r.error) reasons.push(`DBMS: ${cleanReason(r.error)}`)
-      if (!r.dashboard.success && r.dashboard.reason) reasons.push(`Dashboard: ${cleanReason(r.dashboard.reason)}`)
-      if (!r.parser.success && r.parser.reason) reasons.push(`Parser: ${cleanReason(r.parser.reason)}`)
-      const reasonStr = reasons.length ? reasons.join('; ') : '-'
-      const allOk = r.dbms && r.dashboard.success && r.parser.success
-      return `
+    const isFailed = (item: UploadJobEntitySummary): boolean =>
+      item.dbms.state === 'failed' ||
+      item.scraper.state === 'failed' ||
+      item.dashboard.state === 'failed'
+
+    // A DBMS skip means the row was deliberately not created (already exists,
+    // duplicate identifier, missing identifier, ...). Scraper/dashboard skips
+    // are only ever a downstream consequence of a DBMS failure, so keying on
+    // dbms alone avoids counting the same row twice.
+    const isSkipped = (item: UploadJobEntitySummary): boolean =>
+      !isFailed(item) && item.dbms.state === 'skipped'
+
+    const needsAttention = (item: UploadJobEntitySummary): boolean =>
+      isFailed(item) || isSkipped(item)
+
+    const countFailed = (items: UploadJobEntitySummary[]): number =>
+      items.filter(isFailed).length
+
+    const countSkipped = (items: UploadJobEntitySummary[]): number =>
+      items.filter(isSkipped).length
+
+    const rowsFor = (items: UploadJobEntitySummary[]): string =>
+      items
+        .map(item => {
+          const reasons: string[] = []
+          if (item.dbms.reason) reasons.push(`DBMS: ${cleanReason(item.dbms.reason)}`)
+          if (item.scraper.reason)
+            reasons.push(`Scraper: ${cleanReason(item.scraper.reason)}`)
+          if (item.dashboard.reason)
+            reasons.push(`Dashboard: ${cleanReason(item.dashboard.reason)}`)
+          return `
         <tr>
-          <td style="padding:6px 10px;border:1px solid #ddd;">${r.row}</td>
-          <td style="padding:6px 10px;border:1px solid #ddd;">${r.name}</td>
-          <td style="padding:6px 10px;border:1px solid #ddd;">${r.identifier}</td>
-          <td style="padding:6px 10px;border:1px solid #ddd;text-align:center;">${r.action}</td>
-          <td style="padding:6px 10px;border:1px solid #ddd;text-align:center;color:${r.dbms ? '#28a745' : '#dc3545'}"><strong>${fmt(r.dbms)}</strong></td>
-          <td style="padding:6px 10px;border:1px solid #ddd;text-align:center;color:${r.dashboard.success ? '#28a745' : '#dc3545'}"><strong>${fmt(r.dashboard.success)}</strong></td>
-          <td style="padding:6px 10px;border:1px solid #ddd;text-align:center;color:${r.parser.success ? '#28a745' : '#dc3545'}"><strong>${fmt(r.parser.success)}</strong></td>
-          <td style="padding:6px 10px;border:1px solid #ddd;font-size:12px;color:${allOk ? '#666' : '#c0392b'};">${reasonStr}</td>
+          <td style="padding:6px 10px;border:1px solid #ddd;">${item.row ?? '-'}</td>
+          <td style="padding:6px 10px;border:1px solid #ddd;">${item.name}</td>
+          <td style="padding:6px 10px;border:1px solid #ddd;text-align:center;color:${colorFor(item.dbms.state)}"><strong>${item.dbms.state}</strong></td>
+          <td style="padding:6px 10px;border:1px solid #ddd;text-align:center;color:${colorFor(item.scraper.state)}"><strong>${item.scraper.state}</strong></td>
+          <td style="padding:6px 10px;border:1px solid #ddd;text-align:center;color:${colorFor(item.dashboard.state)}"><strong>${item.dashboard.state}</strong></td>
+          <td style="padding:6px 10px;border:1px solid #ddd;font-size:12px;color:${reasons.length ? '#c0392b' : '#666'};">${reasons.length ? reasons.join('; ') : '-'}</td>
         </tr>`
-    }).join('')
+        })
+        .join('')
 
-    const attachments: any[] = []
-    if (failedRows.length > 0) {
+    const sectionTable = (title: string, items: UploadJobEntitySummary[]): string => {
+      if (!items.length) return ''
+      return `
+        <h4 style="margin:20px 0 6px;">${title} (${items.length})</h4>
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <tr style="background:#f4f4f4;">
+            <th style="padding:8px 10px;border:1px solid #ddd;text-align:left;">Row</th>
+            <th style="padding:8px 10px;border:1px solid #ddd;text-align:left;">Name</th>
+            <th style="padding:8px 10px;border:1px solid #ddd;text-align:center;">DBMS</th>
+            <th style="padding:8px 10px;border:1px solid #ddd;text-align:center;">Scraper</th>
+            <th style="padding:8px 10px;border:1px solid #ddd;text-align:center;">Dashboard</th>
+            <th style="padding:8px 10px;border:1px solid #ddd;text-align:left;">Reason</th>
+          </tr>
+          ${rowsFor(items)}
+        </table>`
+    }
+
+    const portfolioFailed = countFailed(job.portfolios.items)
+    const portfolioSkipped = countSkipped(job.portfolios.items)
+    const propertyFailed = countFailed(job.properties.items)
+    const propertySkipped = countSkipped(job.properties.items)
+    const totalFailed = portfolioFailed + propertyFailed
+    const totalSkipped = portfolioSkipped + propertySkipped
+    const totalIssues = totalFailed + totalSkipped
+    const actionLabel = job.source === 'import' ? 'Import' : 'Bulk Update'
+
+    // Builds a fresh workbook containing only the rows that failed or were
+    // skipped — same idea as the old sync-batch report: a small, focused
+    // sheet the user can act on, rather than re-sending their whole
+    // original file back to them.
+    const toDefectiveRow = (type: string, item: UploadJobEntitySummary) => {
+      const reasons: string[] = []
+      if (item.dbms.reason) reasons.push(`DBMS: ${cleanReason(item.dbms.reason)}`)
+      if (item.scraper.reason)
+        reasons.push(`Scraper: ${cleanReason(item.scraper.reason)}`)
+      if (item.dashboard.reason)
+        reasons.push(`Dashboard: ${cleanReason(item.dashboard.reason)}`)
+      return {
+        Type: type,
+        Row: item.row ?? '',
+        Name: item.name,
+        Outcome: isFailed(item) ? 'Failed' : 'Skipped',
+        DBMS: item.dbms.state,
+        Scraper: item.scraper.state,
+        Dashboard: item.dashboard.state,
+        Reason: reasons.join('; ') || 'N/A'
+      }
+    }
+
+    const attachments: EmailAttachment[] = []
+    if (totalIssues > 0) {
+      const defectiveRows = [
+        ...job.portfolios.items
+          .filter(needsAttention)
+          .map(i => toDefectiveRow('Portfolio', i)),
+        ...job.properties.items
+          .filter(needsAttention)
+          .map(i => toDefectiveRow('Property', i))
+      ]
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(
+        wb,
+        XLSX.utils.json_to_sheet(defectiveRows),
+        'Sync Issues'
+      )
+      const excelBuffer = Buffer.from(
+        XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
+      )
+      const filenameBase = job.filename.replace(/\.[^./]+$/, '') || 'upload'
       attachments.push({
-        filename: excelFilename,
+        filename: `${filenameBase}-issues.xlsx`,
         content: excelBuffer,
-        contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        contentType:
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
       })
     }
 
     const mailOptions: any = {
       from: this.configService.get('smtp.email', { infer: true }),
       to: recipientEmail,
-      subject: `Bulk Property Sync Report — ${totalRows} rows (${createdCount} created, ${updatedCount} updated, ${failedRows.length} issues)`,
-      text: `Bulk Property Sync Report\n\nTotal: ${totalRows} | Created: ${createdCount} | Updated: ${updatedCount} | Issues: ${failedRows.length}\n\n${textLines}${failedRows.length ? '\n\nDefective rows are attached as an Excel file for correction.' : ''}`,
+      subject: `${actionLabel} Report — ${job.filename} — ${job.portfolios.total} portfolios, ${job.properties.total} properties (${totalFailed} failed, ${totalSkipped} skipped)`,
+      text: `${actionLabel} finished for "${job.filename}".\n\nPortfolios: ${job.portfolios.total} (${portfolioFailed} failed, ${portfolioSkipped} skipped)\nProperties: ${job.properties.total} (${propertyFailed} failed, ${propertySkipped} skipped)${job.error ? `\n\nJob error: ${job.error}` : ''}`,
       html: `
-        <div style="font-family:Arial,sans-serif;padding:20px;max-width:900px;margin:0 auto;">
-          <h3 style="margin-bottom:4px;">Bulk Property Sync Report</h3>
-          <p style="margin-top:0;color:#555;">
-            Total: <strong>${totalRows}</strong> &nbsp;|&nbsp;
-            Created: <strong style="color:#28a745">${createdCount}</strong> &nbsp;|&nbsp;
-            Updated: <strong style="color:#007bff">${updatedCount}</strong> &nbsp;|&nbsp;
-            Issues: <strong style="color:${failedRows.length ? '#dc3545' : '#28a745'}">${failedRows.length}</strong>
+        <div style="font-family:Arial,sans-serif;padding:20px;max-width:1000px;margin:0 auto;">
+          <h3 style="margin-bottom:4px;">${actionLabel} Report</h3>
+          <p style="margin-top:0;color:#555;">File: <strong>${job.filename}</strong></p>
+          <p style="color:#555;">
+            Portfolios: <strong>${job.portfolios.total}</strong>
+            (${outcomeSummary(portfolioFailed, portfolioSkipped)})
+            &nbsp;|&nbsp;
+            Properties: <strong>${job.properties.total}</strong>
+            (${outcomeSummary(propertyFailed, propertySkipped)})
           </p>
-          <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:16px;">
-            <tr style="background:#f4f4f4;">
-              <th style="padding:8px 10px;border:1px solid #ddd;text-align:left;">Row</th>
-              <th style="padding:8px 10px;border:1px solid #ddd;text-align:left;">Property</th>
-              <th style="padding:8px 10px;border:1px solid #ddd;text-align:left;">Identifier</th>
-              <th style="padding:8px 10px;border:1px solid #ddd;text-align:center;">Action</th>
-              <th style="padding:8px 10px;border:1px solid #ddd;text-align:center;">DBMS</th>
-              <th style="padding:8px 10px;border:1px solid #ddd;text-align:center;">Dashboard</th>
-              <th style="padding:8px 10px;border:1px solid #ddd;text-align:center;">Parser</th>
-              <th style="padding:8px 10px;border:1px solid #ddd;text-align:left;">Reason</th>
-            </tr>
-            ${tableRows}
-          </table>
-          ${failedRows.length ? '<p style="margin-top:16px;color:#888;font-size:12px;">The Excel attachment contains the defective rows for correction.</p>' : ''}
+          ${job.error ? `<p style="color:#dc3545;"><strong>Job error:</strong> ${job.error}</p>` : ''}
+          ${sectionTable('Portfolios', job.portfolios.items)}
+          ${sectionTable('Properties', job.properties.items)}
+          ${attachments.length ? '<p style="margin-top:16px;color:#888;font-size:12px;">An Excel file listing only the rows that failed or were skipped is attached for review.</p>' : ''}
           <p style="margin-top:20px;font-size:12px;color:#888;">VNP Solutions DBMS</p>
         </div>
       `,
@@ -1084,9 +1176,12 @@ VNP Solutions Team`
 
     try {
       const info = await this.transporter.sendMail(mailOptions)
-      console.log('✓ Bulk sync result email sent:', { to: recipientEmail, messageId: info.messageId })
+      console.log('✓ Upload job report email sent:', {
+        to: recipientEmail,
+        messageId: info.messageId
+      })
     } catch (error) {
-      console.error('✗ Failed to send bulk sync result email:', error)
+      console.error('✗ Failed to send upload job report email:', error)
     }
   }
 

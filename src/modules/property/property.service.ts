@@ -1,71 +1,79 @@
 import {
-  BadRequestException,
-  ConflictException,
-  ForbiddenException,
-  Inject,
-  Injectable,
-  Logger,
-  NotFoundException
+    BadRequestException,
+    ConflictException,
+    ForbiddenException,
+    Inject,
+    Injectable,
+    Logger,
+    NotFoundException
 } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
-import { Cron, CronExpression } from '@nestjs/schedule'
 import type { Priority } from '@prisma/client'
 import axios, { AxiosInstance } from 'axios'
 import { createHash, randomUUID } from 'crypto'
 import * as XLSX from 'xlsx'
 import type { PaginatedResult } from '../../common/dto/query.dto'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
-import { RunDateCalculatorService } from '../../common/services/run-date-calculator.service'
 import { GlobalFilterCacheService } from '../../common/services/global-filter-cache.service'
+import { RunDateCalculatorService } from '../../common/services/run-date-calculator.service'
 import { SyncCommunicationService } from '../../common/services/sync-communication.service'
+import { ColoredLogger } from '../../common/utils/colored-logger.util'
 import { EmailUtil } from '../../common/utils/email.util'
 import { EncryptionUtil } from '../../common/utils/encryption.util'
-import { ColoredLogger } from '../../common/utils/colored-logger.util'
 import {
-  EXCEL_HISTORICAL_DATE_HEADERS,
-  findExcelCellValue,
-  findExcelDateValue,
-  mapPropertyToExcelRow,
-  writePropertyExportBuffer
+    EXCEL_HISTORICAL_DATE_HEADERS,
+    findExcelCellValue,
+    findExcelDateValue,
+    mapPropertyToExcelRow,
+    writePropertyExportBuffer
 } from '../../common/utils/property-excel.util'
-import type { Configuration } from '../../config/configuration'
+import { withTimeout } from '../../common/utils/promise-timeout.util'
+import {
+  SYNC_HTTP_TIMEOUT_MS,
+  UPLOAD_JOB_DB_TIMEOUT_MS,
+  UPLOAD_JOB_HTTP_TIMEOUT_MS,
+  UPLOAD_JOB_SYNC_CHUNK_SIZE,
+  type Configuration
+} from '../../config/configuration'
 import type { IAuthRepository } from '../auth/auth.interface'
 import type { IPortfolioService } from '../portfolio/portfolio.interface'
 import { PrismaService } from '../prisma/prisma.service'
 import type { IPropertyCredentialsService } from '../property-credentials/property-credentials.interface'
 import { RedisService } from '../redis/redis.service'
 import type { ISubportfolioService } from '../subportfolio/subportfolio.interface'
+import { applyColumnFilter } from './property-column-filter.util'
 import {
-  collectPropertyUniqueConflicts,
-  normalizePropertyIdentifier,
-  propertyIdentifierKey
+    collectPropertyUniqueConflicts,
+    normalizePropertyIdentifier,
+    propertyIdentifierKey
 } from './property-uniqueness.util'
 import type {
-  SyncBatchAcceptedDto,
-  SyncBulkDeleteResponseDto,
-  SyncBulkUpsertResponseDto,
-  SyncBulkUpsertRowResult
+    SyncBulkDeleteResponseDto,
+    UploadJobAcceptedDto
 } from './property.dto'
 import {
-  BulkUpdateResultDto,
-  CreatePropertyDto,
-  ExportPropertyExcelDto,
-  GetPropertyCredentialDto,
-  PropertyFilterDto,
-  RequiredFieldType,
-  SyncBulkDeleteBodyDto,
-  SyncByOtaDto,
-  UpdatePropertyDto
+    BulkUpdateResultDto,
+    CreatePropertyDto,
+    ExportPropertyExcelDto,
+    GetPropertyCredentialDto,
+    PropertyFilterDto,
+    RequiredFieldType,
+    SyncBulkDeleteBodyDto,
+    SyncByOtaDto,
+    UpdatePropertyDto
 } from './property.dto'
-import { applyColumnFilter } from './property-column-filter.util'
 import type {
-  AllDataForGlobalFilterResponse,
-  ImportPropertiesResult,
-  ImportPropertyRow,
-  IPropertyRepository,
-  IPropertyService,
-  PropertyContact,
-  PropertyWithRelations
+    AllDataForGlobalFilterResponse,
+    EntitySyncState,
+    EntitySyncStatus,
+    ImportPropertiesResult,
+    ImportPropertyRow,
+    IPropertyRepository,
+    IPropertyService,
+    PropertyContact,
+    PropertyWithRelations,
+    UploadJobData,
+    UploadJobEntity
 } from './property.interface'
 
 const CACHE_TTL_ITEM = 5 * 60 * 1000 // 5 minutes for individual records
@@ -145,7 +153,7 @@ export class PropertyService implements IPropertyService {
     private readonly runDateCalculator: RunDateCalculatorService,
     private readonly globalFilterCache: GlobalFilterCacheService
   ) {
-    const timeout = this.config.get('syncTimeoutMs', { infer: true }) ?? 15000
+    const timeout = SYNC_HTTP_TIMEOUT_MS
     const dashUrl =
       this.config.get('dashboardBackendUrl', { infer: true }) ?? ''
     const dashTok =
@@ -188,6 +196,219 @@ export class PropertyService implements IPropertyService {
       this.logger.warn(
         '[sync] scraper JWT client disabled — URL or JWT_COMMUNICATION_SECRET missing'
       )
+  }
+
+  // ─── Upload job status (Redis-backed, for bulk import/update polling) ─────
+
+  /** How long a finished (complete/failed) job's status stays queryable. */
+  private static readonly UPLOAD_JOB_TTL_MS = 24 * 60 * 60 * 1000
+  private static uploadJobKey(jobId: string): string {
+    return `upload-job:${jobId}`
+  }
+  private static uploadJobLatestKey(userId: string): string {
+    return `upload-job:user:${userId}:latest`
+  }
+
+  private pendingEntityStatus(): EntitySyncStatus {
+    return { state: 'pending' }
+  }
+
+  /** An item counts as "processed" (done, for progress-bar purposes) once every
+   *  system it goes through has reached a terminal state — no longer pending/processing. */
+  private static readonly TERMINAL_STATES: ReadonlySet<EntitySyncState> = new Set([
+    'created',
+    'skipped',
+    'failed'
+  ])
+  private static isEntityProcessed(item: UploadJobEntity): boolean {
+    return (
+      PropertyService.TERMINAL_STATES.has(item.dbms.state) &&
+      PropertyService.TERMINAL_STATES.has(item.scraper.state) &&
+      PropertyService.TERMINAL_STATES.has(item.dashboard.state)
+    )
+  }
+
+  private newUploadJob(
+    jobId: string,
+    source: 'import' | 'bulk-update',
+    filename: string,
+    userId: string,
+    userEmail: string
+  ): UploadJobData {
+    const now = new Date().toISOString()
+    return {
+      jobId,
+      source,
+      filename,
+      userId,
+      userEmail,
+      status: 'pending',
+      portfolios: { total: 0, processed: 0, items: [] },
+      properties: { total: 0, processed: 0, items: [] },
+      createdAt: now,
+      updatedAt: now
+    }
+  }
+
+  private async saveUploadJob(job: UploadJobData): Promise<void> {
+    job.portfolios.processed = job.portfolios.items.filter(item =>
+      PropertyService.isEntityProcessed(item)
+    ).length
+    job.properties.processed = job.properties.items.filter(item =>
+      PropertyService.isEntityProcessed(item)
+    ).length
+    job.updatedAt = new Date().toISOString()
+    await this.redisService.set(
+      PropertyService.uploadJobKey(job.jobId),
+      job,
+      PropertyService.UPLOAD_JOB_TTL_MS
+    )
+  }
+
+  private async setLatestUploadJobForUser(
+    userId: string,
+    jobId: string
+  ): Promise<void> {
+    await this.redisService.set(
+      PropertyService.uploadJobLatestKey(userId),
+      jobId,
+      PropertyService.UPLOAD_JOB_TTL_MS
+    )
+  }
+
+  async getUploadJobStatus(jobId: string): Promise<UploadJobData | undefined> {
+    return this.redisService.get<UploadJobData>(
+      PropertyService.uploadJobKey(jobId)
+    )
+  }
+
+  async getLatestUploadJobForUser(
+    userId: string
+  ): Promise<UploadJobData | undefined> {
+    const jobId = await this.redisService.get<string>(
+      PropertyService.uploadJobLatestKey(userId)
+    )
+    if (!jobId) return undefined
+    return this.getUploadJobStatus(jobId)
+  }
+
+  /**
+   * Sends the final "here's what happened" report email once a background
+   * upload job reaches `complete` or `failed`. Swallows its own errors —
+   * a broken mailer must never take down a job that otherwise finished
+   * fine (the frontend already has the full detail via polling regardless).
+   */
+  private async sendUploadJobReportEmail(job: UploadJobData): Promise<void> {
+    try {
+      await this.emailUtil.sendUploadJobReportEmail(job.userEmail, job)
+    } catch (e: any) {
+      this.syncLogger.error(
+        `[async] failed to send upload job report email for job ${job.jobId}: ${e?.message ?? e}`
+      )
+    }
+  }
+
+  /**
+   * Processes every referenced portfolio one at a time: resolve-or-create in
+   * DBMS, then (regardless of whether it was newly created or already
+   * existed) attempt a single-item sync-upsert to scraper + dashboard.
+   * Mutates `job.portfolios.items` in place and persists after every step so
+   * the frontend sees live progress while polling.
+   */
+  private async processPortfolioPhase(job: UploadJobData): Promise<void> {
+    for (const item of job.portfolios.items) {
+      item.dbms.state = 'processing'
+      await this.saveUploadJob(job)
+
+      let res: Awaited<ReturnType<typeof this.repo.resolveOrCreatePortfolio>>
+      try {
+        res = await withTimeout(
+          this.repo.resolveOrCreatePortfolio(item.name),
+          UPLOAD_JOB_DB_TIMEOUT_MS,
+          `resolveOrCreatePortfolio("${item.name}")`
+        )
+      } catch (e: any) {
+        // A transient DB error (e.g. a stale pooled connection after an idle
+        // gap) here shouldn't abort every remaining portfolio/property in the
+        // job — just mark this one failed and move on to the next.
+        item.dbms = { state: 'failed', reason: e?.message ?? String(e) }
+        item.scraper = { state: 'skipped', reason: 'DBMS failed' }
+        item.dashboard = { state: 'skipped', reason: 'DBMS failed' }
+        await this.saveUploadJob(job)
+        continue
+      }
+      if ('error' in res) {
+        item.dbms = { state: 'failed', reason: res.error }
+        item.scraper = { state: 'skipped', reason: 'DBMS failed' }
+        item.dashboard = { state: 'skipped', reason: 'DBMS failed' }
+        await this.saveUploadJob(job)
+        continue
+      }
+      item.dbms = {
+        state: res.created ? 'created' : 'skipped',
+        reason: res.created ? undefined : 'Already exists'
+      }
+      await this.saveUploadJob(job)
+
+      const sync = await this.portfolioService.syncUpsertPortfolioToScraperAndDashboard(
+        res.id,
+        UPLOAD_JOB_HTTP_TIMEOUT_MS
+      )
+      item.scraper = sync.scraper.success
+        ? { state: 'created' }
+        : { state: 'failed', reason: sync.scraper.reason }
+      item.dashboard = sync.dashboard.success
+        ? { state: 'created' }
+        : { state: 'failed', reason: sync.dashboard.reason }
+      await this.saveUploadJob(job)
+    }
+  }
+
+  /**
+   * Flushes a batch of already-DBMS-created/updated properties to the
+   * scraper and dashboard concurrently (up to UPLOAD_JOB_SYNC_CHUNK_SIZE at
+   * a time — DBMS creation itself stays strictly sequential, only this
+   * network-bound sync step is batched for speed). All mutations to `job`
+   * happen synchronously once every call in the batch has settled, and are
+   * followed by a single `saveUploadJob` — so there's no risk of one
+   * in-flight save overwriting another with a stale snapshot, even though
+   * the underlying HTTP calls run in parallel.
+   */
+  private async processPropertySyncChunk(
+    job: UploadJobData,
+    pending: Array<{ item: UploadJobEntity; full: PropertyWithRelations }>
+  ): Promise<void> {
+    if (!pending.length) return
+
+    const settled = await Promise.all(
+      pending.map(async ({ item, full }) => {
+        const [dashboardResult, scraperResult] = await Promise.all([
+          this.syncUpsertPropertyToDashboard(full, UPLOAD_JOB_HTTP_TIMEOUT_MS),
+          this.syncUpsertPropertyToScraper(full, UPLOAD_JOB_HTTP_TIMEOUT_MS)
+        ])
+        return { item, dashboardResult, scraperResult }
+      })
+    )
+
+    for (const { item, dashboardResult, scraperResult } of settled) {
+      item.dashboard = dashboardResult.success
+        ? { state: 'created' }
+        : { state: 'failed', reason: dashboardResult.reason }
+      item.scraper = scraperResult.success
+        ? { state: 'created' }
+        : { state: 'failed', reason: scraperResult.reason }
+    }
+    await this.saveUploadJob(job)
+  }
+
+  private newUploadJobEntity(name: string, row: number | null): UploadJobEntity {
+    return {
+      row,
+      name,
+      dbms: this.pendingEntityStatus(),
+      scraper: this.pendingEntityStatus(),
+      dashboard: this.pendingEntityStatus()
+    }
   }
 
   async create(
@@ -1847,6 +2068,12 @@ export class PropertyService implements IPropertyService {
     file: Express.Multer.File,
     user: IUserWithPermissions
   ): Promise<ImportPropertiesResult> {
+    const rows = this.parseImportRows(file)
+    return this.createImportedRows(rows, user)
+  }
+
+  /** Parses & validates an import Excel file into ImportPropertyRow[]. Throws BadRequestException on invalid input. */
+  private parseImportRows(file: Express.Multer.File): ImportPropertyRow[] {
     const buffer = file.buffer || (file as any).buffer
     if (!buffer || buffer.length === 0) {
       throw new BadRequestException('File buffer is empty')
@@ -2243,6 +2470,51 @@ export class PropertyService implements IPropertyService {
       })
       .filter(Boolean) as ImportPropertyRow[]
 
+    return rows
+  }
+
+  /** Auto-calculates run dates (historical "to" date + valid CRS) for one newly created property and persists them. */
+  private async applyRunDateCalcAndPersist(property: {
+    id: string
+    created_at: Date
+    expedia_to?: string | null
+    expedia_crs?: string | null
+    expedia_priority?: string | null
+    booking_to?: string | null
+    booking_crs?: string | null
+    booking_priority?: string | null
+    agoda_to?: string | null
+    agoda_crs?: string | null
+    agoda_priority?: string | null
+  }): Promise<void> {
+    const runDateUpdates = await this.runDateCalculator.calcRunDatesForProperty(
+      {
+        created_at: property.created_at,
+        expedia_to: property.expedia_to,
+        expedia_crs: property.expedia_crs,
+        expedia_priority: property.expedia_priority,
+        booking_to: property.booking_to,
+        booking_crs: property.booking_crs,
+        booking_priority: property.booking_priority,
+        agoda_to: property.agoda_to,
+        agoda_crs: property.agoda_crs,
+        agoda_priority: property.agoda_priority
+      },
+      property.id
+    )
+    if (Object.keys(runDateUpdates).length > 0) {
+      await this.prisma.property.update({
+        where: { id: property.id },
+        data: runDateUpdates
+      })
+      Object.assign(property, runDateUpdates)
+    }
+  }
+
+  private async createImportedRows(
+    rows: ImportPropertyRow[],
+    user: IUserWithPermissions
+  ): Promise<ImportPropertiesResult> {
     const result = await this.repo.importProperties(rows, user.id)
 
     // Auto-calculate run dates for every newly created property that has
@@ -2251,29 +2523,7 @@ export class PropertyService implements IPropertyService {
     // which is important for correct capacity-check counts.
     if (result.properties && result.properties.length > 0) {
       for (const property of result.properties) {
-        const runDateUpdates =
-          await this.runDateCalculator.calcRunDatesForProperty(
-            {
-              created_at: property.created_at,
-              expedia_to: property.expedia_to,
-              expedia_crs: property.expedia_crs,
-              expedia_priority: property.expedia_priority,
-              booking_to: property.booking_to,
-              booking_crs: property.booking_crs,
-              booking_priority: property.booking_priority,
-              agoda_to: property.agoda_to,
-              agoda_crs: property.agoda_crs,
-              agoda_priority: property.agoda_priority
-            },
-            property.id
-          )
-        if (Object.keys(runDateUpdates).length > 0) {
-          await this.prisma.property.update({
-            where: { id: property.id },
-            data: runDateUpdates
-          })
-          Object.assign(property, runDateUpdates)
-        }
+        await this.applyRunDateCalcAndPersist(property)
       }
     }
 
@@ -2285,278 +2535,213 @@ export class PropertyService implements IPropertyService {
   async importFromExcelAndSync(
     file: Express.Multer.File,
     user: IUserWithPermissions
-  ): Promise<SyncBatchAcceptedDto> {
+  ): Promise<UploadJobAcceptedDto> {
     if (!file) throw new BadRequestException('No file provided')
     if (!file.buffer?.length)
       throw new BadRequestException('File buffer is empty')
 
-    const batchId = randomUUID()
-    const filename = `import-sync-report-${new Date().toISOString().slice(0, 10)}.xlsx`
+    const jobId = randomUUID()
+    const filename = file.originalname
     const userEmail = user?.email ?? user?.id ?? 'unknown'
 
-    // Persist a durable batch record up front so the caller gets a real
-    // batchId and a restart-detectable marker even before the import runs.
-    await this.prisma.syncBatch.create({
-      data: {
-        batch_id: batchId,
-        status: 'pending',
-        source: 'import',
-        user_email: userEmail,
-        filename,
-        rows: [] as any,
-        skipped_rows: [] as any,
-        expected: ['dashboard', 'scraper'],
-        received: {} as any,
-        dbms_summary: { status: 'importing' } as any
-      }
-    })
+    const job = this.newUploadJob(jobId, 'import', filename, user.id, userEmail)
+    await this.saveUploadJob(job)
+    await this.setLatestUploadJobForUser(user.id, jobId)
 
     this.syncLogger.step(
-      `📤 BULK IMPORT ACCEPTED — batch=${batchId} file="${file.originalname}" user=${userEmail} (running in background)`
+      `📤 UPLOAD JOB ACCEPTED (import) — job=${jobId} file="${filename}" user=${userEmail} (running in background)`
     )
 
     // Background the ENTIRE import + sync so the HTTP request returns
-    // immediately. The DBMS import itself can take minutes for large sheets;
-    // the dashboard/scraper sync happens afterwards and reports back via
-    // /api/property/sync-callback, at which point the email report is sent.
+    // immediately. Portfolios and properties are processed one at a time —
+    // each fully synced to DBMS/scraper/dashboard before moving to the
+    // next — with live progress persisted to Redis for polling.
     setImmediate(() => {
-      this.runFullAsyncImport({ file, user, batchId, filename }).catch(e =>
+      this.runImportUploadJob(jobId, file, user).catch(e =>
         this.syncLogger.error(
-          `[async] import failed for batch ${batchId}: ${e?.message ?? e}`
+          `[async] import job ${jobId} failed: ${e?.message ?? e}`
         )
       )
     })
 
     return {
-      batchId,
+      jobId,
       status: 'accepted',
-      message: `Import started. You will receive an email report at ${userEmail} when the sync is complete. Track progress with GET /api/property/sync-batch/${batchId}.`
+      message: `Import started. Track progress with GET /property/upload-job/${jobId}.`
     }
   }
 
   // Runs entirely in the background (dispatched via setImmediate from
-  // importFromExcelAndSync). Performs the DBMS import, records the import
-  // summary on the SyncBatch, then dispatches the dashboard/scraper sync
-  // (which is itself async/callback-driven). The email report is sent by
-  // finalizeSyncBatch once both services have called back (or the sweeper
-  // finalizes a stale batch).
-  private async runFullAsyncImport(params: {
-    file: Express.Multer.File
+  // importFromExcelAndSync). Parses the file, then processes every unique
+  // portfolio one at a time (DBMS create/skip → scraper → dashboard), then
+  // every property row one at a time — persisting live status to Redis
+  // after each step so the frontend can poll granular progress.
+  private async runImportUploadJob(
+    jobId: string,
+    file: Express.Multer.File,
     user: IUserWithPermissions
-    batchId: string
-    filename: string
-  }): Promise<void> {
-    const { file, user, batchId, filename } = params
-    const userEmail = user?.email ?? user?.id ?? 'unknown'
-
-    let result: ImportPropertiesResult
-    try {
-      result = await this.importFromExcel(file, user)
-    } catch (e: any) {
-      this.syncLogger.error(
-        `[async] importFromExcel failed for batch ${batchId}: ${e?.message ?? e}`
-      )
-      await this.prisma.syncBatch.update({
-        where: { batch_id: batchId },
-        data: {
-          status: 'failed',
-          dbms_summary: {
-            status: 'failed',
-            error: e?.message ?? String(e)
-          } as any,
-          completed_at: new Date()
-        }
-      })
-      // Surface the failure by email so the user isn't left waiting.
-      this.sendSyncBatchFailureEmail(userEmail, filename, batchId, e).catch(
-        err =>
-          this.syncLogger.error(
-            `[async] failure email for batch ${batchId} failed: ${err?.message ?? err}`
-          )
-      )
-      return
-    }
-
-    const allProperties: any[] = [
-      ...(result.properties ?? []),
-      ...(result.existingProperties ?? [])
-    ]
-
-    await this.prisma.syncBatch.update({
-      where: { batch_id: batchId },
-      data: {
-        dbms_summary: {
-          status: 'imported',
-          created: result.properties?.length ?? 0,
-          existing: result.existingProperties?.length ?? 0,
-          skipped: result.skippedProperties?.length ?? 0,
-          total: allProperties.length
-        } as any
-      }
-    })
-
-    if (!allProperties.length) {
-      this.syncLogger.warn(
-        `[async] batch ${batchId} — import produced no rows, nothing to sync`
-      )
-      await this.prisma.syncBatch.update({
-        where: { batch_id: batchId },
-        data: { status: 'complete', completed_at: new Date() }
-      })
-      return
-    }
-
-    this.syncLogger.info(
-      `DBMS import done: ${result.properties?.length ?? 0} created, ${result.existingProperties?.length ?? 0} existing, ${result.skippedProperties?.length ?? 0} skipped — starting sync for ${allProperties.length} properties`
-    )
-
-    await this.runAsyncSyncDispatch({
-      batchId,
-      source: 'import',
-      userEmail,
-      allProperties,
-      skippedProperties: result.skippedProperties ?? [],
-      filename
-    })
-  }
-
-  // Minimal failure notification email used when the DBMS import itself
-  // throws (e.g. malformed file). The full per-row report email is produced
-  // by finalizeSyncBatch for the success path.
-  private sendSyncBatchFailureEmail(
-    userEmail: string,
-    filename: string,
-    batchId: string,
-    error: any
   ): Promise<void> {
-    const reason = error?.message ?? String(error)
-    const rows = [
-      {
-        row: 0,
-        name: 'Bulk import failed',
-        identifier: batchId,
-        action: 'failed' as const,
-        dbms: false,
-        dashboard: {
-          success: false,
-          reason: 'DBMS import failed — nothing synced'
-        },
-        parser: {
-          success: false,
-          reason: 'DBMS import failed — nothing synced'
-        },
-        error: reason
-      }
-    ]
-    const sheet = XLSX.utils.aoa_to_sheet([
-      [
-        'Row',
-        'Property Name',
-        'Identifier',
-        'Action',
-        'DBMS',
-        'Dashboard',
-        'Parser',
-        'Reason'
-      ],
-      ['0', 'Bulk import failed', batchId, 'failed', 'NO', 'NO', 'NO', reason]
-    ])
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, sheet, 'Sync Results')
-    const excelBuffer = XLSX.write(wb, {
-      type: 'buffer',
-      bookType: 'xlsx'
-    })
-    return this.emailUtil
-      .sendBulkSyncResultEmail(userEmail, rows, excelBuffer, filename)
-      .catch(e =>
-        this.syncLogger.error(
-          `[async] sendSyncBatchFailureEmail failed: ${e?.message ?? e}`
+    const job = await this.getUploadJobStatus(jobId)
+    if (!job) return
+
+    try {
+      const rows = this.parseImportRows(file)
+
+      const uniquePortfolioNames = [
+        ...new Set(rows.map(r => r.portfolioName.trim()).filter(Boolean))
+      ]
+      job.portfolios.items = uniquePortfolioNames.map(name => {
+        const firstRowIdx = rows.findIndex(r => r.portfolioName.trim() === name)
+        return this.newUploadJobEntity(
+          name,
+          firstRowIdx >= 0 ? firstRowIdx + 2 : null
         )
-      )
-  }
-
-  // Builds the bulk-upsert items + per-row context, persists a SyncBatch, and
-  // dispatches to dashboard/scraper (async, callback-driven). Runs in the
-  // background after the DBMS import/update so the HTTP response is not held
-  // open while credentials are fetched or while the other services sync.
-  private async runAsyncSyncDispatch(params: {
-    batchId: string
-    source: 'import' | 'bulk-update'
-    userEmail: string
-    allProperties: any[]
-    skippedProperties: any[]
-    filename: string
-  }): Promise<void> {
-    const {
-      batchId,
-      source,
-      userEmail,
-      allProperties,
-      skippedProperties,
-      filename
-    } = params
-
-    let rowIndex = 2
-    const skippedNames = new Set(
-      skippedProperties.map((s: { name: string }) => s.name)
-    )
-
-    const importRows = allProperties.map(p => {
-      const row = rowIndex++
-      return { property: p as PropertyWithRelations, row }
-    })
-
-    this.syncLogger.info('Building scraper bulk-upsert items...')
-    const scraperBulkItems = (
-      await Promise.all(
-        importRows.map(async ({ property, row }) =>
-          this.buildScraperBulkUpsertItem(property, row)
-        )
-      )
-    ).filter((item): item is Record<string, unknown> => item !== null)
-    this.syncLogger.info(
-      `Scraper items: ${scraperBulkItems.length}/${importRows.length} eligible (need portfolio_id)`
-    )
-
-    this.syncLogger.info('Building dashboard bulk-upsert items...')
-    const dashboardBulkItems = (
-      await Promise.all(
-        importRows.map(async ({ property, row }) =>
-          this.buildDashboardBulkUpsertItem(property, row)
-        )
-      )
-    ).filter((item): item is Record<string, unknown> => item !== null)
-    this.syncLogger.info(
-      `Dashboard items: ${dashboardBulkItems.length}/${importRows.length} eligible (need expedia_id + portfolio_id); ${importRows.length - dashboardBulkItems.length} will use single-property fallback`
-    )
-
-    const rowContext = this.buildSyncBatchRowContext(importRows, skippedNames)
-
-    const skippedRows = skippedProperties.map(
-      (s: { name: string; reason: string }) => ({
-        row: rowIndex++,
-        name: s.name,
-        reason: s.reason
       })
-    )
+      job.portfolios.total = job.portfolios.items.length
+      job.properties.items = rows.map((r, i) =>
+        this.newUploadJobEntity(r.propertyName, i + 2)
+      )
+      job.properties.total = job.properties.items.length
+      job.status = 'processing_portfolios'
+      await this.saveUploadJob(job)
 
-    await this.dispatchAsyncSyncBatch({
-      batchId,
-      source,
-      userEmail,
-      rows: rowContext,
-      skippedRows,
-      scraperItems: scraperBulkItems,
-      dashboardItems: dashboardBulkItems,
-      filename
-    })
+      await this.processPortfolioPhase(job)
+
+      job.status = 'processing_properties'
+      await this.saveUploadJob(job)
+
+      // DBMS create/update runs strictly one row at a time (fast, local,
+      // avoids racing on inline subportfolio-by-name creation). Once a
+      // property is created/updated, it's queued for the slower
+      // scraper/dashboard sync, which is flushed in small concurrent
+      // batches (UPLOAD_JOB_SYNC_CHUNK_SIZE) for speed.
+      const pendingSync: Array<{
+        item: UploadJobEntity
+        full: PropertyWithRelations
+      }> = []
+
+      for (let i = 0; i < rows.length; i++) {
+        const item = job.properties.items[i]
+        item.dbms.state = 'processing'
+        await this.saveUploadJob(job)
+
+        let result: ImportPropertiesResult
+        try {
+          result = await withTimeout(
+            this.repo.importProperties([rows[i]], user.id),
+            UPLOAD_JOB_DB_TIMEOUT_MS,
+            `importProperties(row ${item.row})`
+          )
+        } catch (e: any) {
+          item.dbms = { state: 'failed', reason: e?.message ?? String(e) }
+          item.scraper = { state: 'skipped', reason: 'DBMS failed' }
+          item.dashboard = { state: 'skipped', reason: 'DBMS failed' }
+          await this.saveUploadJob(job)
+          continue
+        }
+
+        const createdProp = result.properties?.[0] ?? null
+        const existingProp = result.existingProperties?.[0] ?? null
+        const skippedInfo = result.skippedProperties?.[0]
+
+        if (createdProp) {
+          try {
+            await withTimeout(
+              this.applyRunDateCalcAndPersist(createdProp),
+              UPLOAD_JOB_DB_TIMEOUT_MS,
+              `applyRunDateCalcAndPersist(row ${item.row})`
+            )
+          } catch (e: any) {
+            // The property itself was already created successfully in DBMS —
+            // only this follow-up run-date calculation failed, most likely a
+            // transient DB/network blip (e.g. a stale pooled connection after
+            // an idle gap). Don't let that take down the whole job: mark this
+            // row as created-but-unsynced and move on to the next row.
+            item.dbms = { state: 'created' }
+            const reason = `Run-date calculation failed: ${e?.message ?? String(e)}`
+            item.scraper = { state: 'failed', reason }
+            item.dashboard = { state: 'failed', reason }
+            await this.saveUploadJob(job)
+            continue
+          }
+          item.dbms = { state: 'created' }
+        } else if (existingProp) {
+          item.dbms = {
+            state: 'skipped',
+            reason: skippedInfo?.reason ?? 'Already exists'
+          }
+        } else {
+          item.dbms = {
+            state: 'failed',
+            reason: skippedInfo?.reason ?? 'Import failed'
+          }
+          item.scraper = { state: 'skipped', reason: 'DBMS failed' }
+          item.dashboard = { state: 'skipped', reason: 'DBMS failed' }
+          await this.saveUploadJob(job)
+          continue
+        }
+
+        const propertyId = (createdProp ?? existingProp).id
+        let full: PropertyWithRelations | null = null
+        let loadError: string | null = null
+        try {
+          full = await withTimeout(
+            this.repo.findById(propertyId),
+            UPLOAD_JOB_DB_TIMEOUT_MS,
+            `findById(row ${item.row})`
+          )
+        } catch (e: any) {
+          // Same idea — a transient DB error (or a hang on a stale pooled
+          // connection — Prisma's Mongo connector doesn't support
+          // socketTimeoutMS, hence withTimeout) fetching the full row for
+          // sync shouldn't abort every remaining row in the job.
+          loadError = `Failed to load property after create: ${e?.message ?? String(e)}`
+        }
+        if (full) {
+          item.dashboard.state = 'processing'
+          item.scraper.state = 'processing'
+          pendingSync.push({ item, full })
+        } else {
+          const reason = loadError ?? 'Property not found after create'
+          item.dashboard = { state: 'failed', reason }
+          item.scraper = { state: 'failed', reason }
+        }
+        await this.saveUploadJob(job)
+
+        if (pendingSync.length >= UPLOAD_JOB_SYNC_CHUNK_SIZE) {
+          await this.processPropertySyncChunk(
+            job,
+            pendingSync.splice(0, pendingSync.length)
+          )
+        }
+      }
+      await this.processPropertySyncChunk(
+        job,
+        pendingSync.splice(0, pendingSync.length)
+      )
+
+      job.status = 'complete'
+      job.completedAt = new Date().toISOString()
+      await this.saveUploadJob(job)
+      await this.invalidateCaches()
+      this.scheduleCacheWarm(user)
+      await this.sendUploadJobReportEmail(job)
+    } catch (e: any) {
+      job.status = 'failed'
+      job.error = e?.message ?? String(e)
+      job.completedAt = new Date().toISOString()
+      await this.saveUploadJob(job)
+      this.syncLogger.error(
+        `[async] import job ${jobId} failed: ${job.error}`
+      )
+      await this.sendUploadJobReportEmail(job)
+    }
   }
 
   async bulkUpdate(
     file: Express.Multer.File,
     user: IUserWithPermissions
-  ): Promise<SyncBatchAcceptedDto> {
+  ): Promise<UploadJobAcceptedDto> {
     if (!file) throw new BadRequestException('No file provided')
     const buffer = file.buffer || (file as any).buffer
     if (!buffer || buffer.length === 0)
@@ -2572,61 +2757,56 @@ export class PropertyService implements IPropertyService {
       )
     }
 
-    const batchId = randomUUID()
-    const filename = `bulk-update-sync-report-${new Date().toISOString().slice(0, 10)}.xlsx`
+    const jobId = randomUUID()
+    const filename = file.originalname
     const userEmail = user?.email ?? user?.id ?? 'unknown'
 
-    await this.prisma.syncBatch.create({
-      data: {
-        batch_id: batchId,
-        status: 'pending',
-        source: 'bulk-update',
-        user_email: userEmail,
-        filename,
-        rows: [] as any,
-        skipped_rows: [] as any,
-        expected: ['dashboard', 'scraper'],
-        received: {} as any,
-        dbms_summary: { status: 'importing' } as any
-      }
-    })
+    const job = this.newUploadJob(
+      jobId,
+      'bulk-update',
+      filename,
+      user.id,
+      userEmail
+    )
+    await this.saveUploadJob(job)
+    await this.setLatestUploadJobForUser(user.id, jobId)
 
     this.syncLogger.step(
-      `🔄 BULK UPDATE ACCEPTED — batch=${batchId} file="${file.originalname}" user=${userEmail} (running in background)`
+      `🔄 UPLOAD JOB ACCEPTED (bulk-update) — job=${jobId} file="${filename}" user=${userEmail} (running in background)`
     )
 
     // Background the ENTIRE update loop + sync so the HTTP request returns
-    // immediately. The DBMS update itself can take minutes for large sheets;
-    // the dashboard/scraper sync happens afterwards and reports back via
-    // /api/property/sync-callback, at which point the email report is sent.
+    // immediately. Portfolios and properties are processed one at a time —
+    // each fully synced to DBMS/scraper/dashboard before moving to the
+    // next — with live progress persisted to Redis for polling.
     setImmediate(() => {
-      this.runFullAsyncBulkUpdate({ file, user, batchId, filename }).catch(e =>
+      this.runFullAsyncBulkUpdate({ file, user, jobId }).catch(e =>
         this.syncLogger.error(
-          `[async] bulk-update failed for batch ${batchId}: ${e?.message ?? e}`
+          `[async] bulk-update job ${jobId} failed: ${e?.message ?? e}`
         )
       )
     })
 
     return {
-      batchId,
+      jobId,
       status: 'accepted',
-      message: `Bulk update started. You will receive an email report at ${userEmail} when the sync is complete. Track progress with GET /api/property/sync-batch/${batchId}.`
+      message: `Bulk update started. Track progress with GET /property/upload-job/${jobId}.`
     }
   }
 
   // Runs entirely in the background (dispatched via setImmediate from
-  // bulkUpdate). Performs the DBMS update loop, records the summary on the
-  // SyncBatch, then dispatches the dashboard/scraper sync (async,
-  // callback-driven). The email report is sent by finalizeSyncBatch once
-  // both services have called back (or the sweeper finalizes a stale batch).
+  // bulkUpdate). Performs the DBMS update loop one row at a time; each
+  // successfully updated property is immediately synced to scraper +
+  // dashboard before moving to the next row. Live progress is persisted to
+  // Redis (via `job`) after every step so the frontend can poll it.
   private async runFullAsyncBulkUpdate(params: {
     file: Express.Multer.File
     user: IUserWithPermissions
-    batchId: string
-    filename: string
+    jobId: string
   }): Promise<void> {
-    const { file, user, batchId, filename } = params
-    const userEmail = user?.email ?? user?.id ?? 'unknown'
+    const { file, user, jobId } = params
+    const job = await this.getUploadJobStatus(jobId)
+    if (!job) return
 
     const buffer = file.buffer || (file as any).buffer
     const nameLower = file.originalname.toLowerCase()
@@ -2641,6 +2821,19 @@ export class PropertyService implements IPropertyService {
 
     // Tracks successfully updated properties for post-loop sync
     const syncQueue: Array<{ rowNumber: number; propertyId: string }> = []
+    // DBMS update happens strictly one row at a time; successfully updated
+    // properties are queued here and their scraper/dashboard sync is
+    // flushed in small concurrent batches (see processPropertySyncChunk).
+    const pendingSync: Array<{
+      item: UploadJobEntity
+      full: PropertyWithRelations
+    }> = []
+    const createdPortfolioIds: string[] = []
+    const createdSubportfolios: Array<{
+      id: string
+      name: string
+      portfolio_id: string
+    }> = []
 
     // Helper to find a column value with flexible header matching (case-insensitive, strips asterisks)
     const findValue = (
@@ -2765,11 +2958,109 @@ export class PropertyService implements IPropertyService {
 
       result.totalRows = data.length
 
+      // ── Pre-pass: dedupe portfolios referenced in the file and set up the
+      // live job document before touching any row ─────────────────────────
+      const uniquePortfolioNames = [
+        ...new Set(
+          data
+            .map(r => findValue(r, ['Portfolio', 'Portfolio Name', 'Portfolio name']))
+            .filter((v): v is string => !!v)
+        )
+      ]
+      job.portfolios.items = uniquePortfolioNames.map(name =>
+        this.newUploadJobEntity(name, null)
+      )
+      job.portfolios.total = job.portfolios.items.length
+      job.properties.items = data.map((r, i) => {
+        const label =
+          findValue(r, ['Property Identifier', 'Property identifier', 'Identifier']) ||
+          findValue(r, ['Property Name', 'Property name', 'Name']) ||
+          'Unknown'
+        return this.newUploadJobEntity(label, i + 2)
+      })
+      job.properties.total = job.properties.items.length
+      job.status = 'processing_portfolios'
+      await this.saveUploadJob(job)
+
+      await this.processPortfolioPhase(job)
+
+      job.status = 'processing_properties'
+      await this.saveUploadJob(job)
+
       // Fetch accessible IDs once for the whole batch
       const accessibleIds = await this.repo.getAccessiblePropertyIds(user.id)
       const seenIdentifiersInBatch = new Set<string>()
 
+      // Reads what the (unchanged) per-row loop below just recorded on
+      // `result`/`syncQueue` for row `rowIndex` and finalizes its job entry —
+      // on success, immediately syncing that one property to scraper +
+      // dashboard before the next row starts. Called at the top of every
+      // loop iteration (for the previous row) and once more after the loop
+      // ends (for the last row), so it never runs while `continue` is mid-row.
+      let checkpointErrorsLen = result.errors.length
+      let checkpointSuccessCount = result.successCount
+      const finalizeRowStatus = async (rowIndex: number): Promise<void> => {
+        const item = job.properties.items[rowIndex]
+        if (!item) return
+
+        if (result.successCount > checkpointSuccessCount) {
+          item.dbms = { state: 'created' }
+
+          const queued = syncQueue[syncQueue.length - 1]
+          let full: PropertyWithRelations | null = null
+          let loadError: string | null = null
+          try {
+            full = queued
+              ? await withTimeout(
+                  this.repo.findById(queued.propertyId),
+                  UPLOAD_JOB_DB_TIMEOUT_MS,
+                  `findById(row ${rowIndex + 2})`
+                )
+              : null
+          } catch (e: any) {
+            // A transient DB error (or a hang on a stale pooled connection —
+            // Prisma's Mongo connector doesn't support socketTimeoutMS, hence
+            // withTimeout) fetching the full row for sync shouldn't abort
+            // every remaining row in the job — just mark this one unsynced.
+            loadError = `Failed to load property after update: ${e?.message ?? String(e)}`
+          }
+          if (full) {
+            item.dashboard.state = 'processing'
+            item.scraper.state = 'processing'
+            pendingSync.push({ item, full })
+          } else {
+            const reason = loadError ?? 'Property not found after update'
+            item.dashboard = { state: 'failed', reason }
+            item.scraper = { state: 'failed', reason }
+          }
+        } else if (result.errors.length > checkpointErrorsLen) {
+          const lastError = result.errors[result.errors.length - 1]
+          item.dbms = { state: 'failed', reason: lastError.error }
+          item.scraper = { state: 'skipped', reason: 'DBMS failed' }
+          item.dashboard = { state: 'skipped', reason: 'DBMS failed' }
+        } else {
+          item.dbms = { state: 'failed', reason: 'Unknown outcome' }
+          item.scraper = { state: 'skipped', reason: 'DBMS failed' }
+          item.dashboard = { state: 'skipped', reason: 'DBMS failed' }
+        }
+
+        checkpointErrorsLen = result.errors.length
+        checkpointSuccessCount = result.successCount
+        await this.saveUploadJob(job)
+
+        if (pendingSync.length >= UPLOAD_JOB_SYNC_CHUNK_SIZE) {
+          await this.processPropertySyncChunk(
+            job,
+            pendingSync.splice(0, pendingSync.length)
+          )
+        }
+      }
+
       for (let i = 0; i < data.length; i++) {
+        if (i > 0) await finalizeRowStatus(i - 1)
+        job.properties.items[i].dbms.state = 'processing'
+        await this.saveUploadJob(job)
+
         const row = data[i]
         const rowNumber = i + 2 // Row 1 is the header in Excel
 
@@ -2804,21 +3095,29 @@ export class PropertyService implements IPropertyService {
           const rowLabel = normalizedRowIdentifier ?? propertyName!
 
           if (normalizedRowIdentifier) {
-            existingProperty = await this.prisma.property.findFirst({
-              where: {
-                property_identifier: {
-                  equals: normalizedRowIdentifier,
-                  mode: 'insensitive'
+            existingProperty = await withTimeout(
+              this.prisma.property.findFirst({
+                where: {
+                  property_identifier: {
+                    equals: normalizedRowIdentifier,
+                    mode: 'insensitive'
+                  }
                 }
-              }
-            })
+              }),
+              UPLOAD_JOB_DB_TIMEOUT_MS,
+              `findFirst by identifier (row ${rowNumber})`
+            )
             if (existingProperty) {
               matchedByIdentifier = true
             }
           }
 
           if (!existingProperty && propertyName) {
-            existingProperty = await this.repo.findByName(propertyName)
+            existingProperty = await withTimeout(
+              this.repo.findByName(propertyName),
+              UPLOAD_JOB_DB_TIMEOUT_MS,
+              `findByName (row ${rowNumber})`
+            )
           }
 
           if (!existingProperty) {
@@ -3111,19 +3410,24 @@ export class PropertyService implements IPropertyService {
             'Portfolio name'
           ])
           if (portfolioName) {
-            const portfolio = await this.prisma.portfolio.findFirst({
-              where: { name: portfolioName }
-            })
-            if (!portfolio) {
+            const portfolioResult = await withTimeout(
+              this.repo.resolveOrCreatePortfolio(portfolioName),
+              UPLOAD_JOB_DB_TIMEOUT_MS,
+              `resolveOrCreatePortfolio(row ${rowNumber})`
+            )
+            if ('error' in portfolioResult) {
               result.errors.push({
                 row: rowNumber,
                 propertyName: existingProperty.name,
-                error: `Portfolio not found: ${portfolioName}`
+                error: portfolioResult.error
               })
               result.failureCount++
               continue
             }
-            updateData.portfolio_id = portfolio.id
+            if (portfolioResult.created) {
+              createdPortfolioIds.push(portfolioResult.id)
+            }
+            updateData.portfolio_id = portfolioResult.id
           }
 
           const subportfolioName = findValue(row, [
@@ -3144,33 +3448,28 @@ export class PropertyService implements IPropertyService {
               continue
             }
             const subName = subportfolioName.trim()
-            let subportfolio = await this.prisma.subportfolio.findUnique({
-              where: { name: subName }
-            })
-            if (!subportfolio) {
-              try {
-                subportfolio = await this.prisma.subportfolio.create({
-                  data: { name: subName, portfolio_id: portfolioId }
-                })
-              } catch (err: any) {
-                result.errors.push({
-                  row: rowNumber,
-                  propertyName: existingProperty.name,
-                  error: `Error creating subportfolio: ${err.message}`
-                })
-                result.failureCount++
-                continue
-              }
-            } else if (subportfolio.portfolio_id !== portfolioId) {
+            const subResult = await withTimeout(
+              this.repo.resolveOrCreateSubportfolio(subName, portfolioId),
+              UPLOAD_JOB_DB_TIMEOUT_MS,
+              `resolveOrCreateSubportfolio(row ${rowNumber})`
+            )
+            if ('error' in subResult) {
               result.errors.push({
                 row: rowNumber,
                 propertyName: existingProperty.name,
-                error: `Subportfolio "${subName}" belongs to a different portfolio`
+                error: subResult.error
               })
               result.failureCount++
               continue
             }
-            updateData.subportfolio_id = subportfolio.id
+            if (subResult.created) {
+              createdSubportfolios.push({
+                id: subResult.id,
+                name: subName,
+                portfolio_id: portfolioId
+              })
+            }
+            updateData.subportfolio_id = subResult.id
           }
 
           // Case management contact
@@ -3909,7 +4208,11 @@ export class PropertyService implements IPropertyService {
               continue
             }
 
-            await this.repo.update(propertyId, updateData)
+            await withTimeout(
+              this.repo.update(propertyId, updateData),
+              UPLOAD_JOB_DB_TIMEOUT_MS,
+              `update property (row ${rowNumber})`
+            )
           }
 
           // Apply credentials update
@@ -3948,18 +4251,29 @@ export class PropertyService implements IPropertyService {
               credentialsData.agodaSecondaryPassword =
                 this.encryptionUtil.encrypt(agodaSecondaryPassword)
 
-            const existingCredentials =
-              await this.credentialsService.findByPropertyId(propertyId)
+            const existingCredentials = await withTimeout(
+              this.credentialsService.findByPropertyId(propertyId),
+              UPLOAD_JOB_DB_TIMEOUT_MS,
+              `findByPropertyId (row ${rowNumber})`
+            )
             if (existingCredentials) {
-              await this.credentialsService.update(
-                existingCredentials.id,
-                credentialsData
+              await withTimeout(
+                this.credentialsService.update(
+                  existingCredentials.id,
+                  credentialsData
+                ),
+                UPLOAD_JOB_DB_TIMEOUT_MS,
+                `update credentials (row ${rowNumber})`
               )
             } else {
-              await this.credentialsService.create({
-                ...credentialsData,
-                property_id: propertyId
-              })
+              await withTimeout(
+                this.credentialsService.create({
+                  ...credentialsData,
+                  property_id: propertyId
+                }),
+                UPLOAD_JOB_DB_TIMEOUT_MS,
+                `create credentials (row ${rowNumber})`
+              )
             }
           }
 
@@ -3990,166 +4304,32 @@ export class PropertyService implements IPropertyService {
           result.failureCount++
         }
       }
+      if (data.length > 0) await finalizeRowStatus(data.length - 1)
+      await this.processPropertySyncChunk(
+        job,
+        pendingSync.splice(0, pendingSync.length)
+      )
 
-      // ── Post-loop: record DBMS summary, then dispatch to dashboard + scraper ──
-      await this.prisma.syncBatch.update({
-        where: { batch_id: batchId },
-        data: {
-          dbms_summary: {
-            status: 'imported',
-            updated: result.successCount,
-            failed: result.failureCount,
-            total: result.totalRows
-          } as any
-        }
-      })
-
-      if (syncQueue.length > 0) {
-        this.syncLogger.step(
-          `🔄 BULK UPDATE + SYNC START — ${syncQueue.length} properties queued for sync (batch ${batchId})`
-        )
-        const updateRows = await Promise.all(
-          syncQueue.map(async ({ rowNumber, propertyId }) => {
-            const p = (await this.repo.findById(
-              propertyId
-            )) as PropertyWithRelations | null
-            return { rowNumber, propertyId, property: p }
-          })
-        )
-
-        const dbmsErrors = result.errors.map(e => ({
-          row: e.row,
-          name: e.propertyName,
-          reason: e.error
-        }))
-
-        // We're already running in the background, so dispatch directly
-        // (no extra setImmediate). Dashboard/scraper process in the
-        // background and POST results to /api/property/sync-callback; the
-        // email is sent once both report (or the sweeper finalizes a stale
-        // batch).
-        await this.runAsyncBulkUpdateDispatch({
-          batchId,
-          userEmail,
-          updateRows,
-          dbmsErrors,
-          filename
-        })
-
-        this.syncLogger.success(
-          `🔄 BULK UPDATE dispatched — ${updateRows.length} properties (batch ${batchId})`
-        )
-      } else {
-        // Nothing to sync — mark the batch complete immediately.
-        await this.prisma.syncBatch.update({
-          where: { batch_id: batchId },
-          data: { status: 'complete', completed_at: new Date() }
-        })
-        this.syncLogger.warn(
-          `[async] batch ${batchId} — no properties queued for sync`
-        )
-      }
+      job.status = 'complete'
+      job.completedAt = new Date().toISOString()
+      await this.saveUploadJob(job)
 
       if (result.successCount > 0) {
         this.scheduleCacheWarm(user)
       }
+      await this.sendUploadJobReportEmail(job)
     } catch (error) {
       // We're in the background — can't throw to the caller. Record the
-      // failure on the batch and notify by email so the user isn't left
-      // waiting for a report that will never arrive.
+      // failure on the job so the frontend (polling) surfaces it.
       const reason =
         error instanceof Error ? error.message : 'Unknown error occurred'
-      this.syncLogger.error(
-        `[async] bulk-update failed for batch ${batchId}: ${reason}`
-      )
-      await this.prisma.syncBatch.update({
-        where: { batch_id: batchId },
-        data: {
-          status: 'failed',
-          dbms_summary: { status: 'failed', error: reason } as any,
-          completed_at: new Date()
-        }
-      })
-      this.sendSyncBatchFailureEmail(userEmail, filename, batchId, error).catch(
-        e =>
-          this.syncLogger.error(
-            `[async] failure email for batch ${batchId} failed: ${e?.message ?? e}`
-          )
-      )
+      this.syncLogger.error(`[async] bulk-update job ${jobId} failed: ${reason}`)
+      job.status = 'failed'
+      job.error = reason
+      job.completedAt = new Date().toISOString()
+      await this.saveUploadJob(job)
+      await this.sendUploadJobReportEmail(job)
     }
-  }
-
-  // Bulk-update variant of runAsyncSyncDispatch: builds items + per-row context
-  // from the already-updated properties, updates the existing SyncBatch, and
-  // dispatches to dashboard/scraper (async, callback-driven). Runs in the
-  // background.
-  private async runAsyncBulkUpdateDispatch(params: {
-    batchId: string
-    userEmail: string
-    updateRows: Array<{
-      rowNumber: number
-      propertyId: string
-      property: PropertyWithRelations | null
-    }>
-    dbmsErrors: Array<{ row: number; name: string; reason: string }>
-    filename: string
-  }): Promise<void> {
-    const { batchId, userEmail, updateRows, dbmsErrors, filename } = params
-
-    const scraperBulkItems = (
-      await Promise.all(
-        updateRows.map(async ({ property, rowNumber }) =>
-          property ? this.buildScraperBulkUpsertItem(property, rowNumber) : null
-        )
-      )
-    ).filter((item): item is Record<string, unknown> => item !== null)
-    this.syncLogger.info(
-      `Scraper items: ${scraperBulkItems.length}/${updateRows.length} eligible`
-    )
-
-    const dashboardBulkItems = (
-      await Promise.all(
-        updateRows.map(async ({ property, rowNumber }) =>
-          property
-            ? this.buildDashboardBulkUpsertItem(property, rowNumber)
-            : null
-        )
-      )
-    ).filter((item): item is Record<string, unknown> => item !== null)
-    this.syncLogger.info(
-      `Dashboard items: ${dashboardBulkItems.length}/${updateRows.length} eligible; ${updateRows.length - dashboardBulkItems.length} will use single-property fallback`
-    )
-
-    const rowContext = updateRows
-      .filter(({ property }) => !!property)
-      .map(({ propertyId, rowNumber, property: p }) => ({
-        parentId: propertyId,
-        row: rowNumber,
-        action: 'updated' as const,
-        name: (p as PropertyWithRelations).name,
-        identifier: String(
-          (p as any).expedia_id ??
-            (p as any).booking_id ??
-            (p as any).agoda_id ??
-            propertyId
-        ),
-        portfolioName: (p as any).portfolio?.name ?? '',
-        expediaId: (p as any).expedia_id ?? null,
-        bookingId: (p as any).booking_id ?? null,
-        agodaId: (p as any).agoda_id ?? null,
-        hasPortfolioId: !!(p as any).portfolio_id
-      }))
-
-    await this.dispatchAsyncSyncBatch({
-      batchId,
-      source: 'bulk-update',
-      userEmail,
-      rows: rowContext,
-      skippedRows: dbmsErrors,
-      scraperItems: scraperBulkItems,
-      dashboardItems: dashboardBulkItems,
-      filename
-    })
   }
 
   async bulkDelete(
@@ -4409,7 +4589,7 @@ export class PropertyService implements IPropertyService {
     const portfolioIdSet = new Set<string>()
     const subportfolioMap = new Map<
       string,
-      { id: string; name: string; portfolio_id: string }
+      { id: string; name: string; portfolio_id: string | null }
     >()
     const serviceTypeMap = new Map<string, any>()
     const currencyMap = new Map<string, any>()
@@ -5014,1027 +5194,10 @@ export class PropertyService implements IPropertyService {
     }
   }
 
-  private async buildScraperBulkUpsertItem(
-    property: PropertyWithRelations,
-    row: number
-  ): Promise<Record<string, unknown> | null> {
-    if (!property.portfolio_id) return null
-
-    const credentials = await this.credentialsService.findByPropertyId(
-      property.id
-    )
-
-    return {
-      row,
-      parent_id: property.id,
-      portfolio_parent_id: property.portfolio_id,
-      name: property.name,
-      ...(property.expedia_id != null
-        ? { expedia_id: property.expedia_id }
-        : {}),
-      ...(property.booking_id != null
-        ? { booking_id: property.booking_id }
-        : {}),
-      ...(property.agoda_id != null ? { agoda_id: property.agoda_id } : {}),
-      ...(credentials?.expediaUsername
-        ? { expedia_username: credentials.expediaUsername }
-        : {}),
-      ...(credentials?.expediaPassword
-        ? {
-            expedia_password: this.decryptCredentialValue(
-              credentials.expediaPassword
-            )
-          }
-        : {}),
-      ...(credentials?.agodaUsername
-        ? { agoda_username: credentials.agodaUsername }
-        : {}),
-      ...(credentials?.agodaPassword
-        ? {
-            agoda_password: this.decryptCredentialValue(
-              credentials.agodaPassword
-            )
-          }
-        : {}),
-      ...(credentials?.bookingUsername
-        ? { booking_username: credentials.bookingUsername }
-        : {}),
-      ...(credentials?.bookingPassword
-        ? {
-            booking_password: this.decryptCredentialValue(
-              credentials.bookingPassword
-            )
-          }
-        : {})
-    }
-  }
-
-  private resolveParserBulkUpsertResult(
-    parentId: string,
-    bulkResult: {
-      errors?: Array<{ parent_id: string; error: string }>
-      successfulUpserts?: Array<{ parent_id: string; action: string }>
-    } | null,
-    hasPortfolio: boolean
-  ): { success: boolean; reason?: string } {
-    if (!hasPortfolio) {
-      return {
-        success: false,
-        reason: 'Property has no portfolio_id — cannot sync to scraper'
-      }
-    }
-    if (!this.scraperJwtClient) {
-      return {
-        success: false,
-        reason:
-          'Scraper JWT client disabled — URL or JWT_COMMUNICATION_SECRET missing'
-      }
-    }
-    if (!bulkResult) {
-      return {
-        success: false,
-        reason: 'Scraper bulk upsert was not attempted or failed entirely'
-      }
-    }
-
-    const rowError = bulkResult.errors?.find(e => e.parent_id === parentId)
-    if (rowError) {
-      return { success: false, reason: rowError.error }
-    }
-
-    if (bulkResult.successfulUpserts?.some(u => u.parent_id === parentId)) {
-      return { success: true }
-    }
-
-    return {
-      success: false,
-      reason: 'Property was not reported in scraper bulk upsert response'
-    }
-  }
-
-  private async syncBulkUpsertToScraper(
-    items: Record<string, unknown>[]
-  ): Promise<{
-    data: {
-      totalRows: number
-      createdCount: number
-      updatedCount: number
-      failureCount: number
-      errors: Array<{ row: number; parent_id: string; error: string }>
-      successfulUpserts: Array<{
-        parent_id: string
-        action: 'created' | 'updated'
-      }>
-    } | null
-    error?: string
-  }> {
-    if (!items.length) return { data: null }
-
-    if (!this.scraperJwtClient) {
-      const reason =
-        'Scraper JWT client disabled — URL or JWT_COMMUNICATION_SECRET missing'
-      this.logger.warn(`[sync] ${reason}`)
-      return { data: null, error: reason }
-    }
-
-    try {
-      const r = await this.scraperJwtClient.post(
-        '/properties/sync-bulk-upsert',
-        items,
-        { headers: this.syncCommunication.createAuthHeaders() }
-      )
-      const data = r.data?.data ?? r.data
-      this.logger.log(
-        `[sync] scraper property sync-bulk-upsert: ${JSON.stringify(data)}`
-      )
-      return { data }
-    } catch (e: any) {
-      const reason = this.extractSyncErrorReason(e)
-      this.logger.error(
-        `[sync] scraper property sync-bulk-upsert failed: ${reason}`
-      )
-      return { data: null, error: reason }
-    }
-  }
-
-  // Send scraper bulk-upsert items in chunks with bounded concurrency and a
-  // single retry per chunk. Mirrors runDashboardBulkUpsertChunked so the
-  // scraper sync no longer relies on one giant HTTP call that exceeds the
-  // sync timeout for large batches.
-  private async runScraperBulkUpsertChunked(
-    items: Record<string, unknown>[]
-  ): Promise<{
-    errors: Array<{ row: number; parent_id: string; error: string }>
-    successfulUpserts: Array<{
-      parent_id: string
-      action: 'created' | 'updated'
-    }>
-  } | null> {
-    if (!items.length) return null
-
-    const size = Math.max(1, this.scraperBulkChunkSize)
-    const concurrency = Math.max(1, this.scraperBulkConcurrency)
-
-    const chunks: Record<string, unknown>[][] = []
-    for (let i = 0; i < items.length; i += size) {
-      chunks.push(items.slice(i, i + size))
-    }
-
-    this.syncLogger.info(
-      `[scraper] chunking ${items.length} items → ${chunks.length} chunks (size=${size}, concurrency=${concurrency})`
-    )
-
-    const merged = {
-      errors: [] as Array<{ row: number; parent_id: string; error: string }>,
-      successfulUpserts: [] as Array<{
-        parent_id: string
-        action: 'created' | 'updated'
-      }>
-    }
-
-    let cursor = 0
-    const worker = async () => {
-      while (cursor < chunks.length) {
-        const myIndex = cursor++
-        const chunk = chunks[myIndex]
-
-        let chunkData: {
-          errors: Array<{ row: number; parent_id: string; error: string }>
-          successfulUpserts: Array<{
-            parent_id: string
-            action: 'created' | 'updated'
-          }>
-        } | null = null
-        let lastReason = 'unknown error'
-
-        const chunkStart = Date.now()
-        for (let attempt = 0; attempt < 2; attempt++) {
-          const { data, error } = await this.syncBulkUpsertToScraper(chunk)
-          if (data) {
-            chunkData = data
-            break
-          }
-          lastReason = error ?? 'unknown error'
-          if (attempt === 0) {
-            this.syncLogger.warn(
-              `[scraper] chunk #${myIndex + 1} failed (${lastReason}) — retrying...`
-            )
-            await new Promise(r => setTimeout(r, 500))
-          }
-        }
-
-        if (chunkData) {
-          if (Array.isArray(chunkData.errors))
-            merged.errors.push(...chunkData.errors)
-          if (Array.isArray(chunkData.successfulUpserts))
-            merged.successfulUpserts.push(...chunkData.successfulUpserts)
-          this.syncLogger.info(
-            `[scraper] chunk #${myIndex + 1} ok — +${chunkData.successfulUpserts?.length ?? 0} ok, ${chunkData.errors?.length ?? 0} err (${Date.now() - chunkStart}ms)`
-          )
-        } else {
-          for (const it of chunk) {
-            const row = (it as any).row ?? 0
-            const pid = (it as any).parent_id ?? 'Unknown'
-            merged.errors.push({
-              row,
-              parent_id: pid,
-              error: `Scraper chunk sync failed: ${lastReason}`
-            })
-          }
-          this.syncLogger.error(
-            `[scraper] chunk #${myIndex + 1} FAILED after retry — ${chunk.length} items marked failed (${lastReason})`
-          )
-        }
-      }
-    }
-
-    await Promise.all(
-      Array.from({ length: Math.min(concurrency, chunks.length) }, () =>
-        worker()
-      )
-    )
-
-    return merged
-  }
-
-  private async buildDashboardBulkUpsertItem(
-    property: PropertyWithRelations,
-    row: number
-  ): Promise<Record<string, unknown> | null> {
-    // The dashboard bulk endpoint requires both expedia_id and
-    // portfolio_parent_id (non-empty). Properties missing either are
-    // excluded from the bulk path and synced via the single-property path
-    // to preserve existing behavior for those edge cases.
-    if (!property.expedia_id || !property.portfolio_id) return null
-
-    const credentials = await this.credentialsService.findByPropertyId(
-      property.id
-    )
-
-    return {
-      row,
-      parent_id: property.id,
-      name: property.name,
-      address: property.hotel_address || 'N/A',
-      currency: property.currency?.code ?? 'USD',
-      ...(property.card_descriptor
-        ? { card_descriptor: property.card_descriptor }
-        : {}),
-      portfolio_parent_id: property.portfolio_id,
-      is_active: property.is_active,
-      expedia_id: String(property.expedia_id),
-      ...(credentials?.expediaUsername
-        ? { expedia_username: credentials.expediaUsername }
-        : {}),
-      ...(credentials?.expediaPassword
-        ? {
-            expedia_password: this.decryptCredentialValue(
-              credentials.expediaPassword
-            )
-          }
-        : {}),
-      ...(property.agoda_id != null
-        ? { agoda_id: String(property.agoda_id) }
-        : {}),
-      ...(credentials?.agodaUsername
-        ? { agoda_username: credentials.agodaUsername }
-        : {}),
-      ...(credentials?.agodaPassword
-        ? {
-            agoda_password: this.decryptCredentialValue(
-              credentials.agodaPassword
-            )
-          }
-        : {}),
-      ...(property.booking_id != null
-        ? { booking_id: String(property.booking_id) }
-        : {}),
-      ...(credentials?.bookingUsername
-        ? { booking_username: credentials.bookingUsername }
-        : {}),
-      ...(credentials?.bookingPassword
-        ? {
-            booking_password: this.decryptCredentialValue(
-              credentials.bookingPassword
-            )
-          }
-        : {})
-    }
-  }
-
-  private async syncBulkUpsertToDashboard(
-    items: Record<string, unknown>[]
-  ): Promise<{
-    data: {
-      totalRows: number
-      createdCount: number
-      updatedCount: number
-      failureCount: number
-      errors: Array<{ row: number; parent_id: string; error: string }>
-      successfulUpserts: Array<{
-        parent_id: string
-        action: 'created' | 'updated'
-      }>
-    } | null
-    error?: string
-  }> {
-    if (!items.length) return { data: null }
-
-    if (!this.dashboardJwtClient) {
-      const reason =
-        'Dashboard JWT client disabled — URL or JWT_COMMUNICATION_SECRET missing'
-      this.logger.warn(`[sync] ${reason}`)
-      return { data: null, error: reason }
-    }
-
-    try {
-      const r = await this.dashboardJwtClient.post(
-        '/api/property/sync-bulk-upsert',
-        items,
-        { headers: this.syncCommunication.createAuthHeaders() }
-      )
-      const data = r.data?.data ?? r.data
-      this.logger.log(
-        `[sync] dashboard property sync-bulk-upsert: ${JSON.stringify(data)}`
-      )
-      return { data }
-    } catch (e: any) {
-      const reason = this.extractSyncErrorReason(e)
-      this.logger.error(
-        `[sync] dashboard property sync-bulk-upsert failed: ${reason}`
-      )
-      return { data: null, error: reason }
-    }
-  }
-
-  // Send dashboard bulk-upsert items in chunks with bounded concurrency and
-  // a single retry per chunk. Merges per-row results from all chunks into one
-  // aggregate object so callers can resolve per-property outcomes exactly
-  // like the scraper bulk path.
-  private async runDashboardBulkUpsertChunked(
-    items: Record<string, unknown>[]
-  ): Promise<{
-    errors: Array<{ row: number; parent_id: string; error: string }>
-    successfulUpserts: Array<{
-      parent_id: string
-      action: 'created' | 'updated'
-    }>
-  } | null> {
-    if (!items.length) return null
-
-    const size = Math.max(1, this.dashboardBulkChunkSize)
-    const concurrency = Math.max(1, this.dashboardBulkConcurrency)
-
-    const chunks: Record<string, unknown>[][] = []
-    for (let i = 0; i < items.length; i += size) {
-      chunks.push(items.slice(i, i + size))
-    }
-
-    this.syncLogger.info(
-      `[dashboard] chunking ${items.length} items → ${chunks.length} chunks (size=${size}, concurrency=${concurrency})`
-    )
-
-    const merged = {
-      errors: [] as Array<{ row: number; parent_id: string; error: string }>,
-      successfulUpserts: [] as Array<{
-        parent_id: string
-        action: 'created' | 'updated'
-      }>
-    }
-
-    let cursor = 0
-    const worker = async () => {
-      while (cursor < chunks.length) {
-        const myIndex = cursor++
-        const chunk = chunks[myIndex]
-
-        let chunkData: {
-          errors: Array<{ row: number; parent_id: string; error: string }>
-          successfulUpserts: Array<{
-            parent_id: string
-            action: 'created' | 'updated'
-          }>
-        } | null = null
-        let lastReason = 'unknown error'
-
-        const chunkStart = Date.now()
-        for (let attempt = 0; attempt < 2; attempt++) {
-          const { data, error } = await this.syncBulkUpsertToDashboard(chunk)
-          if (data) {
-            chunkData = data
-            break
-          }
-          lastReason = error ?? 'unknown error'
-          if (attempt === 0) {
-            this.syncLogger.warn(
-              `[dashboard] chunk #${myIndex + 1} failed (${lastReason}) — retrying...`
-            )
-            await new Promise(r => setTimeout(r, 500))
-          }
-        }
-
-        if (chunkData) {
-          if (Array.isArray(chunkData.errors))
-            merged.errors.push(...chunkData.errors)
-          if (Array.isArray(chunkData.successfulUpserts))
-            merged.successfulUpserts.push(...chunkData.successfulUpserts)
-          this.syncLogger.info(
-            `[dashboard] chunk #${myIndex + 1} ok — +${chunkData.successfulUpserts?.length ?? 0} ok, ${chunkData.errors?.length ?? 0} err (${Date.now() - chunkStart}ms)`
-          )
-        } else {
-          for (const it of chunk) {
-            const row = (it as any).row ?? 0
-            const pid = (it as any).parent_id ?? 'Unknown'
-            merged.errors.push({
-              row,
-              parent_id: pid,
-              error: `Dashboard chunk sync failed: ${lastReason}`
-            })
-          }
-          this.syncLogger.error(
-            `[dashboard] chunk #${myIndex + 1} FAILED after retry — ${chunk.length} items marked failed (${lastReason})`
-          )
-        }
-      }
-    }
-
-    await Promise.all(
-      Array.from({ length: Math.min(concurrency, chunks.length) }, () =>
-        worker()
-      )
-    )
-
-    return merged
-  }
-
-  // ─── Async callback sync (long-term solution) ────────────────────────────
-  // The DBMS no longer blocks on dashboard/scraper sync results. After its own
-  // import/update it persists a SyncBatch (unique batchId + compact per-row
-  // context), dispatches bulk items to dashboard/scraper with that batchId, and
-  // returns to the caller immediately. Dashboard/scraper process in the
-  // background and POST per-row results to POST /api/property/sync-callback.
-  // Once both expected sources report (or the sweeper gives up on a stale
-  // batch), the DBMS reconstructs the per-row report, builds the defect Excel,
-  // and sends the email — matching the previous synchronous report, deferred.
-
-  private readonly syncBatchStaleMs = parseInt(
-    process.env.SYNC_BATCH_STALE_MS || '600000',
-    10
-  )
-
-  private buildSyncBatchRowContext(
-    importRows: Array<{ property: PropertyWithRelations; row: number }>,
-    skippedNames: Set<string>
-  ): Array<{
-    parentId: string
-    row: number
-    action: 'created' | 'updated'
-    name: string
-    identifier: string
-    portfolioName: string
-    expediaId: string | number | null
-    bookingId: string | number | null
-    agodaId: string | number | null
-    hasPortfolioId: boolean
-  }> {
-    return importRows.map(({ property: p, row }) => ({
-      parentId: p.id,
-      row,
-      action: skippedNames.has(p.name) ? 'updated' : 'created',
-      name: p.name,
-      identifier: String(p.expedia_id ?? p.booking_id ?? p.agoda_id ?? p.id),
-      portfolioName: (p as any).portfolio?.name ?? '',
-      expediaId: (p as any).expedia_id ?? null,
-      bookingId: (p as any).booking_id ?? null,
-      agodaId: (p as any).agoda_id ?? null,
-      hasPortfolioId: !!p.portfolio_id
-    }))
-  }
-
-  private async dispatchAsyncSyncBatch(params: {
-    batchId: string
-    source: 'import' | 'bulk-update'
-    userEmail: string
-    rows: ReturnType<PropertyService['buildSyncBatchRowContext']>
-    skippedRows: Array<{ row: number; name: string; reason: string }>
-    scraperItems: Record<string, unknown>[]
-    dashboardItems: Record<string, unknown>[]
-    filename: string
-  }): Promise<string> {
-    const batchId = params.batchId
-    const dbmsApiUrl = this.config.get('dbmsApiUrl', { infer: true }) ?? ''
-    const callbackUrl = dbmsApiUrl
-      ? `${dbmsApiUrl.replace(/\/$/, '')}/api/property/sync-callback`
-      : ''
-
-    // The batch was already created (pending, dbms_summary importing) when the
-    // request was accepted. Now that the DBMS import has produced the rows,
-    // store the per-row context so finalize can reconstruct the report.
-    await this.prisma.syncBatch.update({
-      where: { batch_id: batchId },
-      data: {
-        rows: params.rows as any,
-        skipped_rows: params.skippedRows as any
-      }
-    })
-
-    this.syncLogger.info(
-      `📦 Sync batch ${batchId} created — ${params.rows.length} rows, scraper items=${params.scraperItems.length}, dashboard items=${params.dashboardItems.length}, callback=${callbackUrl || '(none)'}`
-    )
-
-    const authHeaders = this.syncCommunication.createAuthHeaders()
-    const emptyResult: SyncBulkUpsertResponseDto = {
-      totalRows: 0,
-      createdCount: 0,
-      updatedCount: 0,
-      failureCount: 0,
-      errors: [],
-      successfulUpserts: []
-    }
-
-    // Scraper dispatch — only await the 202 ack; processing happens in the
-    // background on the scraper, which POSTs the result to callbackUrl.
-    if (params.scraperItems.length && this.scraperJwtClient) {
-      this.scraperJwtClient
-        .post(
-          '/properties/sync-bulk-upsert',
-          { items: params.scraperItems, batchId, callbackUrl },
-          { headers: authHeaders }
-        )
-        .then(r =>
-          this.syncLogger.info(
-            `[scraper] dispatch ack ${r.status} for batch ${batchId}`
-          )
-        )
-        .catch(e =>
-          this.syncLogger.error(
-            `[scraper] dispatch failed for batch ${batchId}: ${this.extractSyncErrorReason(e)} — sweeper will mark stale`
-          )
-        )
-    } else {
-      // No eligible items or scraper not configured — record empty result so
-      // the batch can still complete instead of waiting forever.
-      this.recordSyncCallbackInternal(batchId, 'scraper', emptyResult).catch(
-        e => this.logger.error(`[scraper] synthetic record failed: ${e}`)
-      )
-    }
-
-    // Dashboard dispatch — same pattern as scraper.
-    if (params.dashboardItems.length && this.dashboardJwtClient) {
-      this.dashboardJwtClient
-        .post(
-          '/api/property/sync-bulk-upsert',
-          { items: params.dashboardItems, batchId, callbackUrl },
-          { headers: authHeaders }
-        )
-        .then(r =>
-          this.syncLogger.info(
-            `[dashboard] dispatch ack ${r.status} for batch ${batchId}`
-          )
-        )
-        .catch(e =>
-          this.syncLogger.error(
-            `[dashboard] dispatch failed for batch ${batchId}: ${this.extractSyncErrorReason(e)} — sweeper will mark stale`
-          )
-        )
-    } else {
-      this.recordSyncCallbackInternal(batchId, 'dashboard', emptyResult).catch(
-        e => this.logger.error(`[dashboard] synthetic record failed: ${e}`)
-      )
-    }
-
-    return batchId
-  }
-
-  async recordSyncCallback(dto: {
-    batchId: string
-    source: 'dashboard' | 'scraper'
-    result: SyncBulkUpsertResponseDto
-  }): Promise<{ status: string; completed: boolean }> {
-    return this.recordSyncCallbackInternal(dto.batchId, dto.source, dto.result)
-  }
-
-  /// Query the status of a background sync batch by id. Used by the frontend
-  /// to poll progress after the import / bulk-update endpoints return
-  /// instantly with a batchId.
-  async getSyncBatchStatus(batchId: string): Promise<{
-    batchId: string
-    status: string
-    source?: string
-    userEmail?: string
-    filename?: string
-    dbmsSummary?: any
-    received?: any
-    createdAt?: Date
-    completedAt?: Date | null
-  }> {
-    const batch = await this.prisma.syncBatch.findUnique({
-      where: { batch_id: batchId }
-    })
-    if (!batch) {
-      throw new BadRequestException(`Sync batch ${batchId} not found`)
-    }
-    return {
-      batchId: batch.batch_id,
-      status: batch.status,
-      source: batch.source,
-      userEmail: batch.user_email,
-      filename: batch.filename,
-      dbmsSummary: batch.dbms_summary as any,
-      received: batch.received as any,
-      createdAt: batch.created_at,
-      completedAt: batch.completed_at
-    }
-  }
-
-  private async recordSyncCallbackInternal(
-    batchId: string,
-    source: 'dashboard' | 'scraper',
-    result: SyncBulkUpsertResponseDto
-  ): Promise<{ status: string; completed: boolean }> {
-    const batch = await this.prisma.syncBatch.findUnique({
-      where: { batch_id: batchId }
-    })
-    if (!batch) {
-      this.syncLogger.warn(
-        `[callback] batch ${batchId} not found (source=${source})`
-      )
-      return { status: 'not_found', completed: false }
-    }
-    if (batch.status === 'complete') {
-      return { status: 'already_complete', completed: true }
-    }
-
-    const received: Record<string, SyncBulkUpsertResponseDto> =
-      (batch.received as any) ?? {}
-    if (received[source]) {
-      // Idempotent: duplicate callback — keep the first result.
-      this.syncLogger.info(
-        `[callback] duplicate ${source} for batch ${batchId} — ignoring`
-      )
-      return { status: 'duplicate', completed: false }
-    }
-
-    received[source] = result
-    const haveAll = batch.expected.every(s => received[s])
-    // Use 'finalizing' (not 'complete') so finalizeSyncBatch's guard
-    // (which bails on 'complete') actually runs. finalize sets 'complete'
-    // at the end once the email has been sent.
-    const status = haveAll ? 'finalizing' : 'partial'
-
-    await this.prisma.syncBatch.update({
-      where: { id: batch.id },
-      data: { received: received as any, status }
-    })
-
-    this.syncLogger.info(
-      `[callback] ${source} recorded for batch ${batchId} — status=${status}`
-    )
-
-    if (haveAll) {
-      // Finalize in the background so the callback endpoint responds quickly.
-      this.finalizeSyncBatch(batch.id).catch(e =>
-        this.syncLogger.error(
-          `[finalize] batch ${batchId} failed: ${e?.message ?? e}`
-        )
-      )
-    }
-    return { status, completed: haveAll }
-  }
-
-  private async finalizeSyncBatch(batchDbId: string): Promise<void> {
-    const batch = await this.prisma.syncBatch.findUnique({
-      where: { id: batchDbId }
-    })
-    if (!batch || batch.status === 'complete') {
-      return
-    }
-
-    this.syncLogger.step(
-      `📧 Finalizing sync batch ${batch.batch_id} — building per-row report + sending email to ${batch.user_email}`
-    )
-
-    const received: Record<string, SyncBulkUpsertResponseDto> =
-      (batch.received as any) ?? {}
-    const rowsCtx: Array<{
-      parentId: string
-      row: number
-      action: 'created' | 'updated'
-      name: string
-      identifier: string
-      portfolioName: string
-      expediaId: string | number | null
-      bookingId: string | number | null
-      agodaId: string | number | null
-      hasPortfolioId: boolean
-    }> = (batch.rows as any) ?? []
-    const skippedRows: Array<{ row: number; name: string; reason: string }> =
-      (batch.skipped_rows as any) ?? []
-
-    const dashboardBulkResult = received.dashboard ?? null
-    const parserBulkResult = received.scraper ?? null
-
-    // Re-fetch the properties (with relations) so the existing resolve
-    // helpers — including the single-property fallback for ineligible rows —
-    // behave exactly as in the previous synchronous flow.
-    const properties = await this.repo.findByIds(rowsCtx.map(r => r.parentId))
-    const propertyMap = new Map(properties.map(p => [p.id, p]))
-
-    const rowResults: SyncBulkUpsertRowResult[] = await Promise.all(
-      rowsCtx.map(async ctx => {
-        const property = propertyMap.get(ctx.parentId)
-        if (!property) {
-          return {
-            row: ctx.row,
-            parent_id: ctx.parentId,
-            name: ctx.name,
-            identifier: ctx.identifier,
-            action: 'failed' as const,
-            dbms: false,
-            dashboard: {
-              success: false,
-              reason: 'Property not found during finalize'
-            },
-            parser: {
-              success: false,
-              reason: 'Property not found during finalize'
-            },
-            error: 'Property not found during finalize'
-          }
-        }
-        const dashboardResult = await this.resolveDashboardSyncResult(
-          property,
-          dashboardBulkResult
-        )
-        const parserResult = this.resolveParserBulkUpsertResult(
-          ctx.parentId,
-          parserBulkResult,
-          ctx.hasPortfolioId
-        )
-        return {
-          row: ctx.row,
-          parent_id: ctx.parentId,
-          name: ctx.name,
-          identifier: ctx.identifier,
-          action: ctx.action,
-          dbms: true,
-          dashboard: dashboardResult,
-          parser: parserResult
-        } as SyncBulkUpsertRowResult
-      })
-    )
-
-    const skippedResults: SyncBulkUpsertRowResult[] = skippedRows.map(s => ({
-      row: s.row,
-      parent_id: s.name,
-      name: s.name,
-      identifier: s.name,
-      action: 'failed' as const,
-      dbms: false,
-      dashboard: { success: false, reason: 'Skipped — DBMS error' },
-      parser: { success: false, reason: 'Skipped — DBMS error' },
-      error: s.reason
-    }))
-
-    const allRowResults = [...rowResults, ...skippedResults].sort(
-      (a, b) => a.row - b.row
-    )
-
-    await this.sendSyncBatchReportEmail(batch, allRowResults, rowsCtx)
-
-    await this.prisma.syncBatch.update({
-      where: { id: batch.id },
-      data: { status: 'complete', completed_at: new Date() }
-    })
-
-    const failedCount = allRowResults.filter(
-      r => !r.dbms || !r.dashboard.success || !r.parser.success
-    ).length
-    this.syncLogger.success(
-      `✅ SYNC BATCH ${batch.batch_id} FINALIZED — ${allRowResults.length} rows, ${failedCount} failed, email→${batch.user_email}`
-    )
-  }
-
-  private sendSyncBatchReportEmail(
-    batch: { user_email: string; filename: string },
-    allRowResults: SyncBulkUpsertRowResult[],
-    rowsCtx: Array<{
-      parentId: string
-      portfolioName: string
-      expediaId: string | number | null
-      bookingId: string | number | null
-      agodaId: string | number | null
-    }>
-  ): Promise<void> {
-    const ctxByParentId = new Map(rowsCtx.map(r => [r.parentId, r]))
-    const failedRows = allRowResults.filter(
-      r => !r.dbms || !r.dashboard.success || !r.parser.success
-    )
-    const defectiveRows = failedRows.map(r => {
-      const ctx = ctxByParentId.get(r.parent_id)
-      const reasons: string[] = []
-      if (r.error) reasons.push(r.error)
-      if (
-        !r.dashboard.success &&
-        r.dashboard.reason &&
-        r.dashboard.reason !== 'Skipped — DBMS error'
-      )
-        reasons.push(`Dashboard: ${r.dashboard.reason}`)
-      if (
-        !r.parser.success &&
-        r.parser.reason &&
-        r.parser.reason !== 'Skipped — DBMS error'
-      )
-        reasons.push(`Parser: ${r.parser.reason}`)
-      return {
-        Row: r.row,
-        'Property Name': r.name,
-        Identifier: r.identifier,
-        Portfolio: ctx?.portfolioName ?? '',
-        'Expedia ID': ctx?.expediaId ?? '',
-        'Booking ID': ctx?.bookingId ?? '',
-        'Agoda ID': ctx?.agodaId ?? '',
-        DBMS: r.dbms ? 'YES' : 'NO',
-        Dashboard: r.dashboard.success ? 'YES' : 'NO',
-        Parser: r.parser.success ? 'YES' : 'NO',
-        Reason: reasons.join('; ') || 'N/A'
-      }
-    })
-
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(
-      wb,
-      XLSX.utils.json_to_sheet(
-        defectiveRows.length
-          ? defectiveRows
-          : [{ note: 'All rows synced successfully' }]
-      ),
-      'Sync Results'
-    )
-    const excelBuffer = Buffer.from(
-      XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
-    )
-
-    return this.emailUtil
-      .sendBulkSyncResultEmail(
-        batch.user_email,
-        allRowResults,
-        excelBuffer,
-        batch.filename
-      )
-      .catch(e =>
-        this.logger.error(
-          `[email] sync batch report failed: ${e?.message ?? e}`
-        )
-      )
-  }
-
-  @Cron(CronExpression.EVERY_MINUTE)
-  async sweepStaleSyncBatches(): Promise<void> {
-    const staleBefore = new Date(Date.now() - this.syncBatchStaleMs)
-    const stale = await this.prisma.syncBatch.findMany({
-      where: {
-        // 'finalizing' is included so a batch whose finalize crashed (server
-        // restart mid-email) gets retried instead of stuck forever.
-        status: { in: ['pending', 'partial', 'finalizing'] },
-        created_at: { lt: staleBefore }
-      }
-    })
-    if (!stale.length) return
-
-    this.syncLogger.warn(
-      `[sweeper] ${stale.length} stale sync batch(es) — finalizing with missing sources marked failed`
-    )
-    const emptyResult: SyncBulkUpsertResponseDto = {
-      totalRows: 0,
-      createdCount: 0,
-      updatedCount: 0,
-      failureCount: 0,
-      errors: [],
-      successfulUpserts: []
-    }
-    for (const batch of stale) {
-      const dbmsSummary: { status?: string; error?: string } =
-        (batch.dbms_summary as any) ?? {}
-
-      // Case 1: the DBMS import itself never finished (e.g. the server
-      // restarted mid-import). There's no row context to build a per-row
-      // report from, so mark the batch failed and notify the user.
-      if (dbmsSummary.status === 'importing') {
-        this.syncLogger.warn(
-          `[sweeper] batch ${batch.batch_id} — DBMS import was interrupted (still "importing"); marking failed`
-        )
-        await this.prisma.syncBatch.update({
-          where: { id: batch.id },
-          data: {
-            status: 'failed',
-            dbms_summary: {
-              ...dbmsSummary,
-              status: 'failed',
-              error: 'DBMS import interrupted (server restart?)'
-            } as any,
-            completed_at: new Date()
-          }
-        })
-        this.sendSyncBatchFailureEmail(
-          batch.user_email,
-          batch.filename,
-          batch.batch_id,
-          new Error(
-            'The DBMS import was interrupted before it could finish (the server may have restarted). No properties were synced. Please re-upload the file.'
-          )
-        ).catch(e =>
-          this.syncLogger.error(
-            `[sweeper] failure email for batch ${batch.batch_id} failed: ${e?.message ?? e}`
-          )
-        )
-        continue
-      }
-
-      // Case 2: the DBMS import finished but one or both downstream services
-      // never called back. Fill missing sources with an empty (all-failed)
-      // result and finalize so the user still gets a report.
-      const received: Record<string, SyncBulkUpsertResponseDto> =
-        (batch.received as any) ?? {}
-      let changed = false
-      for (const source of batch.expected) {
-        if (!received[source]) {
-          received[source] = emptyResult
-          changed = true
-        }
-      }
-      if (changed) {
-        await this.prisma.syncBatch.update({
-          where: { id: batch.id },
-          data: { received: received as any, status: 'finalizing' }
-        })
-      }
-      this.finalizeSyncBatch(batch.id).catch(e =>
-        this.syncLogger.error(
-          `[sweeper] finalize batch ${batch.batch_id} failed: ${e?.message ?? e}`
-        )
-      )
-    }
-  }
-
-  private resolveDashboardBulkUpsertResult(
-    parentId: string,
-    bulkResult: {
-      errors?: Array<{ parent_id: string; error: string }>
-      successfulUpserts?: Array<{ parent_id: string; action: string }>
-    } | null
-  ): { success: boolean; reason?: string } {
-    if (!this.dashboardJwtClient) {
-      return {
-        success: false,
-        reason:
-          'Dashboard JWT client disabled — URL or JWT_COMMUNICATION_SECRET missing'
-      }
-    }
-    if (!bulkResult) {
-      return {
-        success: false,
-        reason: 'Dashboard bulk upsert was not attempted or failed entirely'
-      }
-    }
-
-    const rowError = bulkResult.errors?.find(e => e.parent_id === parentId)
-    if (rowError) {
-      return { success: false, reason: rowError.error }
-    }
-
-    if (bulkResult.successfulUpserts?.some(u => u.parent_id === parentId)) {
-      return { success: true }
-    }
-
-    return {
-      success: false,
-      reason: 'Property was not reported in dashboard bulk upsert response'
-    }
-  }
-
-  // Properties without expedia_id or portfolio_id are excluded from the bulk
-  // path (the dashboard bulk endpoint requires both). Fall back to the
-  // single-property sync for those so existing behavior is preserved.
-  private async resolveDashboardSyncResult(
-    property: PropertyWithRelations,
-    bulkResult: {
-      errors?: Array<{ parent_id: string; error: string }>
-      successfulUpserts?: Array<{ parent_id: string; action: string }>
-    } | null
-  ): Promise<{ success: boolean; reason?: string }> {
-    const eligibleForBulk = !!property.expedia_id && !!property.portfolio_id
-    if (!eligibleForBulk) {
-      return this.syncUpsertPropertyToDashboard(property).catch(e => ({
-        success: false,
-        reason: e?.message ?? String(e)
-      }))
-    }
-    return this.resolveDashboardBulkUpsertResult(property.id, bulkResult)
-  }
 
   private async syncUpsertPropertyToScraper(
-    property: PropertyWithRelations
+    property: PropertyWithRelations,
+    timeoutMs?: number
   ): Promise<{ success: boolean; reason?: string }> {
     if (!this.scraperJwtClient) {
       const reason =
@@ -6049,9 +5212,22 @@ export class PropertyService implements IPropertyService {
       return { success: false, reason }
     }
 
-    const credentials = await this.credentialsService.findByPropertyId(
-      property.id
-    )
+    // This method must never throw (it always returns { success, reason })
+    // since callers rely on that to keep processing the rest of an upload
+    // job — a transient DB error (e.g. a stale pooled connection after an
+    // idle gap) here shouldn't take down every remaining row.
+    let credentials: Awaited<
+      ReturnType<typeof this.credentialsService.findByPropertyId>
+    >
+    try {
+      credentials = await this.credentialsService.findByPropertyId(
+        property.id
+      )
+    } catch (e: any) {
+      const reason = `Failed to load credentials: ${e?.message ?? String(e)}`
+      this.logger.error(`[sync] scraper property upsert failed: ${reason}`)
+      return { success: false, reason }
+    }
 
     const safeDecrypt = (val: string | null | undefined): string => {
       if (!val) return ''
@@ -6065,6 +5241,12 @@ export class PropertyService implements IPropertyService {
     const payload = {
       name: property.name,
       portfolio_parent_id: property.portfolio_id,
+      ...(property.subportfolio_id
+        ? { sub_portfolio_parent_id: property.subportfolio_id }
+        : {}),
+      ...(property.subportfolio?.name
+        ? { sub_portfolio_name: property.subportfolio.name }
+        : {}),
       ...(property.expedia_id != null
         ? { expedia_id: property.expedia_id }
         : {}),
@@ -6096,7 +5278,10 @@ export class PropertyService implements IPropertyService {
       const r = await this.scraperJwtClient.post(
         `/properties/sync-upsert/${property.id}`,
         payload,
-        { headers: this.syncCommunication.createAuthHeaders() }
+        {
+          headers: this.syncCommunication.createAuthHeaders(),
+          ...(timeoutMs !== undefined ? { timeout: timeoutMs } : {})
+        }
       )
       this.logger.log(
         `[sync] scraper property upsert: ${JSON.stringify(r.data)}`
@@ -6248,7 +5433,8 @@ export class PropertyService implements IPropertyService {
   }
 
   private async syncUpsertPropertyToDashboard(
-    property: PropertyWithRelations
+    property: PropertyWithRelations,
+    timeoutMs?: number
   ): Promise<{ success: boolean; reason?: string }> {
     if (!this.dashboardJwtClient) {
       const reason =
@@ -6257,9 +5443,22 @@ export class PropertyService implements IPropertyService {
       return { success: false, reason }
     }
 
-    const credentials = await this.credentialsService.findByPropertyId(
-      property.id
-    )
+    // This method must never throw (it always returns { success, reason })
+    // since callers rely on that to keep processing the rest of an upload
+    // job — a transient DB error (e.g. a stale pooled connection after an
+    // idle gap) here shouldn't take down every remaining row.
+    let credentials: Awaited<
+      ReturnType<typeof this.credentialsService.findByPropertyId>
+    >
+    try {
+      credentials = await this.credentialsService.findByPropertyId(
+        property.id
+      )
+    } catch (e: any) {
+      const reason = `Failed to load credentials: ${e?.message ?? String(e)}`
+      this.logger.error(`[sync] dashboard property upsert failed: ${reason}`)
+      return { success: false, reason }
+    }
 
     const safeDecrypt = (val: string | null | undefined): string => {
       if (!val) return ''
@@ -6301,7 +5500,10 @@ export class PropertyService implements IPropertyService {
       const r = await this.dashboardJwtClient.post(
         `/api/property/sync-upsert/${property.id}`,
         payload,
-        { headers: this.syncCommunication.createAuthHeaders() }
+        {
+          headers: this.syncCommunication.createAuthHeaders(),
+          ...(timeoutMs !== undefined ? { timeout: timeoutMs } : {})
+        }
       )
       this.logger.log(
         `[sync] dashboard property upsert: ${JSON.stringify(r.data)}`

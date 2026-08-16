@@ -1,11 +1,11 @@
 import {
-  BadRequestException,
-  ConflictException,
-  Inject,
-  Injectable,
-  Logger,
-  NotFoundException,
-  OnModuleInit
+    BadRequestException,
+    ConflictException,
+    Inject,
+    Injectable,
+    Logger,
+    NotFoundException,
+    OnModuleInit
 } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import axios, { AxiosInstance } from 'axios'
@@ -13,25 +13,29 @@ import { createHash } from 'crypto'
 import * as XLSX from 'xlsx'
 import type { PaginatedResult } from '../../common/dto/query.dto'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
+import { GlobalFilterCacheService } from '../../common/services/global-filter-cache.service'
 import { SyncCommunicationService } from '../../common/services/sync-communication.service'
 import { QueryBuilder } from '../../common/utils/query-builder.util'
-import type { Configuration } from '../../config/configuration'
+import {
+  SYNC_HTTP_TIMEOUT_MS,
+  UPLOAD_JOB_HTTP_TIMEOUT_MS,
+  type Configuration
+} from '../../config/configuration'
 import type { UploadAndCreateFileDto } from '../file-upload/file-upload.dto'
 import type { IFileUploadService } from '../file-upload/file-upload.interface'
 import { PrismaService } from '../prisma/prisma.service'
-import { GlobalFilterCacheService } from '../../common/services/global-filter-cache.service'
 import { RedisService } from '../redis/redis.service'
 import {
-  CreatePortfolioDto,
-  PortfolioQueryDto,
-  UpdatePortfolioDto
+    CreatePortfolioDto,
+    PortfolioQueryDto,
+    UpdatePortfolioDto
 } from './portfolio.dto'
 import type {
-  ImportPortfoliosResult,
-  IPortfolioRepository,
-  IPortfolioService,
-  PortfolioContact,
-  PortfolioWithCounts
+    ImportPortfoliosResult,
+    IPortfolioRepository,
+    IPortfolioService,
+    PortfolioContact,
+    PortfolioWithCounts
 } from './portfolio.interface'
 
 const CACHE_TTL_ITEM = 5 * 60 * 1000 // 5 minutes for individual records
@@ -56,7 +60,7 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
     private readonly config: ConfigService<Configuration, true>,
     private readonly syncCommunication: SyncCommunicationService
   ) {
-    const timeout = this.config.get('syncTimeoutMs', { infer: true }) ?? 15000
+    const timeout = SYNC_HTTP_TIMEOUT_MS
     const dashUrl =
       this.config.get('dashboardBackendUrl', { infer: true }) ?? ''
     const scrUrl = this.config.get('scraperBackendUrl', { infer: true }) ?? ''
@@ -920,68 +924,18 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
 
     await this.globalFilterCache.invalidateAll()
 
-    // ── Dashboard & parser bulk-upsert sync ───────────────────────────────────
-    if (portfolios.length) {
-      const dashboardItems = portfolios.map(
-        ({
-          row_no,
-          portfolio: p,
-          service_type_name,
-          currency_code,
-          file_count
-        }) => ({
-          row: row_no,
-          parent_id: p.id,
-          name: p.name,
-          service_type: service_type_name,
-          currency: currency_code,
-          is_active: p.is_active,
-          is_commissionable: p.is_commissionable,
-          file_count
-        })
+    // ── Dashboard & scraper sync — one portfolio at a time ─────────────────
+    // Uses the long upload-job timeout (not the 15s SYNC_TIMEOUT_MS env
+    // default) since this loop can run for a while over many portfolios.
+    for (const { portfolio: p } of portfolios) {
+      await this.syncUpsertPortfolioToScraperAndDashboard(
+        p.id,
+        UPLOAD_JOB_HTTP_TIMEOUT_MS
+      ).catch(e =>
+        this.logger.error(
+          `[sync] portfolio upsert after bulk import failed for "${p.name}": ${e?.message ?? e}`
+        )
       )
-
-      const parserItems = portfolios.map(({ row_no, portfolio: p }) => ({
-        row: row_no,
-        parent_id: p.id,
-        name: p.name
-      }))
-
-      if (this.dashboardClient) {
-        this.postSync(
-          this.dashboardClient,
-          '/api/portfolio/sync-bulk-upsert',
-          { items: dashboardItems } as unknown as Record<string, unknown>,
-          'dashboard',
-          'bulk-upsert-import'
-        ).catch(e =>
-          this.logger.error(
-            `[sync] dashboard portfolio bulk-upsert failed: ${e?.message ?? e}`
-          )
-        )
-      } else {
-        this.logger.warn(
-          '[sync] dashboard disabled — skipping portfolio bulk-upsert sync'
-        )
-      }
-
-      if (this.scraperClient) {
-        this.postSync(
-          this.scraperClient,
-          '/portfolios/sync-bulk-upsert',
-          { items: parserItems } as unknown as Record<string, unknown>,
-          'scraper',
-          'bulk-upsert-import'
-        ).catch(e =>
-          this.logger.error(
-            `[sync] scraper portfolio bulk-upsert failed: ${e?.message ?? e}`
-          )
-        )
-      } else {
-        this.logger.warn(
-          '[sync] scraper disabled — skipping portfolio bulk-upsert sync'
-        )
-      }
     }
 
     return {
@@ -1126,16 +1080,97 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
     target: string,
     operation = 'create'
   ): Promise<void> {
+    await this.postSyncResult(client, path, body, target, operation)
+  }
+
+  /** Same as postSync but returns the outcome instead of only logging it. */
+  private async postSyncResult(
+    client: AxiosInstance | null,
+    path: string,
+    body: Record<string, unknown>,
+    target: string,
+    operation = 'create',
+    timeoutMs?: number
+  ): Promise<{ success: boolean; reason?: string }> {
+    if (!client) {
+      const reason = `${target} sync disabled — URL missing or auth not configured`
+      this.logger.warn(`[sync] ${reason}`)
+      return { success: false, reason }
+    }
     try {
-      const r = await client.post(path, body)
+      const r = await client.post(
+        path,
+        body,
+        timeoutMs !== undefined ? { timeout: timeoutMs } : undefined
+      )
       this.logger.log(
         `[sync] ${target} portfolio ${operation}: ${JSON.stringify(r.data)}`
       )
+      return { success: true }
     } catch (e: any) {
-      this.logger.error(
-        `[sync] ${target} portfolio ${operation} failed: ${e?.response?.data ? JSON.stringify(e.response.data) : (e?.message ?? e)}`
-      )
+      const reason = e?.response?.data
+        ? JSON.stringify(e.response.data)
+        : (e?.message ?? String(e))
+      this.logger.error(`[sync] ${target} portfolio ${operation} failed: ${reason}`)
+      return { success: false, reason }
     }
+  }
+
+  /**
+   * Single-portfolio upsert to scraper + dashboard, used by the property
+   * bulk import/update upload-job pipeline (see PropertyService). Unlike
+   * fanOutPortfolioCreate/queueUpsertSync this never throws — every target
+   * reports its own { success, reason } so the caller can persist granular
+   * per-system status for the frontend to poll.
+   */
+  async syncUpsertPortfolioToScraperAndDashboard(
+    portfolioId: string,
+    timeoutMs?: number
+  ): Promise<{
+    scraper: { success: boolean; reason?: string }
+    dashboard: { success: boolean; reason?: string }
+  }> {
+    const portfolio = await this.prisma.portfolio.findUnique({
+      where: { id: portfolioId },
+      include: {
+        service_type: { select: { type: true } },
+        currency: { select: { code: true } }
+      }
+    })
+    if (!portfolio) {
+      const reason = `Portfolio ${portfolioId} not found`
+      return {
+        scraper: { success: false, reason },
+        dashboard: { success: false, reason }
+      }
+    }
+
+    const [scraper, dashboard] = await Promise.all([
+      this.postSyncResult(
+        this.scraperClient,
+        `/portfolios/sync-upsert/${portfolio.id}`,
+        { name: portfolio.name },
+        'scraper',
+        'upsert',
+        timeoutMs
+      ),
+      this.postSyncResult(
+        this.dashboardClient,
+        `/api/portfolio/sync-upsert/${portfolio.id}`,
+        {
+          name: portfolio.name,
+          service_type: portfolio.service_type?.type ?? '',
+          currency: portfolio.currency?.code ?? 'USD',
+          is_active: portfolio.is_active,
+          is_commissionable: portfolio.is_commissionable
+        },
+        'dashboard',
+        'upsert',
+        timeoutMs
+      )
+    ])
+
+    return { scraper, dashboard }
   }
 
   async createAndSync(data: CreatePortfolioDto, user: IUserWithPermissions) {
@@ -1150,4 +1185,5 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
     }
     return full ?? portfolio
   }
+
 }

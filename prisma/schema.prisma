@@ -317,11 +317,14 @@ model Portfolio {
 }
 
 model Subportfolio {
-  id           String    @id @default(auto()) @map("_id") @db.ObjectId
-  name         String    @unique
+  id           String     @id @default(auto()) @map("_id") @db.ObjectId
+  name         String     @unique
   description  String?
-  portfolio_id String    @db.ObjectId
-  portfolio    Portfolio @relation(fields: [portfolio_id], references: [id], onDelete: Cascade)
+  // Optional: a subportfolio is a standalone label and is no longer required to
+  // belong to (or match) any particular portfolio — properties may reference a
+  // subportfolio regardless of which portfolio they're under.
+  portfolio_id String?    @db.ObjectId
+  portfolio    Portfolio? @relation(fields: [portfolio_id], references: [id], onDelete: Cascade)
 
   properties                   Property[]
   userFeatureAccessPermissions UserFeatureAccessPermission[]
@@ -761,29 +764,3 @@ model Note {
 /// the DBMS now responds to the caller immediately after its own import,
 /// dispatches the sync in the background, and sends the email only when all
 /// expected sources have reported (or the sweeper gives up on stale ones).
-model SyncBatch {
-  id           String    @id @default(auto()) @map("_id") @db.ObjectId
-  batch_id     String    @unique
-  status       String    @default("pending") // pending | partial | complete | failed
-  source       String // "import" | "bulk-update"
-  user_email   String
-  filename     String
-  /// Compact per-row context keyed by property parent_id:
-  /// { [parentId]: { row, action, name, identifier, portfolioName, expediaId, bookingId, agodaId, hasPortfolioId } }
-  rows         Json
-  /// Rows skipped during DBMS import (DBMS = NO): [{ row, name, reason }]
-  skipped_rows Json      @default("[]")
-  expected      String[]  @default(["dashboard", "scraper"])
-  /// Received results keyed by source: { dashboard: {...}, scraper: {...} }
-  received      Json      @default("{}")
-  /// DBMS-side import/update summary, filled once importFromExcel finishes:
-  /// { status: "importing"|"imported"|"failed", created, existing, skipped, total, error? }
-  dbms_summary  Json      @default("{}")
-  created_at    DateTime  @default(now())
-  updated_at    DateTime  @updatedAt
-  completed_at  DateTime?
-
-  @@index([status])
-  @@index([created_at])
-  @@map("sync_batches")
-}

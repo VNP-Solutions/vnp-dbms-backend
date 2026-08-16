@@ -535,6 +535,12 @@ export class PropertyRepository implements IPropertyRepository {
     const createdProperties: any[] = []
     const skippedProperties: Array<{ name: string; reason: string }> = []
     const existingProperties: any[] = []
+    const createdPortfolios: Array<{ id: string; name: string }> = []
+    const createdSubportfolios: Array<{
+      id: string
+      name: string
+      portfolio_id: string
+    }> = []
     const seenIdentifiersInBatch = new Set<string>()
 
     for (const row of rows) {
@@ -553,66 +559,28 @@ export class PropertyRepository implements IPropertyRepository {
       }
 
       // Find or create portfolio by name
-      let portfolio = await this.prisma.portfolio.findUnique({
-        where: { name: portfolioName },
-        select: { id: true, name: true }
-      })
-
-      if (!portfolio) {
-        logger.log(`Portfolio "${portfolioName}" not found — creating it`)
-
-        // Find or create default "OTA" ServiceType
-        let defaultServiceType = await this.prisma.serviceType.findFirst({
-          where: { type: { equals: 'OTA', mode: 'insensitive' } }
+      const portfolioResult = await this.resolveOrCreatePortfolio(
+        portfolioName,
+        logger
+      )
+      if ('error' in portfolioResult) {
+        skippedProperties.push({
+          name: propertyName,
+          reason: portfolioResult.error
         })
-
-        if (!defaultServiceType) {
-          logger.log('Default "OTA" service type not found, creating it...')
-          const maxOrder = await this.prisma.serviceType.findFirst({
-            orderBy: { order: 'desc' },
-            select: { order: true }
-          })
-          defaultServiceType = await this.prisma.serviceType.create({
-            data: {
-              type: 'OTA',
-              is_active: true,
-              order: (maxOrder?.order ?? 0) + 1
-            }
-          })
-          logger.log('Default "OTA" service type created successfully')
-        }
-
-        // Create the portfolio
-        try {
-          portfolio = await this.prisma.portfolio.create({
-            data: {
-              name: portfolioName,
-              service_type_id: defaultServiceType.id,
-              is_active: true,
-              is_commissionable: false
-            },
-            select: { id: true, name: true }
-          })
-          logger.log(`Portfolio "${portfolioName}" created successfully`)
-        } catch (err: any) {
-          logger.error(
-            `Error creating portfolio "${portfolioName}": ${err.message}`
-          )
-          skippedProperties.push({
-            name: propertyName,
-            reason: `Error creating portfolio: ${err.message}`
-          })
-          propertiesSkipped++
-          continue
-        }
+        propertiesSkipped++
+        continue
+      }
+      const portfolio = { id: portfolioResult.id, name: portfolioResult.name }
+      if (portfolioResult.created) {
+        createdPortfolios.push({ id: portfolio.id, name: portfolio.name })
       }
 
       let subportfolioId: string | undefined
       if (row.subportfolioName) {
         const subResult = await this.resolveOrCreateSubportfolio(
           row.subportfolioName,
-          portfolio.id,
-          logger
+          portfolio.id
         )
         if ('error' in subResult) {
           skippedProperties.push({
@@ -623,6 +591,13 @@ export class PropertyRepository implements IPropertyRepository {
           continue
         }
         subportfolioId = subResult.id
+        if (subResult.created) {
+          createdSubportfolios.push({
+            id: subResult.id,
+            name: row.subportfolioName.trim(),
+            portfolio_id: portfolio.id
+          })
+        }
       }
 
       // Check if property already exists
@@ -688,14 +663,29 @@ export class PropertyRepository implements IPropertyRepository {
           )
         }
 
+        const existingUpdates: { subportfolio_id?: string; portfolio_id?: string } =
+          {}
         if (subportfolioId) {
+          existingUpdates.subportfolio_id = subportfolioId
+        }
+        if (portfolio.id !== existingProp.portfolio_id) {
+          existingUpdates.portfolio_id = portfolio.id
+        }
+        if (Object.keys(existingUpdates).length) {
           await this.prisma.property.update({
             where: { id: existingProp.id },
-            data: { subportfolio_id: subportfolioId }
+            data: existingUpdates
           })
-          logger.log(
-            `Subportfolio assigned to existing property "${propertyName}"`
-          )
+          if (existingUpdates.subportfolio_id) {
+            logger.log(
+              `Subportfolio assigned to existing property "${propertyName}"`
+            )
+          }
+          if (existingUpdates.portfolio_id) {
+            logger.log(
+              `Portfolio reassigned on existing property "${propertyName}"`
+            )
+          }
         }
 
         const linkedSubportfolio = subportfolioId
@@ -1223,7 +1213,68 @@ export class PropertyRepository implements IPropertyRepository {
       propertiesSkipped,
       properties: createdProperties,
       existingProperties,
-      skippedProperties
+      skippedProperties,
+      createdPortfolios,
+      createdSubportfolios
+    }
+  }
+
+  async resolveOrCreatePortfolio(
+    portfolioName: string,
+    logger = new Logger(PropertyRepository.name)
+  ): Promise<
+    { id: string; name: string; created: boolean } | { error: string }
+  > {
+    const trimmed = portfolioName?.trim()
+    if (!trimmed) {
+      return { error: 'Portfolio name is empty' }
+    }
+
+    const existing = await this.prisma.portfolio.findUnique({
+      where: { name: trimmed },
+      select: { id: true, name: true }
+    })
+    if (existing) {
+      return { id: existing.id, name: existing.name, created: false }
+    }
+
+    logger.log(`Portfolio "${trimmed}" not found — creating it`)
+
+    let defaultServiceType = await this.prisma.serviceType.findFirst({
+      where: { type: { equals: 'OTA', mode: 'insensitive' } }
+    })
+
+    if (!defaultServiceType) {
+      logger.log('Default "OTA" service type not found, creating it...')
+      const maxOrder = await this.prisma.serviceType.findFirst({
+        orderBy: { order: 'desc' },
+        select: { order: true }
+      })
+      defaultServiceType = await this.prisma.serviceType.create({
+        data: {
+          type: 'OTA',
+          is_active: true,
+          order: (maxOrder?.order ?? 0) + 1
+        }
+      })
+      logger.log('Default "OTA" service type created successfully')
+    }
+
+    try {
+      const portfolio = await this.prisma.portfolio.create({
+        data: {
+          name: trimmed,
+          service_type_id: defaultServiceType.id,
+          is_active: true,
+          is_commissionable: false
+        },
+        select: { id: true, name: true }
+      })
+      logger.log(`Portfolio "${trimmed}" created successfully`)
+      return { id: portfolio.id, name: portfolio.name, created: true }
+    } catch (err: any) {
+      logger.error(`Error creating portfolio "${trimmed}": ${err.message}`)
+      return { error: `Error creating portfolio: ${err.message}` }
     }
   }
 
@@ -1270,32 +1321,32 @@ export class PropertyRepository implements IPropertyRepository {
     }
   }
 
-  private async resolveOrCreateSubportfolio(
+  async resolveOrCreateSubportfolio(
     subName: string,
-    portfolioId: string,
-    logger: Logger
-  ): Promise<{ id: string } | { error: string }> {
+    portfolioId?: string
+  ): Promise<{ id: string; created: boolean } | { error: string }> {
+    const logger = new Logger(PropertyRepository.name)
     const trimmed = subName.trim()
     if (!trimmed) return { error: 'Subportfolio name is empty' }
 
-    let subportfolio = await this.prisma.subportfolio.findUnique({
+    const subportfolio = await this.prisma.subportfolio.findUnique({
       where: { name: trimmed }
     })
     if (!subportfolio) {
       try {
-        subportfolio = await this.prisma.subportfolio.create({
+        const created = await this.prisma.subportfolio.create({
           data: { name: trimmed, portfolio_id: portfolioId }
         })
         logger.log(`Subportfolio "${trimmed}" created during import`)
+        return { id: created.id, created: true }
       } catch (err: any) {
         logger.error(`Error creating subportfolio "${trimmed}": ${err.message}`)
         return { error: `Error creating subportfolio: ${err.message}` }
       }
-    } else if (subportfolio.portfolio_id !== portfolioId) {
-      return {
-        error: `Subportfolio "${trimmed}" belongs to a different portfolio`
-      }
     }
-    return { id: subportfolio.id }
+    // Subportfolios are standalone labels — a property may reference an existing
+    // subportfolio regardless of which portfolio (if any) it was originally
+    // created under. No ownership check here; just resolve and use it.
+    return { id: subportfolio.id, created: false }
   }
 }

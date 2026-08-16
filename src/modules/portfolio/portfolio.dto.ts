@@ -2,15 +2,15 @@ import { PartialType } from '@nestjs/mapped-types'
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger'
 import { Transform } from 'class-transformer'
 import {
-  IsArray,
-  IsBoolean,
-  IsEmail,
-  IsIn,
-  IsMongoId,
-  IsNotEmpty,
-  IsNumber,
-  IsOptional,
-  IsString
+    IsArray,
+    IsBoolean,
+    IsEmail,
+    IsIn,
+    IsMongoId,
+    IsNotEmpty,
+    IsNumber,
+    IsOptional,
+    IsString
 } from 'class-validator'
 import { QueryDto } from '../../common/dto/query.dto'
 
