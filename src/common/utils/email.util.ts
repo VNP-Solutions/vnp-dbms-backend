@@ -1025,13 +1025,30 @@ VNP Solutions Team`
       return '#888' // pending/processing — shouldn't normally appear once the job is finished
     }
 
-    const countIssues = (items: UploadJobEntitySummary[]): number =>
-      items.filter(
-        i =>
-          i.dbms.state === 'failed' ||
-          i.scraper.state === 'failed' ||
-          i.dashboard.state === 'failed'
-      ).length
+    const outcomeSummary = (failed: number, skipped: number): string =>
+      `<span style="color:${failed ? '#dc3545' : '#28a745'}">${failed} failed</span>, ` +
+      `<span style="color:${skipped ? '#f0ad4e' : '#28a745'}">${skipped} skipped</span>`
+
+    const isFailed = (item: UploadJobEntitySummary): boolean =>
+      item.dbms.state === 'failed' ||
+      item.scraper.state === 'failed' ||
+      item.dashboard.state === 'failed'
+
+    // A DBMS skip means the row was deliberately not created (already exists,
+    // duplicate identifier, missing identifier, ...). Scraper/dashboard skips
+    // are only ever a downstream consequence of a DBMS failure, so keying on
+    // dbms alone avoids counting the same row twice.
+    const isSkipped = (item: UploadJobEntitySummary): boolean =>
+      !isFailed(item) && item.dbms.state === 'skipped'
+
+    const needsAttention = (item: UploadJobEntitySummary): boolean =>
+      isFailed(item) || isSkipped(item)
+
+    const countFailed = (items: UploadJobEntitySummary[]): number =>
+      items.filter(isFailed).length
+
+    const countSkipped = (items: UploadJobEntitySummary[]): number =>
+      items.filter(isSkipped).length
 
     const rowsFor = (items: UploadJobEntitySummary[]): string =>
       items
@@ -1071,20 +1088,19 @@ VNP Solutions Team`
         </table>`
     }
 
-    const portfolioIssues = countIssues(job.portfolios.items)
-    const propertyIssues = countIssues(job.properties.items)
-    const totalIssues = portfolioIssues + propertyIssues
+    const portfolioFailed = countFailed(job.portfolios.items)
+    const portfolioSkipped = countSkipped(job.portfolios.items)
+    const propertyFailed = countFailed(job.properties.items)
+    const propertySkipped = countSkipped(job.properties.items)
+    const totalFailed = portfolioFailed + propertyFailed
+    const totalSkipped = portfolioSkipped + propertySkipped
+    const totalIssues = totalFailed + totalSkipped
     const actionLabel = job.source === 'import' ? 'Import' : 'Bulk Update'
 
-    // Builds a fresh workbook containing only the rows that failed
-    // somewhere (DBMS, scraper, or dashboard) — same idea as the old
-    // sync-batch report: a small, focused sheet the user can act on,
-    // rather than re-sending their whole original file back to them.
-    const isFailed = (item: UploadJobEntitySummary): boolean =>
-      item.dbms.state === 'failed' ||
-      item.scraper.state === 'failed' ||
-      item.dashboard.state === 'failed'
-
+    // Builds a fresh workbook containing only the rows that failed or were
+    // skipped — same idea as the old sync-batch report: a small, focused
+    // sheet the user can act on, rather than re-sending their whole
+    // original file back to them.
     const toDefectiveRow = (type: string, item: UploadJobEntitySummary) => {
       const reasons: string[] = []
       if (item.dbms.reason) reasons.push(`DBMS: ${cleanReason(item.dbms.reason)}`)
@@ -1096,6 +1112,7 @@ VNP Solutions Team`
         Type: type,
         Row: item.row ?? '',
         Name: item.name,
+        Outcome: isFailed(item) ? 'Failed' : 'Skipped',
         DBMS: item.dbms.state,
         Scraper: item.scraper.state,
         Dashboard: item.dashboard.state,
@@ -1106,8 +1123,12 @@ VNP Solutions Team`
     const attachments: EmailAttachment[] = []
     if (totalIssues > 0) {
       const defectiveRows = [
-        ...job.portfolios.items.filter(isFailed).map(i => toDefectiveRow('Portfolio', i)),
-        ...job.properties.items.filter(isFailed).map(i => toDefectiveRow('Property', i))
+        ...job.portfolios.items
+          .filter(needsAttention)
+          .map(i => toDefectiveRow('Portfolio', i)),
+        ...job.properties.items
+          .filter(needsAttention)
+          .map(i => toDefectiveRow('Property', i))
       ]
       const wb = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(
@@ -1130,23 +1151,23 @@ VNP Solutions Team`
     const mailOptions: any = {
       from: this.configService.get('smtp.email', { infer: true }),
       to: recipientEmail,
-      subject: `${actionLabel} Report — ${job.filename} — ${job.portfolios.total} portfolios, ${job.properties.total} properties (${totalIssues} issue${totalIssues === 1 ? '' : 's'})`,
-      text: `${actionLabel} finished for "${job.filename}".\n\nPortfolios: ${job.portfolios.total} (${portfolioIssues} issues)\nProperties: ${job.properties.total} (${propertyIssues} issues)${job.error ? `\n\nJob error: ${job.error}` : ''}`,
+      subject: `${actionLabel} Report — ${job.filename} — ${job.portfolios.total} portfolios, ${job.properties.total} properties (${totalFailed} failed, ${totalSkipped} skipped)`,
+      text: `${actionLabel} finished for "${job.filename}".\n\nPortfolios: ${job.portfolios.total} (${portfolioFailed} failed, ${portfolioSkipped} skipped)\nProperties: ${job.properties.total} (${propertyFailed} failed, ${propertySkipped} skipped)${job.error ? `\n\nJob error: ${job.error}` : ''}`,
       html: `
         <div style="font-family:Arial,sans-serif;padding:20px;max-width:1000px;margin:0 auto;">
           <h3 style="margin-bottom:4px;">${actionLabel} Report</h3>
           <p style="margin-top:0;color:#555;">File: <strong>${job.filename}</strong></p>
           <p style="color:#555;">
             Portfolios: <strong>${job.portfolios.total}</strong>
-            (<span style="color:${portfolioIssues ? '#dc3545' : '#28a745'}">${portfolioIssues} issue${portfolioIssues === 1 ? '' : 's'}</span>)
+            (${outcomeSummary(portfolioFailed, portfolioSkipped)})
             &nbsp;|&nbsp;
             Properties: <strong>${job.properties.total}</strong>
-            (<span style="color:${propertyIssues ? '#dc3545' : '#28a745'}">${propertyIssues} issue${propertyIssues === 1 ? '' : 's'}</span>)
+            (${outcomeSummary(propertyFailed, propertySkipped)})
           </p>
           ${job.error ? `<p style="color:#dc3545;"><strong>Job error:</strong> ${job.error}</p>` : ''}
           ${sectionTable('Portfolios', job.portfolios.items)}
           ${sectionTable('Properties', job.properties.items)}
-          ${attachments.length ? '<p style="margin-top:16px;color:#888;font-size:12px;">An Excel file listing only the rows that failed is attached for correction.</p>' : ''}
+          ${attachments.length ? '<p style="margin-top:16px;color:#888;font-size:12px;">An Excel file listing only the rows that failed or were skipped is attached for review.</p>' : ''}
           <p style="margin-top:20px;font-size:12px;color:#888;">VNP Solutions DBMS</p>
         </div>
       `,
