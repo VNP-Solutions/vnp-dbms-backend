@@ -82,14 +82,17 @@ export interface Configuration {
   }
   superAdminSecret: string
   scraperBackendUrl: string
-  expediaCheckerBaseUrl: string
-  expediaCheckerTimeoutMs: number
   expediaCheck: {
     queueUrl: string
     lambdaFunctionName: string
     lambdaPlatform: string
   }
   agodaCheck: {
+    queueUrl: string
+    lambdaFunctionName: string
+    lambdaPlatform: string
+  }
+  bookingCheck: {
     queueUrl: string
     lambdaFunctionName: string
     lambdaPlatform: string
@@ -202,11 +205,6 @@ export default (): Configuration => {
     },
     superAdminSecret: process.env.SUPER_ADMIN_SECRET || '',
     scraperBackendUrl: process.env.SCRAPER_BACKEND_URL || '',
-    expediaCheckerBaseUrl: process.env.EXPEDIA_CHECKER_BASE_URL || '',
-    expediaCheckerTimeoutMs: parseInt(
-      process.env.EXPEDIA_CHECKER_TIMEOUT_MS || '30000',
-      10
-    ),
     expediaCheck: {
       queueUrl: process.env.EXPEDIA_CHECK_QUEUE_URL || '',
       lambdaFunctionName: process.env.EXPEDIA_CHECK_LAMBDA_FUNCTION_NAME || '',
@@ -222,6 +220,17 @@ export default (): Configuration => {
         process.env.EXPEDIA_CHECK_LAMBDA_FUNCTION_NAME ||
         '',
       lambdaPlatform: process.env.AGODA_CHECK_LAMBDA_PLATFORM || 'agoda'
+    },
+    bookingCheck: {
+      queueUrl:
+        process.env.BOOKING_CHECK_QUEUE_URL ||
+        process.env.EXPEDIA_CHECK_QUEUE_URL ||
+        '',
+      lambdaFunctionName:
+        process.env.BOOKING_CHECK_LAMBDA_FUNCTION_NAME ||
+        process.env.EXPEDIA_CHECK_LAMBDA_FUNCTION_NAME ||
+        '',
+      lambdaPlatform: process.env.BOOKING_CHECK_LAMBDA_PLATFORM || 'booking'
     },
     redis: {
       host: process.env.REDIS_HOST || 'localhost',
