@@ -44,7 +44,7 @@ export function findExcelCellValue(
   return undefined
 }
 
-/** Normalizes Excel date cells (MM/DD/YYYY, YYYY-MM-DD, serial numbers) to YYYY-MM-DD. */
+/** Normalizes Excel date cells (MM/DD/YYYY, YYYY-MM-DD, Mmm DD YYYY, serial numbers) to YYYY-MM-DD. */
 export function normalizeExcelDate(value: unknown): string | undefined {
   return normalizeParserJobDate(value)
 }

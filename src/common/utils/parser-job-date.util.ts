@@ -121,6 +121,39 @@ export function calcPreliminaryRunDate(
   return d.toISOString().slice(0, 10)
 }
 
+const MS_PER_DAY = 86_400_000
+
+/** Whole days between the Excel epoch (1899-12-30) and the Unix epoch. */
+const EXCEL_EPOCH_OFFSET_DAYS = 25_569
+
+/** Excel cannot represent a date past 9999-12-31, i.e. serial ~2,958,466. */
+const MAX_EXCEL_SERIAL = 3_000_000
+
+const MONTH_NAMES = [
+  'january',
+  'february',
+  'march',
+  'april',
+  'may',
+  'june',
+  'july',
+  'august',
+  'september',
+  'october',
+  'november',
+  'december'
+]
+
+/**
+ * Resolves a written month to its 0-based index. Accepts the three-letter
+ * abbreviation or any longer prefix up to the full name — "Jan", "Sept" and
+ * "September" all resolve to the same month. Returns -1 when unrecognized.
+ */
+function monthIndexFromName(token: string): number {
+  const name = token.toLowerCase()
+  return MONTH_NAMES.findIndex(m => m.startsWith(name))
+}
+
 /** Normalizes parser/DBMS date payloads to YYYY-MM-DD for validation and storage. */
 export function normalizeParserJobDate(
   value: unknown
@@ -130,7 +163,17 @@ export function normalizeParserJobDate(
     return value.toISOString().slice(0, 10)
   }
   if (typeof value === 'number' && Number.isFinite(value)) {
-    const fromNumber = new Date(value)
+    // A numeric cell is either an Excel serial (days since 1899-12-30) or an
+    // epoch-milliseconds timestamp. They differ by orders of magnitude — the
+    // largest serial Excel can represent (9999-12-31) is ~2,958,466, while any
+    // realistic timestamp is in the trillions — so the magnitude decides.
+    // Excel date cells arrive as serials (01/01/2026 -> 46023.25); reading one
+    // as milliseconds is what previously turned every uploaded date into
+    // 1970-01-01.
+    const fromNumber =
+      Math.abs(value) < MAX_EXCEL_SERIAL
+        ? new Date(Math.floor(value - EXCEL_EPOCH_OFFSET_DAYS) * MS_PER_DAY)
+        : new Date(value)
     if (!Number.isNaN(fromNumber.getTime())) {
       return fromNumber.toISOString().slice(0, 10)
     }
@@ -165,6 +208,31 @@ export function normalizeParserJobDate(
       parsed.getUTCDate() === day
     ) {
       return parsed.toISOString().slice(0, 10)
+    }
+    return undefined
+  }
+
+  // "Mmm DD YYYY" and "Mmm DD, YYYY" — e.g. "Jan 1 2026", "Sep 30, 2026".
+  // The month may also be spelled out in full ("January 1, 2026").
+  const monthNameDate = str.match(
+    /^([A-Za-z]{3,9})\.?\s+(\d{1,2})\s*,?\s+(\d{4})$/
+  )
+  if (monthNameDate) {
+    const month = monthIndexFromName(monthNameDate[1])
+    const day = Number(monthNameDate[2])
+    const year = Number(monthNameDate[3])
+
+    if (month >= 0) {
+      const parsed = new Date(Date.UTC(year, month, day))
+      // Rejects impossible days such as "Feb 30 2026", which would otherwise
+      // roll over into the following month.
+      if (
+        parsed.getUTCFullYear() === year &&
+        parsed.getUTCMonth() === month &&
+        parsed.getUTCDate() === day
+      ) {
+        return parsed.toISOString().slice(0, 10)
+      }
     }
     return undefined
   }
