@@ -14,6 +14,7 @@ import { RedisService } from '../redis/redis.service'
 import { PrismaService } from '../prisma/prisma.service'
 import { PropertyController, PropertySyncController } from './property.controller'
 import { PropertyAgodaCheckerService } from './property-agoda-checker.service'
+import { PropertyBookingCheckerService } from './property-booking-checker.service'
 import { PropertyExpediaCheckerService } from './property-expedia-checker.service'
 import { PropertyRepository } from './property.repository'
 import { PropertyService } from './property.service'
@@ -38,6 +39,7 @@ import { ServiceTokenGuard } from './guards/service-token.guard'
     ServiceTokenGuard,
     PropertyExpediaCheckerService,
     PropertyAgodaCheckerService,
+    PropertyBookingCheckerService,
     RunDateCalculatorService,
     SyncCommunicationService,
     ExternalJwtGuard,

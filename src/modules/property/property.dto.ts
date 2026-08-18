@@ -13,6 +13,7 @@ import {
   IsObject,
   IsOptional,
   IsString,
+  Min,
   ValidateNested
 } from 'class-validator'
 import { QueryDto } from '../../common/dto/query.dto'
@@ -2106,6 +2107,63 @@ export class AgodaCheckPropertiesDto {
   @ValidateNested({ each: true })
   @Type(() => AgodaCheckPropertyItemDto)
   items: AgodaCheckPropertyItemDto[]
+}
+
+// ─── Booking Property Checker ───────────────────────────────────────────
+
+export class BookingCheckPropertyItemDto {
+  @ApiProperty({
+    example: '507f1f77bcf86cd799439011',
+    description: 'Internal MongoDB _id of the property'
+  })
+  @IsString()
+  @IsNotEmpty()
+  _id: string
+
+  @ApiProperty({ example: 12345678, description: 'Booking.com property ID' })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  booking_id: number
+
+  @ApiProperty({
+    example: 'partner@example.com',
+    description: 'Booking.com account username (email)'
+  })
+  @IsString()
+  @IsNotEmpty()
+  booking_username: string
+
+  @ApiProperty({
+    example: 'secret123',
+    description: 'Booking.com account password (never logged)'
+  })
+  @IsString()
+  @IsNotEmpty()
+  booking_password: string
+}
+
+export class BookingCheckPropertiesDto {
+  @ApiProperty({
+    type: [BookingCheckPropertyItemDto],
+    description:
+      'List of properties to check. Items are grouped by booking_username internally.'
+  })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => BookingCheckPropertyItemDto)
+  items: BookingCheckPropertyItemDto[]
+}
+
+export interface BookingCheckerUpstreamItem {
+  _id: string
+  booking_id: number
+}
+
+export interface BookingCheckerUpstreamPayload {
+  username: string
+  password: string
+  booking_ids: BookingCheckerUpstreamItem[]
 }
 
 /// Response returned immediately by the DBMS bulk import / bulk-update
