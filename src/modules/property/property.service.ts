@@ -15,7 +15,10 @@ import * as XLSX from 'xlsx'
 import type { PaginatedResult } from '../../common/dto/query.dto'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
 import { GlobalFilterCacheService } from '../../common/services/global-filter-cache.service'
-import { RunDateCalculatorService } from '../../common/services/run-date-calculator.service'
+import {
+    RunDateCalculatorService,
+    type RunDateOtaType
+} from '../../common/services/run-date-calculator.service'
 import { SyncCommunicationService } from '../../common/services/sync-communication.service'
 import { ColoredLogger } from '../../common/utils/colored-logger.util'
 import { EmailUtil } from '../../common/utils/email.util'
@@ -79,6 +82,12 @@ import type {
 const CACHE_TTL_ITEM = 5 * 60 * 1000 // 5 minutes for individual records
 const CACHE_TTL_ALL = 60 * 60 * 1000 // 1 hour for all properties cache
 const CACHE_KEY = (id: string) => `property:${id}`
+/** OTAs whose run date is derived from the historical "to" date and CRS. */
+const RUN_DATE_OTAS: readonly RunDateOtaType[] = [
+  'expedia',
+  'booking',
+  'agoda'
+]
 const GLOBAL_FILTER_KEY = (userId: string) => `global-filter:all:${userId}`
 
 @Injectable()
@@ -1564,6 +1573,7 @@ export class PropertyService implements IPropertyService {
         this.encryptionUtil.encrypt(webmail_password)
 
     await this.repo.update(id, encryptedData)
+    await this.recalcRunDatesAfterUpdate(id, data)
 
     if (credentials && Object.keys(credentials).length > 0) {
       const existingCredentials =
@@ -1588,6 +1598,68 @@ export class PropertyService implements IPropertyService {
     ])
     this.scheduleCacheWarm(user)
     return this.repo.findById(id) as Promise<PropertyWithRelations>
+  }
+
+  /**
+   * Re-runs the run-date calculation after an update for every OTA whose
+   * `_to`, CRS or priority was part of the request, so an edited historical
+   * "to" date or CRS produces a fresh run date without the caller supplying one.
+   *
+   * An OTA is skipped when the same request set its run date explicitly — a
+   * manually chosen date always wins over the calculated one.
+   */
+  private async recalcRunDatesAfterUpdate(
+    id: string,
+    data: UpdatePropertyDto
+  ): Promise<void> {
+    const payload = data as Record<string, unknown>
+    const otas = RUN_DATE_OTAS.filter(
+      ota =>
+        payload[`${ota}_run_date`] === undefined &&
+        (payload[`${ota}_to`] !== undefined ||
+          payload[`${ota}_crs`] !== undefined ||
+          payload[`${ota}_priority`] !== undefined)
+    )
+    if (otas.length === 0) return
+
+    // Read back the merged record — the request may carry only the CRS while
+    // the "to" date (or vice versa) already lives in the database.
+    const property = await this.prisma.property.findUnique({
+      where: { id },
+      select: {
+        created_at: true,
+        expedia_to: true,
+        expedia_crs: true,
+        expedia_priority: true,
+        booking_to: true,
+        booking_crs: true,
+        booking_priority: true,
+        agoda_to: true,
+        agoda_crs: true,
+        agoda_priority: true
+      }
+    })
+    if (!property) return
+
+    const calculated = await this.runDateCalculator.calcRunDatesForProperty(
+      property,
+      id
+    )
+
+    const runDateUpdates: Record<string, string> = {}
+    for (const ota of otas) {
+      const value = calculated[`${ota}_run_date`]
+      if (value) runDateUpdates[`${ota}_run_date`] = value
+    }
+    if (Object.keys(runDateUpdates).length === 0) return
+
+    await this.prisma.property.update({
+      where: { id },
+      data: runDateUpdates
+    })
+    this.logger.debug(
+      `property ${id} run dates recalculated: ${JSON.stringify(runDateUpdates)}`
+    )
   }
 
   async updateAndSync(

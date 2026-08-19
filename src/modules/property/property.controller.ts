@@ -741,7 +741,13 @@ export class PropertyController {
 
   @Patch(':id')
   @RequirePermission(ModuleType.PROPERTY, PermissionAction.UPDATE, true)
-  @ApiOperation({ summary: 'Update property by ID' })
+  @ApiOperation({
+    summary: 'Update property by ID',
+    description:
+      'When the request changes an OTA\'s "to" date, CRS or priority, that OTA run date ' +
+      '(expedia_run_date / booking_run_date / agoda_run_date) is recalculated automatically ' +
+      'using the same rules as property creation. Sending the run date explicitly keeps the supplied value.'
+  })
   @ApiResponse({ status: 200, description: 'Property updated' })
   @ApiResponse({ status: 404, description: 'Property not found' })
   update(
@@ -754,7 +760,13 @@ export class PropertyController {
 
   @Patch(':id/sync')
   @RequirePermission(ModuleType.PROPERTY, PermissionAction.UPDATE, true)
-  @ApiOperation({ summary: 'Update property and sync to dashboard + scraper' })
+  @ApiOperation({
+    summary: 'Update property and sync to dashboard + scraper',
+    description:
+      'When the request changes an OTA\'s "to" date, CRS or priority, that OTA run date ' +
+      '(expedia_run_date / booking_run_date / agoda_run_date) is recalculated automatically ' +
+      'using the same rules as property creation. Sending the run date explicitly keeps the supplied value.'
+  })
   @ApiBody({
     type: UpdatePropertyDto,
     examples: {
