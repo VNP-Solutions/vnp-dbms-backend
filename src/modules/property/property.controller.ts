@@ -444,9 +444,9 @@ export class PropertyController {
   @Post('export-excel')
   @RequirePermission(ModuleType.PROPERTY, PermissionAction.READ)
   @ApiOperation({
-    summary: 'Export filtered properties to Excel and send via email',
+    summary: 'Export filtered properties to Excel and send via email (async)',
     description:
-      "Generates an Excel (.xlsx) file from the filtered property list and emails it to the authenticated user's email address. All filters are optional — send an empty body {} to export everything. Pagination (page/limit) is ignored; all matching records are always exported. Pass `columns` as an array of column codes to include only those columns; omit, null, or [] to export all columns. Credentials are masked by default; set masked=false with user_name and user_password to include decrypted values."
+      "Queues an Excel (.xlsx) export of the filtered property list and returns 200 immediately — the file is generated in the background and emailed to the authenticated user's address. Files up to 10MB arrive as an attachment; larger ones are uploaded to S3 and the email carries a presigned download link valid for 7 days. All filters are optional — send an empty body {} to export everything. Pagination (page/limit) is ignored; all matching records are always exported. Pass `columns` as an array of column codes to include only those columns; omit, null, or [] to export all columns. Columns are additionally narrowed by the caller's role column template, so a restricted role never receives columns it cannot see in the list view. Because the work is backgrounded, outcomes that used to be returned inline (no matching records, no permitted columns, generation failure) are reported by email instead."
   })
   @ApiBody({
     type: ExportPropertyExcelDto,
@@ -570,13 +570,14 @@ export class PropertyController {
   })
   @ApiResponse({
     status: 200,
-    description: 'Excel report generated and emailed successfully',
+    description:
+      'Export accepted. The workbook is built in the background and emailed when ready.',
     schema: {
       type: 'object',
       properties: {
         message: {
           type: 'string',
-          example: 'Excel report with 42 record(s) sent to user@example.com'
+          example: 'Your file is processing and will be sent to email'
         }
       }
     }

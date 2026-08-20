@@ -26,6 +26,26 @@ export const UPLOAD_JOB_HTTP_TIMEOUT_MS = 6 * 60 * 60 * 1000
 export const UPLOAD_JOB_SYNC_CHUNK_SIZE = 5
 
 /**
+ * Largest property-export workbook that is still emailed as an attachment.
+ * Above this the file is uploaded to S3 and only a presigned link is sent.
+ *
+ * Deliberately well under Gmail's 25MB ceiling: that ceiling applies to the
+ * base64-encoded message, which is ~37% larger than the raw buffer, so a
+ * 10MB workbook already becomes a ~13.7MB message.
+ */
+export const PROPERTY_EXPORT_ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024
+
+/**
+ * Lifetime of the emailed download link for exports too large to attach.
+ * Capped by AWS at 7 days for SigV4 presigned URLs.
+ */
+export const PROPERTY_EXPORT_DOWNLOAD_TTL_SECONDS = 7 * 24 * 60 * 60
+
+/** MIME type of the generated .xlsx export. */
+export const PROPERTY_EXPORT_CONTENT_TYPE =
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+
+/**
  * Bound (via Promise.race, see `withTimeout`) on individual Prisma/Mongo calls
  * made inside the upload-job pipeline (DBMS create/update, run-date persist,
  * post-write findById reload, portfolio/subportfolio resolution). This exists
