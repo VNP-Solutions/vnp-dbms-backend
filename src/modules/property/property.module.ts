@@ -2,6 +2,8 @@ import { Module, forwardRef } from '@nestjs/common'
 import { JwtModule } from '@nestjs/jwt'
 import { EmailUtil } from '../../common/utils/email.util'
 import { EncryptionUtil } from '../../common/utils/encryption.util'
+import { S3ExportUtil } from '../../common/utils/s3-export.util'
+import { ConfigService } from '../../config/config.service'
 import { RunDateCalculatorService } from '../../common/services/run-date-calculator.service'
 import { SyncCommunicationService } from '../../common/services/sync-communication.service'
 import { ExternalJwtGuard } from '../../common/guards/external-jwt.guard'
@@ -36,6 +38,8 @@ import { ServiceTokenGuard } from './guards/service-token.guard'
     EncryptionUtil,
     RedisService,
     EmailUtil,
+    ConfigService,
+    S3ExportUtil,
     ServiceTokenGuard,
     PropertyExpediaCheckerService,
     PropertyAgodaCheckerService,

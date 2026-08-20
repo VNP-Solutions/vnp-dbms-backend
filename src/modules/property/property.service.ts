@@ -23,8 +23,10 @@ import { SyncCommunicationService } from '../../common/services/sync-communicati
 import { ColoredLogger } from '../../common/utils/colored-logger.util'
 import { EmailUtil } from '../../common/utils/email.util'
 import { EncryptionUtil } from '../../common/utils/encryption.util'
+import { S3ExportUtil } from '../../common/utils/s3-export.util'
 import {
     EXCEL_HISTORICAL_DATE_HEADERS,
+    PROPERTY_EXPORT_COLUMN_CODES,
     findExcelCellValue,
     findExcelDateValue,
     mapPropertyToExcelRow,
@@ -32,6 +34,9 @@ import {
 } from '../../common/utils/property-excel.util'
 import { withTimeout } from '../../common/utils/promise-timeout.util'
 import {
+  PROPERTY_EXPORT_ATTACHMENT_MAX_BYTES,
+  PROPERTY_EXPORT_CONTENT_TYPE,
+  PROPERTY_EXPORT_DOWNLOAD_TTL_SECONDS,
   SYNC_HTTP_TIMEOUT_MS,
   UPLOAD_JOB_DB_TIMEOUT_MS,
   UPLOAD_JOB_HTTP_TIMEOUT_MS,
@@ -160,7 +165,8 @@ export class PropertyService implements IPropertyService {
     private readonly config: ConfigService<Configuration>,
     private readonly syncCommunication: SyncCommunicationService,
     private readonly runDateCalculator: RunDateCalculatorService,
-    private readonly globalFilterCache: GlobalFilterCacheService
+    private readonly globalFilterCache: GlobalFilterCacheService,
+    private readonly s3ExportUtil: S3ExportUtil
   ) {
     const timeout = SYNC_HTTP_TIMEOUT_MS
     const dashUrl =
@@ -2080,57 +2086,206 @@ export class PropertyService implements IPropertyService {
   // Export flow — generate Excel from filtered properties and email it
   // ──────────────────────────────────────────────────────────────────────────
 
-  async exportToExcelAndEmail(
+  exportToExcelAndEmail(
     dto: ExportPropertyExcelDto,
     user: IUserWithPermissions
   ): Promise<{ message: string }> {
-    // Step 1 — apply filters (masking doesn't matter here; we only need the IDs)
-    const filterDto: PropertyFilterDto = {
-      ...dto,
-      page: undefined,
-      limit: undefined
-    }
-    const filtered = await this.findAllWithFilters(filterDto, user)
-    const filteredData = filtered.data as any[]
-
-    if (filteredData.length === 0) {
-      return {
-        message: 'No properties matched the given filters. Email not sent.'
-      }
-    }
-
-    // Step 2 — re-fetch the same properties directly from the repo (bypassing the
-    // masking layer), then decrypt every credential field explicitly.
-    const ids = filteredData.map((p: any) => p.id)
-    const raw = await this.repo.findAll({
-      where: { id: { in: ids } },
-      orderBy: { created_at: 'desc' }
+    // The export is dispatched to the background so the request returns
+    // straight away — building the workbook for an unfiltered export and
+    // handing a multi-MB file to SMTP/S3 can take minutes. Everything the
+    // caller needs to know afterwards arrives by email; nothing about the
+    // outcome is reported on this response.
+    setImmediate(() => {
+      this.runExportExcelJob(dto, user).catch(e =>
+        this.logger.error(
+          `[async] property excel export for ${user.email} failed: ${e?.message ?? e}`
+        )
+      )
     })
-    const properties = raw.map(p => this.decryptCredentialsForResponse(p))
 
-    const columnCodes = dto.columns
-    const rows = properties.map(p => mapPropertyToExcelRow(p, columnCodes))
-    const buffer = writePropertyExportBuffer(rows, columnCodes)
+    return Promise.resolve({
+      message: 'Your file is processing and will be sent to email'
+    })
+  }
 
-    const filename = `properties-export-${new Date().toISOString().slice(0, 10)}.xlsx`
+  /**
+   * Runs entirely in the background (dispatched via setImmediate from
+   * exportToExcelAndEmail). Every exit path — success, no matches, failure —
+   * ends in an email, because the HTTP response has already been sent and
+   * there is nothing for the caller to poll.
+   */
+  private async runExportExcelJob(
+    dto: ExportPropertyExcelDto,
+    user: IUserWithPermissions
+  ): Promise<void> {
+    try {
+      // Step 1 — resolve which columns this user may export. A role column
+      // template narrows the request; without one the requested columns
+      // (or all columns) are used as-is.
+      const columnCodes = await this.resolveExportColumnCodes(dto.columns, user)
 
-    await this.emailUtil.sendEmail(
-      user.email,
-      `VNP Solutions – Property Export (${properties.length} records)`,
-      `Please find attached the property data export containing ${properties.length} record(s) generated on ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}.\n\nWarm regards,\nVNP Solutions`,
-      [
-        {
-          filename,
-          content: buffer,
-          contentType:
-            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        }
-      ]
+      if (columnCodes !== null && columnCodes.length === 0) {
+        this.logger.warn(
+          `Property excel export for ${user.email} produced no permitted columns`
+        )
+        await this.sendExportNoticeEmail(
+          user.email,
+          'VNP Solutions – Property Export (no columns available)',
+          'Your property export could not be generated because none of the requested columns are available to your role.\n\nPlease pick different columns or contact your administrator if you believe you should have access to them.'
+        )
+        return
+      }
+
+      // Step 2 — apply filters (masking doesn't matter here; we only need the IDs)
+      const filterDto: PropertyFilterDto = {
+        ...dto,
+        page: undefined,
+        limit: undefined
+      }
+      const filtered = await this.findAllWithFilters(filterDto, user)
+      const filteredData = filtered.data as any[]
+
+      if (filteredData.length === 0) {
+        await this.sendExportNoticeEmail(
+          user.email,
+          'VNP Solutions – Property Export (no matching records)',
+          'No properties matched the filters you selected, so there was nothing to export.\n\nPlease adjust the filters and try again.'
+        )
+        return
+      }
+
+      // Step 3 — re-fetch the same properties directly from the repo (bypassing the
+      // masking layer), then decrypt every credential field explicitly.
+      const ids = filteredData.map((p: any) => p.id)
+      const raw = await this.repo.findAll({
+        where: { id: { in: ids } },
+        orderBy: { created_at: 'desc' }
+      })
+      const properties = raw.map(p => this.decryptCredentialsForResponse(p))
+
+      const rows = properties.map(p => mapPropertyToExcelRow(p, columnCodes))
+      const buffer = writePropertyExportBuffer(rows, columnCodes)
+
+      const filename = `properties-export-${new Date().toISOString().slice(0, 10)}.xlsx`
+
+      await this.deliverExportExcel(
+        user.email,
+        filename,
+        buffer,
+        properties.length
+      )
+    } catch (error) {
+      this.logger.error(
+        `Property excel export for ${user.email} failed: ${error instanceof Error ? error.message : String(error)}`
+      )
+      await this.sendExportNoticeEmail(
+        user.email,
+        'VNP Solutions – Property Export failed',
+        'We were unable to generate your property export. Please try again, and contact support if the problem persists.'
+      ).catch(() => undefined)
+    }
+  }
+
+  /**
+   * Narrows the requested export columns to the ones the user's role column
+   * template allows.
+   *
+   * Returns null when the export should use its own default (no role
+   * template and no explicit request), or an explicit list otherwise. An
+   * empty array means the role permits none of the requested columns — the
+   * caller must treat that as "nothing to export" rather than passing it on,
+   * because resolvePropertyExportColumns() falls back to every column when
+   * given an empty list.
+   */
+  private async resolveExportColumnCodes(
+    requested: string[] | null | undefined,
+    user: IUserWithPermissions
+  ): Promise<string[] | null> {
+    const roleColumnList = await this.getRoleColumnList(user)
+
+    if (!roleColumnList) {
+      return requested && requested.length > 0 ? requested : null
+    }
+
+    const allowed = new Set(roleColumnList)
+    const base =
+      requested && requested.length > 0
+        ? requested
+        : (PROPERTY_EXPORT_COLUMN_CODES as readonly string[])
+
+    return base.filter(code => allowed.has(code))
+  }
+
+  /**
+   * Emails the finished workbook. Small files travel as an attachment;
+   * anything larger goes to S3 and only a time-limited link is emailed,
+   * since SMTP providers cap message size (Gmail: 25MB *after* base64
+   * encoding, which inflates the payload by roughly a third).
+   */
+  private async deliverExportExcel(
+    recipient: string,
+    filename: string,
+    buffer: Buffer,
+    recordCount: number
+  ): Promise<void> {
+    const generatedOn = new Date().toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    })
+    const subject = `VNP Solutions – Property Export (${recordCount} records)`
+
+    if (buffer.length <= PROPERTY_EXPORT_ATTACHMENT_MAX_BYTES) {
+      await this.emailUtil.sendEmail(
+        recipient,
+        subject,
+        `Please find attached the property data export containing ${recordCount} record(s) generated on ${generatedOn}.\n\nWarm regards,\nVNP Solutions`,
+        [
+          {
+            filename,
+            content: buffer,
+            contentType: PROPERTY_EXPORT_CONTENT_TYPE
+          }
+        ]
+      )
+      this.logger.log(
+        `Property excel export emailed as attachment to ${recipient} (${recordCount} records, ${(buffer.length / (1024 * 1024)).toFixed(2)}MB)`
+      )
+      return
+    }
+
+    const key = `exports/properties/${new Date().toISOString().replace(/[:.]/g, '-')}-${filename}`
+    const url = await this.s3ExportUtil.uploadAndGetPresignedUrl(
+      key,
+      buffer,
+      PROPERTY_EXPORT_CONTENT_TYPE,
+      PROPERTY_EXPORT_DOWNLOAD_TTL_SECONDS
+    )
+    const expiryDays = Math.round(
+      PROPERTY_EXPORT_DOWNLOAD_TTL_SECONDS / (24 * 60 * 60)
     )
 
-    return {
-      message: `Excel report with ${properties.length} record(s) sent to ${user.email}`
-    }
+    await this.emailUtil.sendEmail(
+      recipient,
+      subject,
+      `Your property data export containing ${recordCount} record(s) was generated on ${generatedOn}.\n\nThe file is too large to attach, so you can download it here:\n${url}\n\nThis link expires in ${expiryDays} days. Please don't forward it — the file contains account credentials.\n\nWarm regards,\nVNP Solutions`
+    )
+    this.logger.log(
+      `Property excel export uploaded to S3 for ${recipient} (${recordCount} records, ${(buffer.length / (1024 * 1024)).toFixed(2)}MB, key=${key})`
+    )
+  }
+
+  /** Plain-text notice used for the export's non-delivery outcomes. */
+  private async sendExportNoticeEmail(
+    recipient: string,
+    subject: string,
+    body: string
+  ): Promise<void> {
+    await this.emailUtil.sendEmail(
+      recipient,
+      subject,
+      `${body}\n\nWarm regards,\nVNP Solutions`
+    )
   }
 
   // ──────────────────────────────────────────────────────────────────────────
