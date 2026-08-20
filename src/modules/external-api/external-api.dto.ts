@@ -483,6 +483,8 @@ export interface ParserJobEntryPayload {
   billing_type: string | null
   /** 1 when OTA priority is HIGH, otherwise 0 */
   priority: number
+  /** Booking OTP number configured on the property, null when unset */
+  booking_otp_number: string | null
 }
 
 /** Payload sent to the parser backend's bulk-create endpoint */

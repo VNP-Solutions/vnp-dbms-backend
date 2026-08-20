@@ -1230,8 +1230,13 @@ export class PropertyRepository implements IPropertyRepository {
       return { error: 'Portfolio name is empty' }
     }
 
-    const existing = await this.prisma.portfolio.findUnique({
-      where: { name: trimmed },
+    // Case-insensitive, matching every other find-or-create resolver here
+    // (processor, service type, billing type, frequency, priority, currency).
+    // Portfolio.name is a case-SENSITIVE unique index, so an exact-match
+    // lookup would miss "highgate hotels" against a stored "Highgate Hotels"
+    // and then happily create a second, near-duplicate portfolio.
+    const existing = await this.prisma.portfolio.findFirst({
+      where: { name: { equals: trimmed, mode: 'insensitive' } },
       select: { id: true, name: true }
     })
     if (existing) {
@@ -1329,8 +1334,9 @@ export class PropertyRepository implements IPropertyRepository {
     const trimmed = subName.trim()
     if (!trimmed) return { error: 'Subportfolio name is empty' }
 
-    const subportfolio = await this.prisma.subportfolio.findUnique({
-      where: { name: trimmed }
+    // Case-insensitive for the same reason as resolveOrCreatePortfolio above.
+    const subportfolio = await this.prisma.subportfolio.findFirst({
+      where: { name: { equals: trimmed, mode: 'insensitive' } }
     })
     if (!subportfolio) {
       try {

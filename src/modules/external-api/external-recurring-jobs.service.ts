@@ -487,7 +487,8 @@ export class ExternalRecurringJobsService {
             start_date: startDate,
             end_date: endDate,
             billing_type: otaConfig.billing_type,
-            priority: jobPriority
+            priority: jobPriority,
+            booking_otp_number: property.booking_otp_number ?? null
           })
 
           result.jobs_created.push({ ota_type: ota, start_date: startDate, end_date: endDate })
