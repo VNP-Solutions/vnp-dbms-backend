@@ -514,7 +514,15 @@ export interface IPropertyService {
   removeAndSync(
     id: string,
     user: IUserWithPermissions
-  ): Promise<{ message: string }>
+  ): Promise<{
+    message: string
+    /// Per-platform outcome of the delete fan-out. Absent only when the row
+    /// disappeared before the fan-out could run.
+    sync?: {
+      dashboard: { success: boolean; reason?: string }
+      scraper: { success: boolean; reason?: string }
+    }
+  }>
   getContact(id: string, user: IUserWithPermissions): Promise<PropertyContact>
   getContactExternal(id: string): Promise<PropertyContact>
 }

@@ -1782,48 +1782,57 @@ export class PropertyService implements IPropertyService {
     }
   }
 
+  /** Deletes the property from DBMS only. The dashboard/scraper fan-out lives
+   *  in removeAndSync so both targets are fired from a single place — see the
+   *  note there. */
   async remove(id: string, user: IUserWithPermissions) {
     await this.findOne(id, user)
     await this.repo.delete(id)
+    // Cache bookkeeping must never decide whether the downstream deletes run:
+    // the row is already gone from DBMS by this point, so letting a Redis
+    // hiccup throw here would strand the property in dashboard/scraper forever.
     await Promise.all([
       this.redisService.del(CACHE_KEY(id)),
       this.invalidateCaches()
-    ])
-    this.scheduleCacheWarm(user)
-    try {
-      if (this.dashboardJwtClient) {
-        const r = await this.dashboardJwtClient.post(
-          `/api/property/sync-delete/${id}`,
-          {},
-          { headers: this.syncCommunication.createAuthHeaders() }
-        )
-        this.logger.log(
-          `[sync] dashboard property sync-delete: ${JSON.stringify(r.data)}`
-        )
-      } else {
-        this.logger.warn(
-          '[sync] dashboard JWT client disabled, skipping property sync-delete'
-        )
-      }
-    } catch (e: any) {
-      this.logger.error(
-        `[sync] dashboard property sync-delete failed: ${e?.response?.data ? JSON.stringify(e.response.data) : (e?.message ?? e)}`
+    ]).catch(e =>
+      this.logger.warn(
+        `[cache] invalidation after delete of ${id} failed: ${e?.message ?? e}`
       )
-    }
+    )
+    this.scheduleCacheWarm(user)
     return { message: 'Property deleted successfully' }
   }
 
+  /** Deletes the property from DBMS and then from BOTH downstream platforms.
+   *
+   *  The two fan-out calls are deliberately independent: they are dispatched
+   *  together and settled together, so a dashboard failure can never prevent
+   *  the scraper delete (or vice versa). Their outcome is returned to the
+   *  caller rather than only logged — a delete that succeeded in DBMS but was
+   *  rejected downstream previously still answered "deleted successfully",
+   *  which made a half-applied delete indistinguishable from a clean one. */
   async removeAndSync(id: string, user: IUserWithPermissions) {
     const before = await this.repo.findById(id)
     const result = await this.remove(id, user)
-    if (before) {
-      try {
-        await this.syncDeletePropertyToScraper(before.id)
-      } catch (e: any) {
-        this.logger.error(`[sync] unexpected on delete: ${e?.message ?? e}`)
-      }
+
+    // `before` is only null when the row vanished between findById and the
+    // access check inside remove() — nothing downstream to reconcile then.
+    if (!before) return result
+
+    const [dashboard, scraper] = await Promise.all([
+      this.syncDeletePropertyToDashboard(before.id),
+      this.syncDeletePropertyToScraper(before.id)
+    ])
+
+    if (!dashboard.success || !scraper.success) {
+      this.logger.error(
+        `[sync] property ${before.id} deleted in DBMS but not everywhere — ` +
+          `dashboard=${dashboard.success ? 'ok' : dashboard.reason} ` +
+          `scraper=${scraper.success ? 'ok' : scraper.reason}`
+      )
     }
-    return result
+
+    return { ...result, sync: { dashboard, scraper } }
   }
 
   async transferPortfolio(
@@ -5512,12 +5521,16 @@ export class PropertyService implements IPropertyService {
     }
   }
 
-  private async syncDeletePropertyToScraper(parentId: string): Promise<void> {
+  /** Never throws — always resolves to an outcome, so a caller fanning out to
+   *  several platforms can report each one independently. */
+  private async syncDeletePropertyToScraper(
+    parentId: string
+  ): Promise<{ success: boolean; reason?: string }> {
     if (!this.scraperJwtClient) {
-      this.logger.warn(
-        '[sync] scraper JWT client disabled, skipping property delete sync'
-      )
-      return
+      const reason =
+        'Scraper JWT client disabled — URL or JWT_COMMUNICATION_SECRET missing'
+      this.logger.warn(`[sync] ${reason}`)
+      return { success: false, reason }
     }
 
     try {
@@ -5529,10 +5542,39 @@ export class PropertyService implements IPropertyService {
       this.logger.log(
         `[sync] scraper property delete: ${JSON.stringify(r.data)}`
       )
+      return { success: true }
     } catch (e: any) {
-      this.logger.error(
-        `[sync] scraper property delete failed: ${e?.response?.data ? JSON.stringify(e.response.data) : (e?.message ?? e)}`
+      const reason = this.extractSyncErrorReason(e)
+      this.logger.error(`[sync] scraper property delete failed: ${reason}`)
+      return { success: false, reason }
+    }
+  }
+
+  /** Dashboard counterpart of syncDeletePropertyToScraper. Also never throws. */
+  private async syncDeletePropertyToDashboard(
+    parentId: string
+  ): Promise<{ success: boolean; reason?: string }> {
+    if (!this.dashboardJwtClient) {
+      const reason =
+        'Dashboard JWT client disabled — URL or JWT_COMMUNICATION_SECRET missing'
+      this.logger.warn(`[sync] ${reason}`)
+      return { success: false, reason }
+    }
+
+    try {
+      const r = await this.dashboardJwtClient.post(
+        `/api/property/sync-delete/${parentId}`,
+        {},
+        { headers: this.syncCommunication.createAuthHeaders() }
       )
+      this.logger.log(
+        `[sync] dashboard property delete: ${JSON.stringify(r.data)}`
+      )
+      return { success: true }
+    } catch (e: any) {
+      const reason = this.extractSyncErrorReason(e)
+      this.logger.error(`[sync] dashboard property delete failed: ${reason}`)
+      return { success: false, reason }
     }
   }
 
