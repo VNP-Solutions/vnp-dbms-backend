@@ -791,8 +791,27 @@ export class PropertyController {
 
   @Delete(':id')
   @RequirePermission(ModuleType.PROPERTY, PermissionAction.DELETE, true)
-  @ApiOperation({ summary: 'Delete property by ID' })
-  @ApiResponse({ status: 200, description: 'Property deleted' })
+  @ApiOperation({
+    summary: 'Delete property by ID',
+    description:
+      'Deletes the property from DBMS, then from the dashboard and the scraper. ' +
+      'The two downstream deletes are independent — one failing never prevents ' +
+      'the other. A 200 means the DBMS delete succeeded; inspect `sync` to see ' +
+      'whether each platform also applied it.'
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Property deleted from DBMS — check `sync` for each platform',
+    schema: {
+      example: {
+        message: 'Property deleted successfully',
+        sync: {
+          dashboard: { success: true },
+          scraper: { success: false, reason: 'Property not found with parent_id: abc' }
+        }
+      }
+    }
+  })
   @ApiResponse({ status: 404, description: 'Property not found' })
   remove(@Param('id') id: string, @CurrentUser() user: IUserWithPermissions) {
     return this.propertyService.removeAndSync(id, user)
