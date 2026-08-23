@@ -994,7 +994,8 @@ VNP Solutions Team`
   async sendUploadJobReportEmail(
     recipientEmail: string,
     job: {
-      source: 'import' | 'bulk-update'
+      source: 'import' | 'bulk-update' | 'bulk-transfer'
+      /** Uploaded filename — or, for a bulk transfer, the target portfolio. */
       filename: string
       error?: string
       portfolios: { total: number; items: UploadJobEntitySummary[] }
@@ -1096,7 +1097,15 @@ VNP Solutions Team`
     const totalFailed = portfolioFailed + propertyFailed
     const totalSkipped = portfolioSkipped + propertySkipped
     const totalIssues = totalFailed + totalSkipped
-    const actionLabel = job.source === 'import' ? 'Import' : 'Bulk Update'
+    const actionLabel =
+      job.source === 'import'
+        ? 'Import'
+        : job.source === 'bulk-transfer'
+          ? 'Bulk Transfer'
+          : 'Bulk Update'
+    // A bulk transfer has no file — `filename` carries the target portfolio.
+    const isTransfer = job.source === 'bulk-transfer'
+    const contextLabel = isTransfer ? 'Target portfolio' : 'File'
 
     // Builds a fresh workbook containing only the rows that failed or were
     // skipped — same idea as the old sync-batch report: a small, focused
@@ -1140,7 +1149,9 @@ VNP Solutions Team`
       const excelBuffer = Buffer.from(
         XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
       )
-      const filenameBase = job.filename.replace(/\.[^./]+$/, '') || 'upload'
+      const filenameBase = isTransfer
+        ? 'bulk-transfer'
+        : job.filename.replace(/\.[^./]+$/, '') || 'upload'
       attachments.push({
         filename: `${filenameBase}-issues.xlsx`,
         content: excelBuffer,
@@ -1152,16 +1163,20 @@ VNP Solutions Team`
     const mailOptions: any = {
       from: this.configService.get('smtp.email', { infer: true }),
       to: recipientEmail,
-      subject: `${actionLabel} Report — ${job.filename} — ${job.portfolios.total} portfolios, ${job.properties.total} properties (${totalFailed} failed, ${totalSkipped} skipped)`,
-      text: `${actionLabel} finished for "${job.filename}".\n\nPortfolios: ${job.portfolios.total} (${portfolioFailed} failed, ${portfolioSkipped} skipped)\nProperties: ${job.properties.total} (${propertyFailed} failed, ${propertySkipped} skipped)${job.error ? `\n\nJob error: ${job.error}` : ''}`,
+      subject: isTransfer
+        ? `${actionLabel} Report — ${job.filename} — ${job.properties.total} properties (${totalFailed} failed, ${totalSkipped} skipped)`
+        : `${actionLabel} Report — ${job.filename} — ${job.portfolios.total} portfolios, ${job.properties.total} properties (${totalFailed} failed, ${totalSkipped} skipped)`,
+      text: isTransfer
+        ? `${actionLabel} finished — ${job.properties.total} properties moved to "${job.filename}" (${propertyFailed} failed, ${propertySkipped} skipped).${job.error ? `\n\nJob error: ${job.error}` : ''}`
+        : `${actionLabel} finished for "${job.filename}".\n\nPortfolios: ${job.portfolios.total} (${portfolioFailed} failed, ${portfolioSkipped} skipped)\nProperties: ${job.properties.total} (${propertyFailed} failed, ${propertySkipped} skipped)${job.error ? `\n\nJob error: ${job.error}` : ''}`,
       html: `
         <div style="font-family:Arial,sans-serif;padding:20px;max-width:1000px;margin:0 auto;">
           <h3 style="margin-bottom:4px;">${actionLabel} Report</h3>
-          <p style="margin-top:0;color:#555;">File: <strong>${job.filename}</strong></p>
+          <p style="margin-top:0;color:#555;">${contextLabel}: <strong>${job.filename}</strong></p>
           <p style="color:#555;">
-            Portfolios: <strong>${job.portfolios.total}</strong>
+            ${isTransfer ? '' : `Portfolios: <strong>${job.portfolios.total}</strong>
             (${outcomeSummary(portfolioFailed, portfolioSkipped)})
-            &nbsp;|&nbsp;
+            &nbsp;|&nbsp;`}
             Properties: <strong>${job.properties.total}</strong>
             (${outcomeSummary(propertyFailed, propertySkipped)})
           </p>
