@@ -57,6 +57,7 @@ const COLUMN_TO_FIELDS: Record<string, string[]> = {
   agoda_duration:              ['agoda_duration'],
   agoda_run_date:              ['agoda_run_date'],
   agoda_processor:             ['agoda_processor_id', 'agoda_processor'],
+  agoda_screenshots:           ['agoda_screenshot_urls'],
   hotel_address:               ['hotel_address'],
   portfolio_contact_email:     ['portfolio_contact_email'],
   reporting_contact:           ['reporting_contact'],

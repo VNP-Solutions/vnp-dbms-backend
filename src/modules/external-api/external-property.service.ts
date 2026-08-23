@@ -176,6 +176,7 @@ export class ExternalPropertyService {
       booking_credential_verified: property.booking_credential_verified ?? null,
       booking_otp_number: property.booking_otp_number ?? null,
       booking_screenshot_urls: property.booking_screenshot_urls ?? [],
+      agoda_screenshot_urls: property.agoda_screenshot_urls ?? [],
       agoda_billing_type: property.agoda_billing_type?.name ?? null,
       agoda_service_type: property.agoda_service_type?.type ?? null,
       agoda_frequency: property.agoda_frequency?.name ?? null,

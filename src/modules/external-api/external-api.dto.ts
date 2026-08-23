@@ -254,6 +254,13 @@ export interface ExternalPropertyDto {
     timestamp: string
     type: string
   }[]
+  /** Screenshots from the most recent Agoda property check (S3 URLs). */
+  agoda_screenshot_urls: {
+    step: string
+    url: string
+    timestamp: string
+    type: string
+  }[]
   agoda_billing_type: string | null
   agoda_service_type: string | null
   agoda_frequency: string | null

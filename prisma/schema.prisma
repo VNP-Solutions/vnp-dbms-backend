@@ -137,7 +137,8 @@ model UserInvitation {
 }
 
 /// One screenshot captured during an OTA property check and stored in S3.
-type BookingScreenshot {
+/// Shared by every platform's *_screenshot_urls field.
+type OtaScreenshot {
   step      String
   url       String
   timestamp String
@@ -439,12 +440,12 @@ model Property {
   to_db                            String?
 
   // Booking.com integration detail
-  booking_billing_type_id     String?             @db.ObjectId
-  booking_billing_type        BillingType?        @relation("PropertyBookingBillingType", fields: [booking_billing_type_id], references: [id])
-  booking_service_type_id     String?             @db.ObjectId
-  booking_service_type        ServiceType?        @relation("PropertyBookingServiceType", fields: [booking_service_type_id], references: [id])
-  booking_frequency_id        String?             @db.ObjectId
-  booking_frequency           Frequency?          @relation("PropertyBookingFrequency", fields: [booking_frequency_id], references: [id])
+  booking_billing_type_id     String?         @db.ObjectId
+  booking_billing_type        BillingType?    @relation("PropertyBookingBillingType", fields: [booking_billing_type_id], references: [id])
+  booking_service_type_id     String?         @db.ObjectId
+  booking_service_type        ServiceType?    @relation("PropertyBookingServiceType", fields: [booking_service_type_id], references: [id])
+  booking_frequency_id        String?         @db.ObjectId
+  booking_frequency           Frequency?      @relation("PropertyBookingFrequency", fields: [booking_frequency_id], references: [id])
   booking_access_level        Boolean?
   booking_from                String?
   booking_to                  String?
@@ -459,15 +460,15 @@ model Property {
   // Screenshots from the most recent Booking.com property check, uploaded to
   // S3 by the scraper. Replaced on every run, so this reflects the latest
   // check rather than an accumulating history.
-  booking_screenshot_urls     BookingScreenshot[]
+  booking_screenshot_urls     OtaScreenshot[]
 
   // Agoda integration detail
-  agoda_billing_type_id     String?      @db.ObjectId
-  agoda_billing_type        BillingType? @relation("PropertyAgodaBillingType", fields: [agoda_billing_type_id], references: [id])
-  agoda_service_type_id     String?      @db.ObjectId
-  agoda_service_type        ServiceType? @relation("PropertyAgodaServiceType", fields: [agoda_service_type_id], references: [id])
-  agoda_frequency_id        String?      @db.ObjectId
-  agoda_frequency           Frequency?   @relation("PropertyAgodaFrequency", fields: [agoda_frequency_id], references: [id])
+  agoda_billing_type_id     String?         @db.ObjectId
+  agoda_billing_type        BillingType?    @relation("PropertyAgodaBillingType", fields: [agoda_billing_type_id], references: [id])
+  agoda_service_type_id     String?         @db.ObjectId
+  agoda_service_type        ServiceType?    @relation("PropertyAgodaServiceType", fields: [agoda_service_type_id], references: [id])
+  agoda_frequency_id        String?         @db.ObjectId
+  agoda_frequency           Frequency?      @relation("PropertyAgodaFrequency", fields: [agoda_frequency_id], references: [id])
   agoda_access_level        Boolean?
   agoda_from                String?
   agoda_to                  String?
@@ -479,6 +480,10 @@ model Property {
   agoda_revised_date        String?
   agoda_credential_verified Boolean?
   agoda_otp_number          String?
+  // Screenshots from the most recent Agoda property check, uploaded to S3 by
+  // the scraper. Replaced on every run, so this reflects the latest check
+  // rather than an accumulating history.
+  agoda_screenshot_urls     OtaScreenshot[]
 
   sales_rep String?
 
