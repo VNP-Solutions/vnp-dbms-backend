@@ -47,6 +47,7 @@ const COLUMN_TO_FIELDS: Record<string, string[]> = {
   booking_run_date:            ['booking_run_date'],
   booking_processor:           ['booking_processor_id', 'booking_processor'],
   booking_otp_phone:           ['booking_otp_phone'],
+  booking_screenshots:         ['booking_screenshot_urls'],
   agoda_id:                    ['agoda_id'],
   agoda_service_type:          ['agoda_service_type_id', 'agoda_service_type'],
   agoda_service_fee:           ['agoda_service_fee'],

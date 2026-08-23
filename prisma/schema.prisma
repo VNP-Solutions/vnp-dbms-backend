@@ -136,6 +136,14 @@ model UserInvitation {
   @@index([user_role_id])
 }
 
+/// One screenshot captured during an OTA property check and stored in S3.
+type BookingScreenshot {
+  step      String
+  url       String
+  timestamp String
+  type      String
+}
+
 type ProjectRoleInvitation {
   project_type     ProjectType
   user_role_id     String      @db.ObjectId
@@ -431,12 +439,12 @@ model Property {
   to_db                            String?
 
   // Booking.com integration detail
-  booking_billing_type_id     String?      @db.ObjectId
-  booking_billing_type        BillingType? @relation("PropertyBookingBillingType", fields: [booking_billing_type_id], references: [id])
-  booking_service_type_id     String?      @db.ObjectId
-  booking_service_type        ServiceType? @relation("PropertyBookingServiceType", fields: [booking_service_type_id], references: [id])
-  booking_frequency_id        String?      @db.ObjectId
-  booking_frequency           Frequency?   @relation("PropertyBookingFrequency", fields: [booking_frequency_id], references: [id])
+  booking_billing_type_id     String?             @db.ObjectId
+  booking_billing_type        BillingType?        @relation("PropertyBookingBillingType", fields: [booking_billing_type_id], references: [id])
+  booking_service_type_id     String?             @db.ObjectId
+  booking_service_type        ServiceType?        @relation("PropertyBookingServiceType", fields: [booking_service_type_id], references: [id])
+  booking_frequency_id        String?             @db.ObjectId
+  booking_frequency           Frequency?          @relation("PropertyBookingFrequency", fields: [booking_frequency_id], references: [id])
   booking_access_level        Boolean?
   booking_from                String?
   booking_to                  String?
@@ -448,6 +456,10 @@ model Property {
   booking_revised_date        String?
   booking_credential_verified Boolean?
   booking_otp_number          String?
+  // Screenshots from the most recent Booking.com property check, uploaded to
+  // S3 by the scraper. Replaced on every run, so this reflects the latest
+  // check rather than an accumulating history.
+  booking_screenshot_urls     BookingScreenshot[]
 
   // Agoda integration detail
   agoda_billing_type_id     String?      @db.ObjectId

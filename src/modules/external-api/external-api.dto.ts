@@ -247,6 +247,13 @@ export interface ExternalPropertyDto {
   booking_revised_date: string | null
   booking_credential_verified: boolean | null
   booking_otp_number: string | null
+  /** Screenshots from the most recent Booking.com property check (S3 URLs). */
+  booking_screenshot_urls: {
+    step: string
+    url: string
+    timestamp: string
+    type: string
+  }[]
   agoda_billing_type: string | null
   agoda_service_type: string | null
   agoda_frequency: string | null
