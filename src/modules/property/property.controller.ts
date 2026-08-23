@@ -40,7 +40,6 @@ import {
   AllDataForGlobalFilterResponseDto,
   BulkDeletePropertyDto,
   BulkTransferPropertyDto,
-  BulkUpdateResultDto,
   CreatePropertyDto,
   AgodaCheckPropertiesDto,
   BookingCheckPropertiesDto,
@@ -55,7 +54,8 @@ import {
   SyncBulkDeleteBodyDto,
   TransferPropertyDto,
   SyncByOtaDto,
-  UpdatePropertyDto
+  UpdatePropertyDto,
+  UploadJobAcceptedDto
 } from './property.dto'
 import type { IPropertyService } from './property.interface'
 import { ServiceTokenGuard } from './guards/service-token.guard'
@@ -147,6 +147,7 @@ export class PropertyController {
   }
 
   @Post('bulk-update')
+  @HttpCode(200)
   @RequirePermission(ModuleType.PROPERTY, PermissionAction.UPDATE)
   @UseInterceptors(ExcelFileInterceptor)
   @ApiConsumes('multipart/form-data')
@@ -213,8 +214,8 @@ export class PropertyController {
   })
   @ApiResponse({
     status: 200,
-    description: 'Bulk update completed',
-    type: BulkUpdateResultDto
+    description: 'Bulk update accepted and running in the background',
+    type: UploadJobAcceptedDto
   })
   @ApiResponse({
     status: 400,
@@ -716,11 +717,31 @@ export class PropertyController {
   @ApiOperation({
     summary: 'Transfer property to a different portfolio',
     description:
-      "Moves a property to a new portfolio. Requires the caller's account password for confirmation."
+      "Moves a property to a new portfolio in DBMS, then pushes the new " +
+      "portfolio to the dashboard and the scraper. Requires the caller's " +
+      'account password for confirmation. The two downstream upserts are ' +
+      'independent — one failing never prevents the other. A 200 means the ' +
+      'DBMS move succeeded; inspect `sync` to see whether each platform also ' +
+      'applied it.'
   })
   @ApiResponse({
     status: 200,
-    description: 'Property transferred successfully'
+    description:
+      'Property transferred in DBMS — check `sync` for each platform',
+    schema: {
+      example: {
+        id: '507f1f77bcf86cd799439011',
+        name: 'Sample Hotel',
+        portfolio_id: '507f1f77bcf86cd799439012',
+        sync: {
+          dashboard: { success: true },
+          scraper: {
+            success: false,
+            reason: 'Property not found with parent_id: abc'
+          }
+        }
+      }
+    }
   })
   @ApiResponse({
     status: 400,
@@ -919,45 +940,31 @@ export class PropertyController {
   }
 
   @Post('bulk-transfer')
+  @HttpCode(200)
   @RequirePermission(ModuleType.PROPERTY, PermissionAction.UPDATE)
   @ApiOperation({
     summary: 'Bulk transfer properties to a different portfolio',
     description:
-      "Moves multiple properties to a new portfolio. Requires the caller's account password for confirmation. Properties already in the target portfolio or inaccessible ones are reported as skipped."
+      "Accepts the transfer and runs it in the background, like bulk update. " +
+      "The caller's account password, the target portfolio and the property " +
+      'ids are validated up front (a bad password or portfolio still returns ' +
+      '400 immediately); everything after that — the DBMS moves and the ' +
+      'dashboard/scraper sync-upsert for each property — happens off-request. ' +
+      'Track progress with GET /property/upload-job/{jobId}, which reports ' +
+      'DBMS, scraper and dashboard state per property. Properties already in ' +
+      'the target portfolio or inaccessible ones are reported as skipped, and ' +
+      'a report email is sent when the job finishes.'
   })
   @ApiResponse({
     status: 200,
-    description: 'Bulk transfer completed',
-    schema: {
-      type: 'object',
-      properties: {
-        success: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              id: { type: 'string' },
-              name: { type: 'string' }
-            }
-          }
-        },
-        skipped: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              id: { type: 'string' },
-              name: { type: 'string', nullable: true },
-              reason: { type: 'string' }
-            }
-          }
-        },
-        successCount: { type: 'number' },
-        skippedCount: { type: 'number' }
-      }
-    }
+    description: 'Bulk transfer accepted and running in the background',
+    type: UploadJobAcceptedDto
   })
-  @ApiResponse({ status: 400, description: 'Invalid password' })
+  @ApiResponse({
+    status: 400,
+    description:
+      'Invalid password, no properties provided, or target portfolio not found'
+  })
   @ApiResponse({ status: 403, description: 'Forbidden' })
   bulkTransferPortfolio(
     @Body() dto: BulkTransferPropertyDto,

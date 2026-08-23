@@ -41,6 +41,10 @@ export interface EntitySyncStatus {
 export interface UploadJobEntity {
   /** Excel row number (1-based, header excluded) — null when not tied to a single row (e.g. a portfolio referenced by several rows). */
   row: number | null
+  /** DBMS id of the entity, when the job started from ids rather than a file
+   *  (bulk-transfer) — lets the frontend map progress back to the rows the
+   *  user selected. Absent for file-driven jobs, where `row` identifies it. */
+  id?: string
   name: string
   dbms: EntitySyncStatus
   scraper: EntitySyncStatus
@@ -57,7 +61,10 @@ export type UploadJobStatus =
 /** Live status document for a bulk import / bulk-update background job, persisted in Redis. */
 export interface UploadJobData {
   jobId: string
-  source: 'import' | 'bulk-update'
+  source: 'import' | 'bulk-update' | 'bulk-transfer'
+  /** Name of the uploaded file. For `bulk-transfer` — which has no file —
+   *  this carries the target portfolio name instead, so the same status
+   *  document and report email stay renderable for every job source. */
   filename: string
   userId: string
   userEmail: string
@@ -493,16 +500,18 @@ export interface IPropertyService {
     portfolioId: string,
     password: string,
     user: IUserWithPermissions
-  ): Promise<PropertyWithRelations>
+  ): Promise<TransferPortfolioResult>
   syncByOta(
     dto: SyncByOtaDto
   ): Promise<{ status: string; id?: string; candidates?: string[] }>
+  /// Accepted-and-backgrounded, like `bulkUpdate`: the DBMS moves and the
+  /// downstream sync-upserts run off-request, tracked as an upload job.
   bulkTransferPortfolio(
     ids: string[],
     portfolioId: string,
     password: string,
     user: IUserWithPermissions
-  ): Promise<BulkTransferResult>
+  ): Promise<UploadJobAcceptedDto>
   importFromExcelAndSync(
     file: Express.Multer.File,
     user: IUserWithPermissions
@@ -527,11 +536,18 @@ export interface IPropertyService {
   getContactExternal(id: string): Promise<PropertyContact>
 }
 
-export interface BulkTransferResult {
-  success: Array<{ id: string; name: string }>
-  skipped: Array<{ id: string; name?: string; reason: string }>
-  successCount: number
-  skippedCount: number
+/// Per-platform outcome of a property sync-upsert fan-out. A DBMS write can
+/// succeed while one or both downstream platforms reject or miss the change.
+export interface PropertySyncOutcome {
+  dashboard: { success: boolean; reason?: string }
+  scraper: { success: boolean; reason?: string }
+}
+
+/// The transferred property, plus the outcome of pushing its new portfolio to
+/// the dashboard and the scraper. A 200 means the DBMS move succeeded —
+/// inspect `sync` to see whether each platform also applied it.
+export type TransferPortfolioResult = PropertyWithRelations & {
+  sync: PropertySyncOutcome
 }
 
 export interface ImportPropertiesResult {

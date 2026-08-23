@@ -79,7 +79,9 @@ import type {
     IPropertyRepository,
     IPropertyService,
     PropertyContact,
+    PropertySyncOutcome,
     PropertyWithRelations,
+    TransferPortfolioResult,
     UploadJobData,
     UploadJobEntity
 } from './property.interface'
@@ -246,7 +248,7 @@ export class PropertyService implements IPropertyService {
 
   private newUploadJob(
     jobId: string,
-    source: 'import' | 'bulk-update',
+    source: 'import' | 'bulk-update' | 'bulk-transfer',
     filename: string,
     userId: string,
     userEmail: string
@@ -424,9 +426,14 @@ export class PropertyService implements IPropertyService {
     await this.saveUploadJob(job)
   }
 
-  private newUploadJobEntity(name: string, row: number | null): UploadJobEntity {
+  private newUploadJobEntity(
+    name: string,
+    row: number | null,
+    id?: string
+  ): UploadJobEntity {
     return {
       row,
+      ...(id ? { id } : {}),
       name,
       dbms: this.pendingEntityStatus(),
       scraper: this.pendingEntityStatus(),
@@ -777,12 +784,11 @@ export class PropertyService implements IPropertyService {
 
         switch (name) {
           case 'portfolio_id':
-            whereConditions.push({
-              OR: [
-                { portfolio_id: { in: values } },
-                { subportfolio: { portfolio_id: { in: values } } }
-              ]
-            })
+            // The property's own portfolio only. This deliberately does not
+            // also match subportfolio.portfolio_id: a property whose
+            // subportfolio is parented to another portfolio would otherwise
+            // come back under a portfolio it does not belong to.
+            whereConditions.push({ portfolio_id: { in: values } })
             break
           case 'property_id':
             whereConditions.push({ id: { in: values } })
@@ -1840,7 +1846,7 @@ export class PropertyService implements IPropertyService {
     portfolioId: string,
     password: string,
     user: IUserWithPermissions
-  ): Promise<PropertyWithRelations> {
+  ): Promise<TransferPortfolioResult> {
     const userFromDb = await this.authRepository.findUserByEmail(user.email)
     if (!userFromDb) throw new BadRequestException('Invalid credentials')
 
@@ -1856,12 +1862,26 @@ export class PropertyService implements IPropertyService {
         'Property is already in the specified portfolio'
       )
 
-    await this.repo.update(id, { portfolio_id: portfolioId })
+    const updated = await this.repo.update(id, { portfolio_id: portfolioId })
     await Promise.all([
       this.redisService.del(CACHE_KEY(id)),
       this.invalidateCaches()
     ])
-    return this.repo.findById(id) as Promise<PropertyWithRelations>
+
+    // portfolio_parent_id is part of both sync payloads, so a transfer that
+    // only lands in DBMS leaves the dashboard and the scraper pointing at the
+    // old portfolio — fan out the same upsert `updateAndSync` uses.
+    const sync = await this.syncUpsertPropertyToPlatforms(updated)
+
+    if (!sync.dashboard.success || !sync.scraper.success) {
+      this.logger.error(
+        `[sync] property ${id} transferred in DBMS but not everywhere — ` +
+          `dashboard=${sync.dashboard.success ? 'ok' : sync.dashboard.reason} ` +
+          `scraper=${sync.scraper.success ? 'ok' : sync.scraper.reason}`
+      )
+    }
+
+    return { ...updated, sync }
   }
 
   async bulkTransferPortfolio(
@@ -1869,7 +1889,7 @@ export class PropertyService implements IPropertyService {
     portfolioId: string,
     password: string,
     user: IUserWithPermissions
-  ): Promise<import('./property.interface').BulkTransferResult> {
+  ): Promise<UploadJobAcceptedDto> {
     const userFromDb = await this.authRepository.findUserByEmail(user.email)
     if (!userFromDb) throw new BadRequestException('Invalid credentials')
 
@@ -1879,59 +1899,225 @@ export class PropertyService implements IPropertyService {
     )
     if (!isPasswordValid) throw new BadRequestException('Invalid password')
 
-    this.logger.log(
-      `User ${user.email} attempting bulk transfer of ${ids.length} properties to portfolio ${portfolioId}`
+    if (!ids.length) throw new BadRequestException('No properties provided')
+
+    // Validate the target here rather than in the background: a bad portfolio
+    // id would otherwise fail every single row inside an already-accepted job.
+    const portfolio = await this.prisma.portfolio.findUnique({
+      where: { id: portfolioId },
+      select: { id: true, name: true }
+    })
+    if (!portfolio) throw new BadRequestException('Target portfolio not found')
+
+    // Resolve names once, up front, so the job the frontend polls is readable
+    // from its first tick instead of listing bare ids.
+    const named = await this.prisma.property.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, name: true }
+    })
+    const nameById = new Map(named.map(p => [p.id, p.name]))
+
+    const jobId = randomUUID()
+    const userEmail = user?.email ?? user?.id ?? 'unknown'
+    const job = this.newUploadJob(
+      jobId,
+      'bulk-transfer',
+      portfolio.name,
+      user.id,
+      userEmail
+    )
+    job.properties.items = ids.map(id =>
+      this.newUploadJobEntity(nameById.get(id) ?? id, null, id)
+    )
+    job.properties.total = job.properties.items.length
+    await this.saveUploadJob(job)
+    await this.setLatestUploadJobForUser(user.id, jobId)
+
+    this.syncLogger.step(
+      `🔄 UPLOAD JOB ACCEPTED (bulk-transfer) — job=${jobId} properties=${ids.length} ` +
+        `target="${portfolio.name}" user=${userEmail} (running in background)`
     )
 
-    const accessibleIds = await this.repo.getAccessiblePropertyIds(user.id)
-
-    const success: Array<{ id: string; name: string }> = []
-    const skipped: Array<{ id: string; name?: string; reason: string }> = []
-
-    for (const id of ids) {
-      if (accessibleIds !== 'all' && !accessibleIds.includes(id)) {
-        skipped.push({ id, reason: 'No access to this property' })
-        continue
-      }
-
-      try {
-        const property = await this.repo.findById(id)
-        if (!property) {
-          skipped.push({ id, reason: 'Property not found' })
-          continue
-        }
-        if (property.portfolio_id === portfolioId) {
-          skipped.push({
-            id,
-            name: property.name,
-            reason: 'Property is already in the specified portfolio'
-          })
-          continue
-        }
-
-        await this.repo.update(id, { portfolio_id: portfolioId })
-        await this.redisService.del(CACHE_KEY(id))
-        success.push({ id: property.id, name: property.name })
-      } catch (err: any) {
-        this.logger.error(`Error transferring property ${id}: ${err.message}`)
-        skipped.push({ id, reason: `Error: ${err.message}` })
-      }
-    }
-
-    if (success.length > 0) {
-      await this.invalidateCaches()
-    }
-
-    this.logger.log(
-      `Bulk transfer completed: ${success.length} success, ${skipped.length} skipped`
-    )
+    setImmediate(() => {
+      this.runFullAsyncBulkTransfer({
+        ids,
+        portfolioId,
+        user,
+        jobId
+      }).catch(e =>
+        this.syncLogger.error(
+          `[async] bulk-transfer job ${jobId} failed: ${e?.message ?? e}`
+        )
+      )
+    })
 
     return {
-      success,
-      skipped,
-      successCount: success.length,
-      skippedCount: skipped.length
+      jobId,
+      status: 'accepted',
+      message: `Bulk transfer started. Track progress with GET /property/upload-job/${jobId}.`
     }
+  }
+
+  // Runs entirely in the background (dispatched via setImmediate from
+  // bulkTransferPortfolio). Moves each property to the target portfolio in
+  // DBMS one row at a time, then re-pushes it through the SAME per-property
+  // sync-upsert the dashboard and the scraper already expose — a transfer
+  // needs no new downstream endpoint, since portfolio_parent_id is part of
+  // that payload. The network-bound syncs are flushed in small concurrent
+  // batches, and live progress is persisted to Redis after every step so the
+  // frontend can poll it exactly like an import or a bulk update.
+  private async runFullAsyncBulkTransfer(params: {
+    ids: string[]
+    portfolioId: string
+    user: IUserWithPermissions
+    jobId: string
+  }): Promise<void> {
+    const { ids, portfolioId, user, jobId } = params
+    const job = await this.getUploadJobStatus(jobId)
+    if (!job) return
+
+    /** Marks a row that never reached the target portfolio in DBMS. The
+     *  downstream systems are labelled skipped rather than failed — they were
+     *  deliberately never called, since there is nothing new to push. */
+    const markNotTransferred = (
+      item: UploadJobEntity,
+      state: EntitySyncState,
+      reason: string
+    ): void => {
+      const downstream = state === 'failed' ? 'DBMS failed' : 'Not transferred'
+      item.dbms = { state, reason }
+      item.scraper = { state: 'skipped', reason: downstream }
+      item.dashboard = { state: 'skipped', reason: downstream }
+    }
+
+    try {
+      job.status = 'processing_properties'
+      await this.saveUploadJob(job)
+
+      const accessibleIds = await this.repo.getAccessiblePropertyIds(user.id)
+
+      const pendingSync: Array<{
+        item: UploadJobEntity
+        full: PropertyWithRelations
+      }> = []
+      let transferredCount = 0
+
+      for (let i = 0; i < ids.length; i++) {
+        const id = ids[i]
+        const item = job.properties.items[i]
+        item.dbms.state = 'processing'
+        await this.saveUploadJob(job)
+
+        if (accessibleIds !== 'all' && !accessibleIds.includes(id)) {
+          markNotTransferred(item, 'skipped', 'No access to this property')
+          await this.saveUploadJob(job)
+          continue
+        }
+
+        try {
+          // withTimeout on every Prisma call: this job can sit idle between
+          // rows waiting on the syncs, and Prisma's Mongo connector has no
+          // socketTimeoutMS — a stale pooled connection would otherwise hang
+          // the whole job instead of failing this one row.
+          const property = await withTimeout(
+            this.repo.findById(id),
+            UPLOAD_JOB_DB_TIMEOUT_MS,
+            `findById(${id})`
+          )
+          if (!property) {
+            markNotTransferred(item, 'skipped', 'Property not found')
+            await this.saveUploadJob(job)
+            continue
+          }
+          item.name = property.name
+          if (property.portfolio_id === portfolioId) {
+            markNotTransferred(
+              item,
+              'skipped',
+              'Property is already in the specified portfolio'
+            )
+            await this.saveUploadJob(job)
+            continue
+          }
+
+          const updated = await withTimeout(
+            this.repo.update(id, { portfolio_id: portfolioId }),
+            UPLOAD_JOB_DB_TIMEOUT_MS,
+            `update(${id})`
+          )
+          await this.redisService.del(CACHE_KEY(id))
+          transferredCount++
+
+          item.dbms = { state: 'updated' }
+          item.scraper.state = 'processing'
+          item.dashboard.state = 'processing'
+          pendingSync.push({ item, full: updated })
+        } catch (e: any) {
+          const reason = e?.message ?? String(e)
+          this.syncLogger.error(
+            `[async] bulk-transfer job ${jobId}: property ${id} failed: ${reason}`
+          )
+          markNotTransferred(item, 'failed', reason)
+        }
+        await this.saveUploadJob(job)
+
+        if (pendingSync.length >= UPLOAD_JOB_SYNC_CHUNK_SIZE) {
+          await this.processPropertySyncChunk(
+            job,
+            pendingSync.splice(0, pendingSync.length)
+          )
+        }
+      }
+      await this.processPropertySyncChunk(
+        job,
+        pendingSync.splice(0, pendingSync.length)
+      )
+
+      job.status = 'complete'
+      job.completedAt = new Date().toISOString()
+      await this.saveUploadJob(job)
+
+      if (transferredCount > 0) {
+        await this.invalidateCaches()
+        this.scheduleCacheWarm(user)
+      }
+
+      this.syncLogger.step(
+        `✅ BULK TRANSFER COMPLETE — job=${jobId} ${transferredCount}/${ids.length} properties moved`
+      )
+      await this.sendUploadJobReportEmail(job)
+    } catch (e: any) {
+      // We're in the background — can't throw to the caller. Record the
+      // failure on the job so the frontend (polling) surfaces it.
+      const reason = e?.message ?? String(e)
+      this.syncLogger.error(
+        `[async] bulk-transfer job ${jobId} failed: ${reason}`
+      )
+      job.status = 'failed'
+      job.error = reason
+      job.completedAt = new Date().toISOString()
+      await this.saveUploadJob(job)
+      await this.sendUploadJobReportEmail(job)
+    }
+  }
+
+  /** Pushes a property's current DBMS state to the dashboard and the scraper.
+   *  Neither call throws — each resolves to its own outcome — so one platform
+   *  being down never hides the other's result. */
+  private async syncUpsertPropertyToPlatforms(
+    property: PropertyWithRelations
+  ): Promise<PropertySyncOutcome> {
+    const [dashboard, scraper] = await Promise.all([
+      this.syncUpsertPropertyToDashboard(property).catch(e => ({
+        success: false,
+        reason: e?.message ?? String(e)
+      })),
+      this.syncUpsertPropertyToScraper(property).catch(e => ({
+        success: false,
+        reason: e?.message ?? String(e)
+      }))
+    ])
+    return { dashboard, scraper }
   }
 
   async findByPortfolioId(
