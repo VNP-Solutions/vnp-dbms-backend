@@ -442,13 +442,10 @@ export class PropertyRepository implements IPropertyRepository {
   async findByPortfolioId(
     portfolioId: string
   ): Promise<PropertyWithRelations[]> {
+    // The property's own portfolio only — no fallback to the subportfolio's
+    // parent portfolio, which would return properties belonging elsewhere.
     const rows = await this.prisma.property.findMany({
-      where: {
-        OR: [
-          { portfolio_id: portfolioId },
-          { subportfolio: { portfolio_id: portfolioId } }
-        ]
-      },
+      where: { portfolio_id: portfolioId },
       include: propertyInclude
     })
     return rows.map(withTotalNotes) as PropertyWithRelations[]

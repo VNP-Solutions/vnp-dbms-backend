@@ -784,12 +784,11 @@ export class PropertyService implements IPropertyService {
 
         switch (name) {
           case 'portfolio_id':
-            whereConditions.push({
-              OR: [
-                { portfolio_id: { in: values } },
-                { subportfolio: { portfolio_id: { in: values } } }
-              ]
-            })
+            // The property's own portfolio only. This deliberately does not
+            // also match subportfolio.portfolio_id: a property whose
+            // subportfolio is parented to another portfolio would otherwise
+            // come back under a portfolio it does not belong to.
+            whereConditions.push({ portfolio_id: { in: values } })
             break
           case 'property_id':
             whereConditions.push({ id: { in: values } })
