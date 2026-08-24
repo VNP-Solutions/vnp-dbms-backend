@@ -247,6 +247,13 @@ export interface ExternalPropertyDto {
   booking_revised_date: string | null
   booking_credential_verified: boolean | null
   booking_otp_number: string | null
+  /** Screenshots from the most recent Expedia property check (S3 URLs). */
+  expedia_screenshot_urls: {
+    step: string
+    url: string
+    timestamp: string
+    type: string
+  }[]
   /** Screenshots from the most recent Booking.com property check (S3 URLs). */
   booking_screenshot_urls: {
     step: string

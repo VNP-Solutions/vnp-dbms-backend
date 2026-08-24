@@ -36,6 +36,7 @@ const COLUMN_TO_FIELDS: Record<string, string[]> = {
   expedia_run_date_db:         ['expedia_run_date_db'],
   expedia_processor:           ['expedia_processor_id', 'expedia_processor'],
   expedia_otp_number:          ['expedia_otp_number'],
+  expedia_screenshots:         ['expedia_screenshot_urls'],
   need_another_domain:         ['need_another_domain'],
   booking_id:                  ['booking_id'],
   booking_service_type:        ['booking_service_type_id', 'booking_service_type'],

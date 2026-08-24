@@ -411,12 +411,12 @@ model Property {
   agoda_status   String?
 
   // Expedia integration detail
-  expedia_billing_type_id          String?      @db.ObjectId
-  expedia_billing_type             BillingType? @relation("PropertyExpediaBillingType", fields: [expedia_billing_type_id], references: [id])
-  expedia_service_type_id          String?      @db.ObjectId
-  expedia_service_type             ServiceType? @relation("PropertyExpediaServiceType", fields: [expedia_service_type_id], references: [id])
-  expedia_frequency_id             String?      @db.ObjectId
-  expedia_frequency                Frequency?   @relation("PropertyExpediaFrequency", fields: [expedia_frequency_id], references: [id])
+  expedia_billing_type_id          String?         @db.ObjectId
+  expedia_billing_type             BillingType?    @relation("PropertyExpediaBillingType", fields: [expedia_billing_type_id], references: [id])
+  expedia_service_type_id          String?         @db.ObjectId
+  expedia_service_type             ServiceType?    @relation("PropertyExpediaServiceType", fields: [expedia_service_type_id], references: [id])
+  expedia_frequency_id             String?         @db.ObjectId
+  expedia_frequency                Frequency?      @relation("PropertyExpediaFrequency", fields: [expedia_frequency_id], references: [id])
   expedia_access_level             Boolean?
   expedia_from                     String?
   expedia_to                       String?
@@ -436,6 +436,10 @@ model Property {
   expedia_db_duration              Int?
   expedia_credential_verified      Boolean?
   expedia_otp_number               String?
+  // Screenshots from the most recent Expedia property check, uploaded to S3 by
+  // the scraper. Replaced on every run, so this reflects the latest check
+  // rather than an accumulating history.
+  expedia_screenshot_urls          OtaScreenshot[]
   from_db                          String?
   to_db                            String?
 
