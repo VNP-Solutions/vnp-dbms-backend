@@ -20,6 +20,7 @@ import {
     type RunDateOtaType
 } from '../../common/services/run-date-calculator.service'
 import { SyncCommunicationService } from '../../common/services/sync-communication.service'
+import { SyncActionLogWriter } from '../../common/services/sync-action-log-writer.service'
 import { ColoredLogger } from '../../common/utils/colored-logger.util'
 import { EmailUtil } from '../../common/utils/email.util'
 import { EncryptionUtil } from '../../common/utils/encryption.util'
@@ -166,6 +167,7 @@ export class PropertyService implements IPropertyService {
     private readonly emailUtil: EmailUtil,
     private readonly config: ConfigService<Configuration>,
     private readonly syncCommunication: SyncCommunicationService,
+    private readonly syncActionLogWriter: SyncActionLogWriter,
     private readonly runDateCalculator: RunDateCalculatorService,
     private readonly globalFilterCache: GlobalFilterCacheService,
     private readonly s3ExportUtil: S3ExportUtil
@@ -324,6 +326,7 @@ export class PropertyService implements IPropertyService {
         `[async] failed to send upload job report email for job ${job.jobId}: ${e?.message ?? e}`
       )
     }
+    void this.syncActionLogWriter.writeFromUploadJob(job)
   }
 
   /**
@@ -564,6 +567,25 @@ export class PropertyService implements IPropertyService {
           `[email] sync result email failed: ${e?.message ?? e}`
         )
       )
+
+    void this.syncActionLogWriter.writeSingle({
+      entity_type: 'PROPERTY',
+      action: 'CREATE',
+      entity_id: property.id,
+      entity_name: property.name,
+      success: dashboardResult.success && parserResult.success,
+      reason:
+        !dashboardResult.success
+          ? dashboardResult.reason
+          : !parserResult.success
+            ? parserResult.reason
+            : undefined,
+      dbms: 'created',
+      dashboard: dashboardResult.success ? 'created' : 'failed',
+      scraper: parserResult.success ? 'created' : 'failed',
+      performed_by_email: user.email,
+      performed_by_name: user.email
+    })
 
     return property
   }
@@ -1713,6 +1735,25 @@ export class PropertyService implements IPropertyService {
         )
       )
 
+    void this.syncActionLogWriter.writeSingle({
+      entity_type: 'PROPERTY',
+      action: 'UPDATE',
+      entity_id: updated.id,
+      entity_name: updated.name,
+      success: dashboardResult.success && parserResult.success,
+      reason:
+        !dashboardResult.success
+          ? dashboardResult.reason
+          : !parserResult.success
+            ? parserResult.reason
+            : undefined,
+      dbms: 'updated',
+      dashboard: dashboardResult.success ? 'updated' : 'failed',
+      scraper: parserResult.success ? 'updated' : 'failed',
+      performed_by_email: user.email,
+      performed_by_name: user.email
+    })
+
     return updated
   }
 
@@ -1838,6 +1879,25 @@ export class PropertyService implements IPropertyService {
       )
     }
 
+    void this.syncActionLogWriter.writeSingle({
+      entity_type: 'PROPERTY',
+      action: 'DELETE',
+      entity_id: before.id,
+      entity_name: before.name,
+      success: dashboard.success && scraper.success,
+      reason:
+        !dashboard.success
+          ? dashboard.reason
+          : !scraper.success
+            ? scraper.reason
+            : undefined,
+      dbms: 'deleted',
+      dashboard: dashboard.success ? 'deleted' : 'failed',
+      scraper: scraper.success ? 'deleted' : 'failed',
+      performed_by_email: user.email,
+      performed_by_name: user.email
+    })
+
     return { ...result, sync: { dashboard, scraper } }
   }
 
@@ -1880,6 +1940,29 @@ export class PropertyService implements IPropertyService {
           `scraper=${sync.scraper.success ? 'ok' : sync.scraper.reason}`
       )
     }
+
+    void this.syncActionLogWriter.writeSingle({
+      entity_type: 'PROPERTY',
+      action: 'TRANSFER',
+      entity_id: updated.id,
+      entity_name: updated.name,
+      success: sync.dashboard.success && sync.scraper.success,
+      reason:
+        !sync.dashboard.success
+          ? sync.dashboard.reason
+          : !sync.scraper.success
+            ? sync.scraper.reason
+            : undefined,
+      dbms: 'updated',
+      dashboard: sync.dashboard.success ? 'updated' : 'failed',
+      scraper: sync.scraper.success ? 'updated' : 'failed',
+      from_portfolio_id: property.portfolio_id,
+      from_portfolio_name: property.portfolio?.name,
+      to_portfolio_id: portfolioId,
+      to_portfolio_name: updated.portfolio?.name,
+      performed_by_email: user.email,
+      performed_by_name: user.email
+    })
 
     return { ...updated, sync }
   }
@@ -4812,6 +4895,36 @@ export class PropertyService implements IPropertyService {
           `[sync] bulk-delete scraper failed: ${e?.message ?? e}`
         )
       )
+    }
+
+    const items = [
+      ...success.map(s => ({
+        id: s.id,
+        name: s.name,
+        success: true,
+        dbms: 'deleted'
+      })),
+      ...skipped.map(s => ({
+        id: s.id,
+        name: s.name ?? s.id,
+        success: false,
+        dbms: 'failed',
+        reason: s.reason
+      }))
+    ]
+
+    if (items.length > 0) {
+      void this.syncActionLogWriter.write({
+        scope: 'BULK',
+        entity_type: 'PROPERTY',
+        action: 'DELETE',
+        items,
+        total_count: items.length,
+        success_count: success.length,
+        failed_count: skipped.length,
+        performed_by_email: user.email,
+        performed_by_name: user.email
+      })
     }
 
     return {
