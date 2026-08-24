@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config'
 import axios, { AxiosInstance } from 'axios'
 import { SyncCommunicationService } from './sync-communication.service'
 import type { Configuration } from '../../config/configuration'
+import type { IUserWithPermissions } from '../interfaces/permission.interface'
 import type {
   EntitySyncState,
   UploadJobData,
@@ -32,6 +33,12 @@ export interface SyncActionLogItemPayload {
   to_portfolio_name?: string
 }
 
+export interface SyncActionActorSnapshot {
+  performed_by_email?: string
+  performed_by_name?: string
+  performed_by_role?: string
+}
+
 export interface SyncActionLogPayload {
   scope: SyncActionScope
   entity_type: SyncActionEntityType
@@ -44,7 +51,13 @@ export interface SyncActionLogPayload {
   failed_count?: number
   performed_by_email?: string
   performed_by_name?: string
+  performed_by_role?: string
   job_id?: string
+}
+
+type ActorUser = IUserWithPermissions & {
+  first_name?: string | null
+  last_name?: string | null
 }
 
 const FAILED_STATES: ReadonlySet<EntitySyncState> = new Set(['failed'])
@@ -74,6 +87,18 @@ export class SyncActionLogWriter {
       this.logger.warn(
         '[sync-action-log] disabled — dashboard URL or JWT_COMMUNICATION_SECRET missing'
       )
+    }
+  }
+
+  actorFromUser(user: ActorUser): SyncActionActorSnapshot {
+    const name = [user.first_name, user.last_name]
+      .filter(Boolean)
+      .join(' ')
+      .trim()
+    return {
+      performed_by_email: user.email,
+      performed_by_name: name || user.email,
+      performed_by_role: user.role?.name
     }
   }
 
@@ -107,6 +132,7 @@ export class SyncActionLogWriter {
     to_portfolio_name?: string
     performed_by_email?: string
     performed_by_name?: string
+    performed_by_role?: string
   }): Promise<void> {
     const success = params.success !== false
     await this.write({
@@ -134,7 +160,8 @@ export class SyncActionLogWriter {
       success_count: success ? 1 : 0,
       failed_count: success ? 0 : 1,
       performed_by_email: params.performed_by_email,
-      performed_by_name: params.performed_by_name
+      performed_by_name: params.performed_by_name,
+      performed_by_role: params.performed_by_role
     })
   }
 
@@ -162,7 +189,8 @@ export class SyncActionLogWriter {
       success_count: successCount,
       failed_count: failedCount,
       performed_by_email: job.userEmail,
-      performed_by_name: job.userEmail,
+      performed_by_name: job.userName || job.userEmail,
+      performed_by_role: job.userRole,
       job_id: job.jobId
     })
   }
@@ -227,13 +255,11 @@ export class SyncActionLogWriter {
   private isItemOverallSuccess(item: UploadJobEntity): boolean {
     const states = [item.dbms.state, item.dashboard.state, item.scraper.state]
     if (states.some(s => FAILED_STATES.has(s))) return false
-    // DBMS skipped with dependents skipped is OK; require DBMS not pending
     if (item.dbms.state === 'pending' || item.dbms.state === 'processing') {
       return false
     }
     return (
-      SUCCESS_STATES.has(item.dbms.state) ||
-      item.dbms.state === 'skipped'
+      SUCCESS_STATES.has(item.dbms.state) || item.dbms.state === 'skipped'
     )
   }
 }

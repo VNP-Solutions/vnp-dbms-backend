@@ -64,6 +64,8 @@ export interface IUserRoleWithPermissions {
 export interface IUserWithPermissions {
   id: string
   email: string
+  first_name?: string
+  last_name?: string
   user_role_id: string
   role: IUserRoleWithPermissions
 }

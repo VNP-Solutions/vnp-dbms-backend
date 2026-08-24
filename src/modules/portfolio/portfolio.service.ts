@@ -498,8 +498,7 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
             entity_name: full.name,
             success: true,
             dbms: 'updated',
-            performed_by_email: user.email,
-            performed_by_name: user.email
+            ...this.syncActionLogWriter.actorFromUser(user)
           })
         }
       }
@@ -643,8 +642,7 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
       entity_name: before.name,
       success: true,
       dbms: 'deleted',
-      performed_by_email: user.email,
-      performed_by_name: user.email
+      ...this.syncActionLogWriter.actorFromUser(user)
     })
     return result
   }
@@ -986,8 +984,7 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
         total_count: importItems.length,
         success_count: portfolios.length,
         failed_count: skipped_portfolios.length,
-        performed_by_email: user.email,
-        performed_by_name: user.email
+        ...this.syncActionLogWriter.actorFromUser(user)
       })
     }
 
@@ -1245,8 +1242,7 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
       entity_name: name,
       success: true,
       dbms: 'created',
-      performed_by_email: user.email,
-      performed_by_name: user.email
+      ...this.syncActionLogWriter.actorFromUser(user)
     })
     return full ?? portfolio
   }
