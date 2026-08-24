@@ -378,6 +378,7 @@ export class PropertyService implements IPropertyService {
         state: res.created ? 'created' : 'skipped',
         reason: res.created ? undefined : 'Already exists'
       }
+      item.id = res.id
       await this.saveUploadJob(job)
 
       // The downstream call is an upsert, so label it to match what actually
@@ -419,11 +420,20 @@ export class PropertyService implements IPropertyService {
           this.syncUpsertPropertyToDashboard(full, UPLOAD_JOB_HTTP_TIMEOUT_MS),
           this.syncUpsertPropertyToScraper(full, UPLOAD_JOB_HTTP_TIMEOUT_MS)
         ])
-        return { item, dashboardResult, scraperResult }
+        return { item, full, dashboardResult, scraperResult }
       })
     )
 
-    for (const { item, dashboardResult, scraperResult } of settled) {
+    for (const { item, full, dashboardResult, scraperResult } of settled) {
+      if (full?.id) {
+        item.id = full.id
+      }
+      if (full?.portfolio?.name) {
+        item.portfolioName = full.portfolio.name
+      }
+      if (full?.portfolio_id) {
+        item.portfolioId = full.portfolio_id
+      }
       // Mirror the DBMS outcome: only a freshly created property reports as
       // created downstream — an updated or pre-existing one reports as updated.
       const syncState: EntitySyncState =
@@ -441,12 +451,14 @@ export class PropertyService implements IPropertyService {
   private newUploadJobEntity(
     name: string,
     row: number | null,
-    id?: string
+    id?: string,
+    portfolioName?: string
   ): UploadJobEntity {
     return {
       row,
       ...(id ? { id } : {}),
       name,
+      ...(portfolioName ? { portfolioName } : {}),
       dbms: this.pendingEntityStatus(),
       scraper: this.pendingEntityStatus(),
       dashboard: this.pendingEntityStatus()
@@ -2016,6 +2028,7 @@ export class PropertyService implements IPropertyService {
       this.actorName(user),
       user.role?.name
     )
+    job.targetPortfolioId = portfolio.id
     job.properties.items = ids.map(id =>
       this.newUploadJobEntity(nameById.get(id) ?? id, null, id)
     )
@@ -2120,6 +2133,12 @@ export class PropertyService implements IPropertyService {
             continue
           }
           item.name = property.name
+          if (property.portfolio?.name) {
+            item.portfolioName = property.portfolio.name
+          }
+          if (property.portfolio_id) {
+            item.portfolioId = property.portfolio_id
+          }
           if (property.portfolio_id === portfolioId) {
             markNotTransferred(
               item,
@@ -3127,7 +3146,12 @@ export class PropertyService implements IPropertyService {
       })
       job.portfolios.total = job.portfolios.items.length
       job.properties.items = rows.map((r, i) =>
-        this.newUploadJobEntity(r.propertyName, i + 2)
+        this.newUploadJobEntity(
+          r.propertyName,
+          i + 2,
+          undefined,
+          r.portfolioName?.trim() || undefined
+        )
       )
       job.properties.total = job.properties.items.length
       job.status = 'processing_portfolios'
@@ -3210,6 +3234,7 @@ export class PropertyService implements IPropertyService {
         }
 
         const propertyId = (createdProp ?? existingProp).id
+        item.id = propertyId
         let full: PropertyWithRelations | null = null
         let loadError: string | null = null
         try {
@@ -3226,6 +3251,12 @@ export class PropertyService implements IPropertyService {
           loadError = `Failed to load property after create: ${e?.message ?? String(e)}`
         }
         if (full) {
+          if (full.portfolio?.name) {
+            item.portfolioName = full.portfolio.name
+          }
+          if (full.portfolio_id) {
+            item.portfolioId = full.portfolio_id
+          }
           item.dashboard.state = 'processing'
           item.scraper.state = 'processing'
           pendingSync.push({ item, full })
@@ -3506,7 +3537,17 @@ export class PropertyService implements IPropertyService {
           findValue(r, ['Property Identifier', 'Property identifier', 'Identifier']) ||
           findValue(r, ['Property Name', 'Property name', 'Name']) ||
           'Unknown'
-        return this.newUploadJobEntity(label, i + 2)
+        const portfolioName = findValue(r, [
+          'Portfolio',
+          'Portfolio Name',
+          'Portfolio name'
+        ])
+        return this.newUploadJobEntity(
+          label,
+          i + 2,
+          undefined,
+          portfolioName || undefined
+        )
       })
       job.properties.total = job.properties.items.length
       job.status = 'processing_portfolios'
@@ -3555,6 +3596,13 @@ export class PropertyService implements IPropertyService {
             loadError = `Failed to load property after update: ${e?.message ?? String(e)}`
           }
           if (full) {
+            item.id = full.id
+            if (full.portfolio?.name) {
+              item.portfolioName = full.portfolio.name
+            }
+            if (full.portfolio_id) {
+              item.portfolioId = full.portfolio_id
+            }
             item.dashboard.state = 'processing'
             item.scraper.state = 'processing'
             pendingSync.push({ item, full })
