@@ -3533,9 +3533,14 @@ export class PropertyService implements IPropertyService {
       )
       job.portfolios.total = job.portfolios.items.length
       job.properties.items = data.map((r, i) => {
+        // Prefer display name for logs / UI; fall back to identifier when name is absent.
         const label =
-          findValue(r, ['Property Identifier', 'Property identifier', 'Identifier']) ||
           findValue(r, ['Property Name', 'Property name', 'Name']) ||
+          findValue(r, [
+            'Property Identifier',
+            'Property identifier',
+            'Identifier'
+          ]) ||
           'Unknown'
         const portfolioName = findValue(r, [
           'Portfolio',
@@ -3597,6 +3602,7 @@ export class PropertyService implements IPropertyService {
           }
           if (full) {
             item.id = full.id
+            item.name = full.name
             if (full.portfolio?.name) {
               item.portfolioName = full.portfolio.name
             }
@@ -3670,7 +3676,7 @@ export class PropertyService implements IPropertyService {
 
           let existingProperty: any
           let matchedByIdentifier = false
-          const rowLabel = normalizedRowIdentifier ?? propertyName!
+          const rowLabel = propertyName ?? normalizedRowIdentifier!
 
           if (normalizedRowIdentifier) {
             existingProperty = await withTimeout(
@@ -3680,6 +3686,9 @@ export class PropertyService implements IPropertyService {
                     equals: normalizedRowIdentifier,
                     mode: 'insensitive'
                   }
+                },
+                include: {
+                  portfolio: { select: { id: true, name: true } }
                 }
               }),
               UPLOAD_JOB_DB_TIMEOUT_MS,
@@ -3692,10 +3701,22 @@ export class PropertyService implements IPropertyService {
 
           if (!existingProperty && propertyName) {
             existingProperty = await withTimeout(
-              this.repo.findByName(propertyName),
+              this.prisma.property.findFirst({
+                where: {
+                  name: { equals: propertyName, mode: 'insensitive' }
+                },
+                include: {
+                  portfolio: { select: { id: true, name: true } }
+                }
+              }),
               UPLOAD_JOB_DB_TIMEOUT_MS,
               `findByName (row ${rowNumber})`
             )
+          }
+
+          const jobItem = job.properties.items[i]
+          if (propertyName) {
+            jobItem.name = propertyName
           }
 
           if (!existingProperty) {
@@ -3709,6 +3730,18 @@ export class PropertyService implements IPropertyService {
             result.failureCount++
             continue
           }
+
+          // Stamp real DBMS identity onto the job row so action-log UI can
+          // show the property name + deep-link even when the update fails later.
+          jobItem.id = existingProperty.id
+          jobItem.name = existingProperty.name
+          if (existingProperty.portfolio?.name) {
+            jobItem.portfolioName = existingProperty.portfolio.name
+          }
+          if (existingProperty.portfolio_id) {
+            jobItem.portfolioId = existingProperty.portfolio_id
+          }
+          await this.saveUploadJob(job)
 
           // Check access permission
           if (
