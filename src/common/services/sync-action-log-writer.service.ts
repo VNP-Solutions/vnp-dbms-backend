@@ -11,7 +11,7 @@ import type {
 } from '../../modules/property/property.interface'
 
 export type SyncActionScope = 'SINGLE' | 'BULK'
-export type SyncActionEntityType = 'PORTFOLIO' | 'PROPERTY'
+export type SyncActionEntityType = 'PORTFOLIO' | 'PROPERTY' | 'MIXED'
 export type SyncActionType =
   | 'CREATE'
   | 'UPDATE'
@@ -45,10 +45,18 @@ export interface SyncActionLogPayload {
   action: SyncActionType
   entity_id?: string
   entity_name?: string
-  items: SyncActionLogItemPayload[]
+  items?: SyncActionLogItemPayload[]
+  portfolio_items?: SyncActionLogItemPayload[]
+  property_items?: SyncActionLogItemPayload[]
   total_count?: number
   success_count?: number
   failed_count?: number
+  portfolio_total_count?: number
+  portfolio_success_count?: number
+  portfolio_failed_count?: number
+  property_total_count?: number
+  property_success_count?: number
+  property_failed_count?: number
   performed_by_email?: string
   performed_by_name?: string
   performed_by_role?: string
@@ -117,7 +125,7 @@ export class SyncActionLogWriter {
   }
 
   async writeSingle(params: {
-    entity_type: SyncActionEntityType
+    entity_type: Exclude<SyncActionEntityType, 'MIXED'>
     action: SyncActionType
     entity_id?: string
     entity_name: string
@@ -165,37 +173,10 @@ export class SyncActionLogWriter {
     })
   }
 
-  async writeFromUploadJobItems(params: {
-    job: UploadJobData
-    entity_type: SyncActionEntityType
-    action: SyncActionType
-    items: UploadJobEntity[]
-    to_portfolio_id?: string
-    to_portfolio_name?: string
-  }): Promise<void> {
-    const { job, entity_type, action, items } = params
-    if (!items.length) return
-
-    const mapped = items.map(item => this.mapUploadJobEntity(item, params))
-    const successCount = mapped.filter(i => i.success).length
-    const failedCount = mapped.length - successCount
-
-    await this.write({
-      scope: 'BULK',
-      entity_type,
-      action,
-      items: mapped,
-      total_count: mapped.length,
-      success_count: successCount,
-      failed_count: failedCount,
-      performed_by_email: job.userEmail,
-      performed_by_name: job.userName || job.userEmail,
-      performed_by_role: job.userRole,
-      job_id: job.jobId
-    })
-  }
-
-  /** Writes portfolio + property logs from a finished upload job when applicable. */
+  /**
+   * Writes one SyncActionLog document per finished upload job, with separate
+   * portfolio_items and property_items when both phases ran.
+   */
   async writeFromUploadJob(job: UploadJobData): Promise<void> {
     const action =
       job.source === 'import'
@@ -204,25 +185,59 @@ export class SyncActionLogWriter {
           ? 'UPDATE'
           : 'TRANSFER'
 
-    if (job.portfolios.items.length > 0 && job.source === 'import') {
-      await this.writeFromUploadJobItems({
-        job,
-        entity_type: 'PORTFOLIO',
-        action: 'IMPORT',
-        items: job.portfolios.items
-      })
+    const includePortfolios =
+      job.portfolios.items.length > 0 &&
+      (job.source === 'import' || job.source === 'bulk-update')
+
+    const portfolioItems = includePortfolios
+      ? job.portfolios.items.map(item => this.mapUploadJobEntity(item, {}))
+      : []
+
+    const propertyItems =
+      job.properties.items.length > 0
+        ? job.properties.items.map(item =>
+            this.mapUploadJobEntity(item, {
+              to_portfolio_name:
+                job.source === 'bulk-transfer' ? job.filename : undefined
+            })
+          )
+        : []
+
+    if (!portfolioItems.length && !propertyItems.length) return
+
+    const portfolioSuccess = portfolioItems.filter(i => i.success).length
+    const portfolioFailed = portfolioItems.length - portfolioSuccess
+    const propertySuccess = propertyItems.filter(i => i.success).length
+    const propertyFailed = propertyItems.length - propertySuccess
+
+    let entity_type: SyncActionEntityType = 'PROPERTY'
+    if (portfolioItems.length && propertyItems.length) {
+      entity_type = 'MIXED'
+    } else if (portfolioItems.length) {
+      entity_type = 'PORTFOLIO'
     }
 
-    if (job.properties.items.length > 0) {
-      await this.writeFromUploadJobItems({
-        job,
-        entity_type: 'PROPERTY',
-        action,
-        items: job.properties.items,
-        to_portfolio_name:
-          job.source === 'bulk-transfer' ? job.filename : undefined
-      })
-    }
+    await this.write({
+      scope: 'BULK',
+      entity_type,
+      action,
+      items: [],
+      portfolio_items: portfolioItems,
+      property_items: propertyItems,
+      total_count: portfolioItems.length + propertyItems.length,
+      success_count: portfolioSuccess + propertySuccess,
+      failed_count: portfolioFailed + propertyFailed,
+      portfolio_total_count: portfolioItems.length,
+      portfolio_success_count: portfolioSuccess,
+      portfolio_failed_count: portfolioFailed,
+      property_total_count: propertyItems.length,
+      property_success_count: propertySuccess,
+      property_failed_count: propertyFailed,
+      performed_by_email: job.userEmail,
+      performed_by_name: job.userName || job.userEmail,
+      performed_by_role: job.userRole,
+      job_id: job.jobId
+    })
   }
 
   private mapUploadJobEntity(
