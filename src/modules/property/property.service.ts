@@ -253,7 +253,9 @@ export class PropertyService implements IPropertyService {
     source: 'import' | 'bulk-update' | 'bulk-transfer',
     filename: string,
     userId: string,
-    userEmail: string
+    userEmail: string,
+    userName?: string,
+    userRole?: string
   ): UploadJobData {
     const now = new Date().toISOString()
     return {
@@ -262,12 +264,19 @@ export class PropertyService implements IPropertyService {
       filename,
       userId,
       userEmail,
+      userName,
+      userRole,
       status: 'pending',
       portfolios: { total: 0, processed: 0, items: [] },
       properties: { total: 0, processed: 0, items: [] },
       createdAt: now,
       updatedAt: now
     }
+  }
+
+  private actorName(user: IUserWithPermissions): string {
+    const name = [user.first_name, user.last_name].filter(Boolean).join(' ').trim()
+    return name || user.email
   }
 
   private async saveUploadJob(job: UploadJobData): Promise<void> {
@@ -583,8 +592,7 @@ export class PropertyService implements IPropertyService {
       dbms: 'created',
       dashboard: dashboardResult.success ? 'created' : 'failed',
       scraper: parserResult.success ? 'created' : 'failed',
-      performed_by_email: user.email,
-      performed_by_name: user.email
+      ...this.syncActionLogWriter.actorFromUser(user)
     })
 
     return property
@@ -1750,8 +1758,7 @@ export class PropertyService implements IPropertyService {
       dbms: 'updated',
       dashboard: dashboardResult.success ? 'updated' : 'failed',
       scraper: parserResult.success ? 'updated' : 'failed',
-      performed_by_email: user.email,
-      performed_by_name: user.email
+      ...this.syncActionLogWriter.actorFromUser(user)
     })
 
     return updated
@@ -1894,8 +1901,7 @@ export class PropertyService implements IPropertyService {
       dbms: 'deleted',
       dashboard: dashboard.success ? 'deleted' : 'failed',
       scraper: scraper.success ? 'deleted' : 'failed',
-      performed_by_email: user.email,
-      performed_by_name: user.email
+      ...this.syncActionLogWriter.actorFromUser(user)
     })
 
     return { ...result, sync: { dashboard, scraper } }
@@ -1960,8 +1966,7 @@ export class PropertyService implements IPropertyService {
       from_portfolio_name: property.portfolio?.name,
       to_portfolio_id: portfolioId,
       to_portfolio_name: updated.portfolio?.name,
-      performed_by_email: user.email,
-      performed_by_name: user.email
+      ...this.syncActionLogWriter.actorFromUser(user)
     })
 
     return { ...updated, sync }
@@ -2007,7 +2012,9 @@ export class PropertyService implements IPropertyService {
       'bulk-transfer',
       portfolio.name,
       user.id,
-      userEmail
+      userEmail,
+      this.actorName(user),
+      user.role?.name
     )
     job.properties.items = ids.map(id =>
       this.newUploadJobEntity(nameById.get(id) ?? id, null, id)
@@ -3057,7 +3064,15 @@ export class PropertyService implements IPropertyService {
     const filename = file.originalname
     const userEmail = user?.email ?? user?.id ?? 'unknown'
 
-    const job = this.newUploadJob(jobId, 'import', filename, user.id, userEmail)
+    const job = this.newUploadJob(
+      jobId,
+      'import',
+      filename,
+      user.id,
+      userEmail,
+      this.actorName(user),
+      user.role?.name
+    )
     await this.saveUploadJob(job)
     await this.setLatestUploadJobForUser(user.id, jobId)
 
@@ -3279,7 +3294,9 @@ export class PropertyService implements IPropertyService {
       'bulk-update',
       filename,
       user.id,
-      userEmail
+      userEmail,
+      this.actorName(user),
+      user.role?.name
     )
     await this.saveUploadJob(job)
     await this.setLatestUploadJobForUser(user.id, jobId)
@@ -4922,8 +4939,7 @@ export class PropertyService implements IPropertyService {
         total_count: items.length,
         success_count: success.length,
         failed_count: skipped.length,
-        performed_by_email: user.email,
-        performed_by_name: user.email
+        ...this.syncActionLogWriter.actorFromUser(user)
       })
     }
 

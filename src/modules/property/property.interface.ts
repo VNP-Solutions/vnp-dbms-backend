@@ -68,6 +68,10 @@ export interface UploadJobData {
   filename: string
   userId: string
   userEmail: string
+  /** Snapshotted display name for durable action logs / report emails. */
+  userName?: string
+  /** Snapshotted role name for durable action logs. */
+  userRole?: string
   status: UploadJobStatus
   error?: string
   /** `processed` = how many items have reached a terminal state (created/updated/skipped/failed)
