@@ -196,10 +196,20 @@ export class SyncActionLogWriter {
     const propertyItems =
       job.properties.items.length > 0
         ? job.properties.items.map(item =>
-            this.mapUploadJobEntity(item, {
-              to_portfolio_name:
-                job.source === 'bulk-transfer' ? job.filename : undefined
-            })
+            this.mapUploadJobEntity(
+              item,
+              job.source === 'bulk-transfer'
+                ? {
+                    from_portfolio_id: item.portfolioId,
+                    from_portfolio_name: item.portfolioName,
+                    to_portfolio_id: job.targetPortfolioId,
+                    to_portfolio_name: job.filename
+                  }
+                : {
+                    to_portfolio_id: item.portfolioId,
+                    to_portfolio_name: item.portfolioName
+                  }
+            )
           )
         : []
 
@@ -210,11 +220,19 @@ export class SyncActionLogWriter {
     const propertySuccess = propertyItems.filter(i => i.success).length
     const propertyFailed = propertyItems.length - propertySuccess
 
-    let entity_type: SyncActionEntityType = 'PROPERTY'
-    if (portfolioItems.length && propertyItems.length) {
+    // Label by primary job intent — not every entity touched as a side effect.
+    // - import: portfolios + properties are first-class → MIXED when both exist
+    // - bulk-update / bulk-transfer: property-focused even if portfolios were
+    //   resolved/created along the way → PROPERTY (still logs portfolio_items)
+    let entity_type: SyncActionEntityType
+    if (job.source === 'bulk-update' || job.source === 'bulk-transfer') {
+      entity_type = propertyItems.length > 0 ? 'PROPERTY' : 'PORTFOLIO'
+    } else if (portfolioItems.length > 0 && propertyItems.length > 0) {
       entity_type = 'MIXED'
-    } else if (portfolioItems.length) {
+    } else if (portfolioItems.length > 0) {
       entity_type = 'PORTFOLIO'
+    } else {
+      entity_type = 'PROPERTY'
     }
 
     await this.write({
@@ -243,6 +261,8 @@ export class SyncActionLogWriter {
   private mapUploadJobEntity(
     item: UploadJobEntity,
     opts: {
+      from_portfolio_id?: string
+      from_portfolio_name?: string
       to_portfolio_id?: string
       to_portfolio_name?: string
     }
@@ -262,6 +282,8 @@ export class SyncActionLogWriter {
       dbms: item.dbms.state,
       dashboard: item.dashboard.state,
       scraper: item.scraper.state,
+      from_portfolio_id: opts.from_portfolio_id,
+      from_portfolio_name: opts.from_portfolio_name,
       to_portfolio_id: opts.to_portfolio_id,
       to_portfolio_name: opts.to_portfolio_name
     }
