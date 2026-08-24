@@ -6,6 +6,7 @@ import { S3ExportUtil } from '../../common/utils/s3-export.util'
 import { ConfigService } from '../../config/config.service'
 import { RunDateCalculatorService } from '../../common/services/run-date-calculator.service'
 import { SyncCommunicationService } from '../../common/services/sync-communication.service'
+import { SyncActionLogWriter } from '../../common/services/sync-action-log-writer.service'
 import { ExternalJwtGuard } from '../../common/guards/external-jwt.guard'
 import { ExternalRawSecretGuard } from '../../common/guards/external-raw-secret.guard'
 import { AuthModule } from '../auth/auth.module'
@@ -46,6 +47,7 @@ import { ServiceTokenGuard } from './guards/service-token.guard'
     PropertyBookingCheckerService,
     RunDateCalculatorService,
     SyncCommunicationService,
+    SyncActionLogWriter,
     ExternalJwtGuard,
     ExternalRawSecretGuard
   ],

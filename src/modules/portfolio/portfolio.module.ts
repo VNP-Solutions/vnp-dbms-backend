@@ -3,6 +3,7 @@ import { JwtModule } from '@nestjs/jwt'
 import { ExternalJwtGuard } from '../../common/guards/external-jwt.guard'
 import { ExternalRawSecretGuard } from '../../common/guards/external-raw-secret.guard'
 import { SyncCommunicationService } from '../../common/services/sync-communication.service'
+import { SyncActionLogWriter } from '../../common/services/sync-action-log-writer.service'
 import { FileUploadModule } from '../file-upload/file-upload.module'
 import { PrismaService } from '../prisma/prisma.service'
 import { RedisService } from '../redis/redis.service'
@@ -17,6 +18,7 @@ import { PortfolioService } from './portfolio.service'
     { provide: 'IPortfolioService', useClass: PortfolioService },
     { provide: 'IPortfolioRepository', useClass: PortfolioRepository },
     SyncCommunicationService,
+    SyncActionLogWriter,
     PrismaService,
     RedisService,
     ExternalJwtGuard,

@@ -15,6 +15,7 @@ import type { PaginatedResult } from '../../common/dto/query.dto'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
 import { GlobalFilterCacheService } from '../../common/services/global-filter-cache.service'
 import { SyncCommunicationService } from '../../common/services/sync-communication.service'
+import { SyncActionLogWriter } from '../../common/services/sync-action-log-writer.service'
 import { QueryBuilder } from '../../common/utils/query-builder.util'
 import {
   SYNC_HTTP_TIMEOUT_MS,
@@ -58,7 +59,8 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
     private readonly redisService: RedisService,
     private readonly globalFilterCache: GlobalFilterCacheService,
     private readonly config: ConfigService<Configuration, true>,
-    private readonly syncCommunication: SyncCommunicationService
+    private readonly syncCommunication: SyncCommunicationService,
+    private readonly syncActionLogWriter: SyncActionLogWriter
   ) {
     const timeout = SYNC_HTTP_TIMEOUT_MS
     const dashUrl =
@@ -489,6 +491,16 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
 
         if (!this.isAttachmentsOnlyUpdate(data)) {
           await this.fanOutPortfolioUpdate(full, before.name)
+          void this.syncActionLogWriter.writeSingle({
+            entity_type: 'PORTFOLIO',
+            action: 'UPDATE',
+            entity_id: full.id,
+            entity_name: full.name,
+            success: true,
+            dbms: 'updated',
+            performed_by_email: user.email,
+            performed_by_name: user.email
+          })
         }
       }
     } catch (e: any) {
@@ -624,6 +636,16 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
         `[sync] unexpected on portfolio delete: ${e?.message ?? e}`
       )
     }
+    void this.syncActionLogWriter.writeSingle({
+      entity_type: 'PORTFOLIO',
+      action: 'DELETE',
+      entity_id: before.id,
+      entity_name: before.name,
+      success: true,
+      dbms: 'deleted',
+      performed_by_email: user.email,
+      performed_by_name: user.email
+    })
     return result
   }
 
@@ -938,6 +960,37 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
       )
     }
 
+    const importItems = [
+      ...portfolios.map(({ portfolio: p, row_no }) => ({
+        id: p.id,
+        name: p.name,
+        success: true,
+        dbms: 'created',
+        reason: undefined as string | undefined
+      })),
+      ...skipped_portfolios.map(s => ({
+        id: undefined as string | undefined,
+        name: s.portfolio_name,
+        success: false,
+        dbms: 'skipped',
+        reason: s.reason
+      }))
+    ]
+
+    if (importItems.length > 0) {
+      void this.syncActionLogWriter.write({
+        scope: 'BULK',
+        entity_type: 'PORTFOLIO',
+        action: 'IMPORT',
+        items: importItems,
+        total_count: importItems.length,
+        success_count: portfolios.length,
+        failed_count: skipped_portfolios.length,
+        performed_by_email: user.email,
+        performed_by_name: user.email
+      })
+    }
+
     return {
       portfoliosCreated,
       portfolios: portfolios.map(({ portfolio: p }) => p),
@@ -1183,6 +1236,18 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
         `[sync] unexpected on portfolio create: ${e?.message ?? e}`
       )
     }
+    const name = full?.name ?? portfolio.name
+    const id = full?.id ?? portfolio.id
+    void this.syncActionLogWriter.writeSingle({
+      entity_type: 'PORTFOLIO',
+      action: 'CREATE',
+      entity_id: id,
+      entity_name: name,
+      success: true,
+      dbms: 'created',
+      performed_by_email: user.email,
+      performed_by_name: user.email
+    })
     return full ?? portfolio
   }
 
