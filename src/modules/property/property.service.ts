@@ -20,6 +20,7 @@ import {
     type RunDateOtaType
 } from '../../common/services/run-date-calculator.service'
 import { SyncCommunicationService } from '../../common/services/sync-communication.service'
+import { SyncActionLogWriter } from '../../common/services/sync-action-log-writer.service'
 import { ColoredLogger } from '../../common/utils/colored-logger.util'
 import { EmailUtil } from '../../common/utils/email.util'
 import { EncryptionUtil } from '../../common/utils/encryption.util'
@@ -166,6 +167,7 @@ export class PropertyService implements IPropertyService {
     private readonly emailUtil: EmailUtil,
     private readonly config: ConfigService<Configuration>,
     private readonly syncCommunication: SyncCommunicationService,
+    private readonly syncActionLogWriter: SyncActionLogWriter,
     private readonly runDateCalculator: RunDateCalculatorService,
     private readonly globalFilterCache: GlobalFilterCacheService,
     private readonly s3ExportUtil: S3ExportUtil
@@ -251,7 +253,9 @@ export class PropertyService implements IPropertyService {
     source: 'import' | 'bulk-update' | 'bulk-transfer',
     filename: string,
     userId: string,
-    userEmail: string
+    userEmail: string,
+    userName?: string,
+    userRole?: string
   ): UploadJobData {
     const now = new Date().toISOString()
     return {
@@ -260,12 +264,19 @@ export class PropertyService implements IPropertyService {
       filename,
       userId,
       userEmail,
+      userName,
+      userRole,
       status: 'pending',
       portfolios: { total: 0, processed: 0, items: [] },
       properties: { total: 0, processed: 0, items: [] },
       createdAt: now,
       updatedAt: now
     }
+  }
+
+  private actorName(user: IUserWithPermissions): string {
+    const name = [user.first_name, user.last_name].filter(Boolean).join(' ').trim()
+    return name || user.email
   }
 
   private async saveUploadJob(job: UploadJobData): Promise<void> {
@@ -324,6 +335,7 @@ export class PropertyService implements IPropertyService {
         `[async] failed to send upload job report email for job ${job.jobId}: ${e?.message ?? e}`
       )
     }
+    void this.syncActionLogWriter.writeFromUploadJob(job)
   }
 
   /**
@@ -366,6 +378,7 @@ export class PropertyService implements IPropertyService {
         state: res.created ? 'created' : 'skipped',
         reason: res.created ? undefined : 'Already exists'
       }
+      item.id = res.id
       await this.saveUploadJob(job)
 
       // The downstream call is an upsert, so label it to match what actually
@@ -407,11 +420,20 @@ export class PropertyService implements IPropertyService {
           this.syncUpsertPropertyToDashboard(full, UPLOAD_JOB_HTTP_TIMEOUT_MS),
           this.syncUpsertPropertyToScraper(full, UPLOAD_JOB_HTTP_TIMEOUT_MS)
         ])
-        return { item, dashboardResult, scraperResult }
+        return { item, full, dashboardResult, scraperResult }
       })
     )
 
-    for (const { item, dashboardResult, scraperResult } of settled) {
+    for (const { item, full, dashboardResult, scraperResult } of settled) {
+      if (full?.id) {
+        item.id = full.id
+      }
+      if (full?.portfolio?.name) {
+        item.portfolioName = full.portfolio.name
+      }
+      if (full?.portfolio_id) {
+        item.portfolioId = full.portfolio_id
+      }
       // Mirror the DBMS outcome: only a freshly created property reports as
       // created downstream — an updated or pre-existing one reports as updated.
       const syncState: EntitySyncState =
@@ -429,12 +451,14 @@ export class PropertyService implements IPropertyService {
   private newUploadJobEntity(
     name: string,
     row: number | null,
-    id?: string
+    id?: string,
+    portfolioName?: string
   ): UploadJobEntity {
     return {
       row,
       ...(id ? { id } : {}),
       name,
+      ...(portfolioName ? { portfolioName } : {}),
       dbms: this.pendingEntityStatus(),
       scraper: this.pendingEntityStatus(),
       dashboard: this.pendingEntityStatus()
@@ -564,6 +588,24 @@ export class PropertyService implements IPropertyService {
           `[email] sync result email failed: ${e?.message ?? e}`
         )
       )
+
+    void this.syncActionLogWriter.writeSingle({
+      entity_type: 'PROPERTY',
+      action: 'CREATE',
+      entity_id: property.id,
+      entity_name: property.name,
+      success: dashboardResult.success && parserResult.success,
+      reason:
+        !dashboardResult.success
+          ? dashboardResult.reason
+          : !parserResult.success
+            ? parserResult.reason
+            : undefined,
+      dbms: 'created',
+      dashboard: dashboardResult.success ? 'created' : 'failed',
+      scraper: parserResult.success ? 'created' : 'failed',
+      ...this.syncActionLogWriter.actorFromUser(user)
+    })
 
     return property
   }
@@ -1713,6 +1755,24 @@ export class PropertyService implements IPropertyService {
         )
       )
 
+    void this.syncActionLogWriter.writeSingle({
+      entity_type: 'PROPERTY',
+      action: 'UPDATE',
+      entity_id: updated.id,
+      entity_name: updated.name,
+      success: dashboardResult.success && parserResult.success,
+      reason:
+        !dashboardResult.success
+          ? dashboardResult.reason
+          : !parserResult.success
+            ? parserResult.reason
+            : undefined,
+      dbms: 'updated',
+      dashboard: dashboardResult.success ? 'updated' : 'failed',
+      scraper: parserResult.success ? 'updated' : 'failed',
+      ...this.syncActionLogWriter.actorFromUser(user)
+    })
+
     return updated
   }
 
@@ -1838,6 +1898,24 @@ export class PropertyService implements IPropertyService {
       )
     }
 
+    void this.syncActionLogWriter.writeSingle({
+      entity_type: 'PROPERTY',
+      action: 'DELETE',
+      entity_id: before.id,
+      entity_name: before.name,
+      success: dashboard.success && scraper.success,
+      reason:
+        !dashboard.success
+          ? dashboard.reason
+          : !scraper.success
+            ? scraper.reason
+            : undefined,
+      dbms: 'deleted',
+      dashboard: dashboard.success ? 'deleted' : 'failed',
+      scraper: scraper.success ? 'deleted' : 'failed',
+      ...this.syncActionLogWriter.actorFromUser(user)
+    })
+
     return { ...result, sync: { dashboard, scraper } }
   }
 
@@ -1880,6 +1958,28 @@ export class PropertyService implements IPropertyService {
           `scraper=${sync.scraper.success ? 'ok' : sync.scraper.reason}`
       )
     }
+
+    void this.syncActionLogWriter.writeSingle({
+      entity_type: 'PROPERTY',
+      action: 'TRANSFER',
+      entity_id: updated.id,
+      entity_name: updated.name,
+      success: sync.dashboard.success && sync.scraper.success,
+      reason:
+        !sync.dashboard.success
+          ? sync.dashboard.reason
+          : !sync.scraper.success
+            ? sync.scraper.reason
+            : undefined,
+      dbms: 'updated',
+      dashboard: sync.dashboard.success ? 'updated' : 'failed',
+      scraper: sync.scraper.success ? 'updated' : 'failed',
+      from_portfolio_id: property.portfolio_id,
+      from_portfolio_name: property.portfolio?.name,
+      to_portfolio_id: portfolioId,
+      to_portfolio_name: updated.portfolio?.name,
+      ...this.syncActionLogWriter.actorFromUser(user)
+    })
 
     return { ...updated, sync }
   }
@@ -1924,8 +2024,11 @@ export class PropertyService implements IPropertyService {
       'bulk-transfer',
       portfolio.name,
       user.id,
-      userEmail
+      userEmail,
+      this.actorName(user),
+      user.role?.name
     )
+    job.targetPortfolioId = portfolio.id
     job.properties.items = ids.map(id =>
       this.newUploadJobEntity(nameById.get(id) ?? id, null, id)
     )
@@ -2030,6 +2133,12 @@ export class PropertyService implements IPropertyService {
             continue
           }
           item.name = property.name
+          if (property.portfolio?.name) {
+            item.portfolioName = property.portfolio.name
+          }
+          if (property.portfolio_id) {
+            item.portfolioId = property.portfolio_id
+          }
           if (property.portfolio_id === portfolioId) {
             markNotTransferred(
               item,
@@ -2974,7 +3083,15 @@ export class PropertyService implements IPropertyService {
     const filename = file.originalname
     const userEmail = user?.email ?? user?.id ?? 'unknown'
 
-    const job = this.newUploadJob(jobId, 'import', filename, user.id, userEmail)
+    const job = this.newUploadJob(
+      jobId,
+      'import',
+      filename,
+      user.id,
+      userEmail,
+      this.actorName(user),
+      user.role?.name
+    )
     await this.saveUploadJob(job)
     await this.setLatestUploadJobForUser(user.id, jobId)
 
@@ -3029,7 +3146,12 @@ export class PropertyService implements IPropertyService {
       })
       job.portfolios.total = job.portfolios.items.length
       job.properties.items = rows.map((r, i) =>
-        this.newUploadJobEntity(r.propertyName, i + 2)
+        this.newUploadJobEntity(
+          r.propertyName,
+          i + 2,
+          undefined,
+          r.portfolioName?.trim() || undefined
+        )
       )
       job.properties.total = job.properties.items.length
       job.status = 'processing_portfolios'
@@ -3112,6 +3234,7 @@ export class PropertyService implements IPropertyService {
         }
 
         const propertyId = (createdProp ?? existingProp).id
+        item.id = propertyId
         let full: PropertyWithRelations | null = null
         let loadError: string | null = null
         try {
@@ -3128,6 +3251,12 @@ export class PropertyService implements IPropertyService {
           loadError = `Failed to load property after create: ${e?.message ?? String(e)}`
         }
         if (full) {
+          if (full.portfolio?.name) {
+            item.portfolioName = full.portfolio.name
+          }
+          if (full.portfolio_id) {
+            item.portfolioId = full.portfolio_id
+          }
           item.dashboard.state = 'processing'
           item.scraper.state = 'processing'
           pendingSync.push({ item, full })
@@ -3196,7 +3325,9 @@ export class PropertyService implements IPropertyService {
       'bulk-update',
       filename,
       user.id,
-      userEmail
+      userEmail,
+      this.actorName(user),
+      user.role?.name
     )
     await this.saveUploadJob(job)
     await this.setLatestUploadJobForUser(user.id, jobId)
@@ -3406,7 +3537,17 @@ export class PropertyService implements IPropertyService {
           findValue(r, ['Property Identifier', 'Property identifier', 'Identifier']) ||
           findValue(r, ['Property Name', 'Property name', 'Name']) ||
           'Unknown'
-        return this.newUploadJobEntity(label, i + 2)
+        const portfolioName = findValue(r, [
+          'Portfolio',
+          'Portfolio Name',
+          'Portfolio name'
+        ])
+        return this.newUploadJobEntity(
+          label,
+          i + 2,
+          undefined,
+          portfolioName || undefined
+        )
       })
       job.properties.total = job.properties.items.length
       job.status = 'processing_portfolios'
@@ -3455,6 +3596,13 @@ export class PropertyService implements IPropertyService {
             loadError = `Failed to load property after update: ${e?.message ?? String(e)}`
           }
           if (full) {
+            item.id = full.id
+            if (full.portfolio?.name) {
+              item.portfolioName = full.portfolio.name
+            }
+            if (full.portfolio_id) {
+              item.portfolioId = full.portfolio_id
+            }
             item.dashboard.state = 'processing'
             item.scraper.state = 'processing'
             pendingSync.push({ item, full })
@@ -4812,6 +4960,35 @@ export class PropertyService implements IPropertyService {
           `[sync] bulk-delete scraper failed: ${e?.message ?? e}`
         )
       )
+    }
+
+    const items = [
+      ...success.map(s => ({
+        id: s.id,
+        name: s.name,
+        success: true,
+        dbms: 'deleted'
+      })),
+      ...skipped.map(s => ({
+        id: s.id,
+        name: s.name ?? s.id,
+        success: false,
+        dbms: 'failed',
+        reason: s.reason
+      }))
+    ]
+
+    if (items.length > 0) {
+      void this.syncActionLogWriter.write({
+        scope: 'BULK',
+        entity_type: 'PROPERTY',
+        action: 'DELETE',
+        items,
+        total_count: items.length,
+        success_count: success.length,
+        failed_count: skipped.length,
+        ...this.syncActionLogWriter.actorFromUser(user)
+      })
     }
 
     return {

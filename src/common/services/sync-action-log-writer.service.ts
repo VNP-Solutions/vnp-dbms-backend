@@ -1,0 +1,302 @@
+import { Injectable, Logger } from '@nestjs/common'
+import { ConfigService } from '@nestjs/config'
+import axios, { AxiosInstance } from 'axios'
+import { SyncCommunicationService } from './sync-communication.service'
+import type { Configuration } from '../../config/configuration'
+import type { IUserWithPermissions } from '../interfaces/permission.interface'
+import type {
+  EntitySyncState,
+  UploadJobData,
+  UploadJobEntity
+} from '../../modules/property/property.interface'
+
+export type SyncActionScope = 'SINGLE' | 'BULK'
+export type SyncActionEntityType = 'PORTFOLIO' | 'PROPERTY' | 'MIXED'
+export type SyncActionType =
+  | 'CREATE'
+  | 'UPDATE'
+  | 'DELETE'
+  | 'TRANSFER'
+  | 'IMPORT'
+
+export interface SyncActionLogItemPayload {
+  id?: string
+  name: string
+  success?: boolean
+  reason?: string
+  dbms?: string
+  dashboard?: string
+  scraper?: string
+  from_portfolio_id?: string
+  from_portfolio_name?: string
+  to_portfolio_id?: string
+  to_portfolio_name?: string
+}
+
+export interface SyncActionActorSnapshot {
+  performed_by_email?: string
+  performed_by_name?: string
+  performed_by_role?: string
+}
+
+export interface SyncActionLogPayload {
+  scope: SyncActionScope
+  entity_type: SyncActionEntityType
+  action: SyncActionType
+  entity_id?: string
+  entity_name?: string
+  items?: SyncActionLogItemPayload[]
+  portfolio_items?: SyncActionLogItemPayload[]
+  property_items?: SyncActionLogItemPayload[]
+  total_count?: number
+  success_count?: number
+  failed_count?: number
+  portfolio_total_count?: number
+  portfolio_success_count?: number
+  portfolio_failed_count?: number
+  property_total_count?: number
+  property_success_count?: number
+  property_failed_count?: number
+  performed_by_email?: string
+  performed_by_name?: string
+  performed_by_role?: string
+  job_id?: string
+}
+
+type ActorUser = IUserWithPermissions & {
+  first_name?: string | null
+  last_name?: string | null
+}
+
+const FAILED_STATES: ReadonlySet<EntitySyncState> = new Set(['failed'])
+const SUCCESS_STATES: ReadonlySet<EntitySyncState> = new Set([
+  'created',
+  'updated',
+  'skipped'
+])
+
+@Injectable()
+export class SyncActionLogWriter {
+  private readonly logger = new Logger(SyncActionLogWriter.name)
+  private readonly client: AxiosInstance | null
+
+  constructor(
+    private readonly config: ConfigService<Configuration, true>,
+    private readonly syncCommunication: SyncCommunicationService
+  ) {
+    const dashUrl =
+      this.config.get('dashboardBackendUrl', { infer: true }) ?? ''
+    this.client =
+      dashUrl && this.syncCommunication.isConfigured()
+        ? axios.create({ baseURL: dashUrl, timeout: 15000 })
+        : null
+
+    if (!this.client) {
+      this.logger.warn(
+        '[sync-action-log] disabled — dashboard URL or JWT_COMMUNICATION_SECRET missing'
+      )
+    }
+  }
+
+  actorFromUser(user: ActorUser): SyncActionActorSnapshot {
+    const name = [user.first_name, user.last_name]
+      .filter(Boolean)
+      .join(' ')
+      .trim()
+    return {
+      performed_by_email: user.email,
+      performed_by_name: name || user.email,
+      performed_by_role: user.role?.name
+    }
+  }
+
+  async write(payload: SyncActionLogPayload): Promise<void> {
+    if (!this.client) return
+
+    try {
+      await this.client.post('/api/sync-action-log', payload, {
+        headers: this.syncCommunication.createAuthHeaders()
+      })
+    } catch (e: any) {
+      this.logger.error(
+        `[sync-action-log] failed to write log: ${e?.message ?? e}`
+      )
+    }
+  }
+
+  async writeSingle(params: {
+    entity_type: Exclude<SyncActionEntityType, 'MIXED'>
+    action: SyncActionType
+    entity_id?: string
+    entity_name: string
+    success?: boolean
+    reason?: string
+    dbms?: string
+    dashboard?: string
+    scraper?: string
+    from_portfolio_id?: string
+    from_portfolio_name?: string
+    to_portfolio_id?: string
+    to_portfolio_name?: string
+    performed_by_email?: string
+    performed_by_name?: string
+    performed_by_role?: string
+  }): Promise<void> {
+    const success = params.success !== false
+    await this.write({
+      scope: 'SINGLE',
+      entity_type: params.entity_type,
+      action: params.action,
+      entity_id: params.entity_id,
+      entity_name: params.entity_name,
+      items: [
+        {
+          id: params.entity_id,
+          name: params.entity_name,
+          success,
+          reason: params.reason,
+          dbms: params.dbms,
+          dashboard: params.dashboard,
+          scraper: params.scraper,
+          from_portfolio_id: params.from_portfolio_id,
+          from_portfolio_name: params.from_portfolio_name,
+          to_portfolio_id: params.to_portfolio_id,
+          to_portfolio_name: params.to_portfolio_name
+        }
+      ],
+      total_count: 1,
+      success_count: success ? 1 : 0,
+      failed_count: success ? 0 : 1,
+      performed_by_email: params.performed_by_email,
+      performed_by_name: params.performed_by_name,
+      performed_by_role: params.performed_by_role
+    })
+  }
+
+  /**
+   * Writes one SyncActionLog document per finished upload job, with separate
+   * portfolio_items and property_items when both phases ran.
+   */
+  async writeFromUploadJob(job: UploadJobData): Promise<void> {
+    const action =
+      job.source === 'import'
+        ? 'IMPORT'
+        : job.source === 'bulk-update'
+          ? 'UPDATE'
+          : 'TRANSFER'
+
+    const includePortfolios =
+      job.portfolios.items.length > 0 &&
+      (job.source === 'import' || job.source === 'bulk-update')
+
+    const portfolioItems = includePortfolios
+      ? job.portfolios.items.map(item => this.mapUploadJobEntity(item, {}))
+      : []
+
+    const propertyItems =
+      job.properties.items.length > 0
+        ? job.properties.items.map(item =>
+            this.mapUploadJobEntity(
+              item,
+              job.source === 'bulk-transfer'
+                ? {
+                    from_portfolio_id: item.portfolioId,
+                    from_portfolio_name: item.portfolioName,
+                    to_portfolio_id: job.targetPortfolioId,
+                    to_portfolio_name: job.filename
+                  }
+                : {
+                    to_portfolio_id: item.portfolioId,
+                    to_portfolio_name: item.portfolioName
+                  }
+            )
+          )
+        : []
+
+    if (!portfolioItems.length && !propertyItems.length) return
+
+    const portfolioSuccess = portfolioItems.filter(i => i.success).length
+    const portfolioFailed = portfolioItems.length - portfolioSuccess
+    const propertySuccess = propertyItems.filter(i => i.success).length
+    const propertyFailed = propertyItems.length - propertySuccess
+
+    // Label by primary job intent — not every entity touched as a side effect.
+    // - import: portfolios + properties are first-class → MIXED when both exist
+    // - bulk-update / bulk-transfer: property-focused even if portfolios were
+    //   resolved/created along the way → PROPERTY (still logs portfolio_items)
+    let entity_type: SyncActionEntityType
+    if (job.source === 'bulk-update' || job.source === 'bulk-transfer') {
+      entity_type = propertyItems.length > 0 ? 'PROPERTY' : 'PORTFOLIO'
+    } else if (portfolioItems.length > 0 && propertyItems.length > 0) {
+      entity_type = 'MIXED'
+    } else if (portfolioItems.length > 0) {
+      entity_type = 'PORTFOLIO'
+    } else {
+      entity_type = 'PROPERTY'
+    }
+
+    await this.write({
+      scope: 'BULK',
+      entity_type,
+      action,
+      items: [],
+      portfolio_items: portfolioItems,
+      property_items: propertyItems,
+      total_count: portfolioItems.length + propertyItems.length,
+      success_count: portfolioSuccess + propertySuccess,
+      failed_count: portfolioFailed + propertyFailed,
+      portfolio_total_count: portfolioItems.length,
+      portfolio_success_count: portfolioSuccess,
+      portfolio_failed_count: portfolioFailed,
+      property_total_count: propertyItems.length,
+      property_success_count: propertySuccess,
+      property_failed_count: propertyFailed,
+      performed_by_email: job.userEmail,
+      performed_by_name: job.userName || job.userEmail,
+      performed_by_role: job.userRole,
+      job_id: job.jobId
+    })
+  }
+
+  private mapUploadJobEntity(
+    item: UploadJobEntity,
+    opts: {
+      from_portfolio_id?: string
+      from_portfolio_name?: string
+      to_portfolio_id?: string
+      to_portfolio_name?: string
+    }
+  ): SyncActionLogItemPayload {
+    const success = this.isItemOverallSuccess(item)
+    const reason =
+      item.dbms.reason ||
+      item.dashboard.reason ||
+      item.scraper.reason ||
+      undefined
+
+    return {
+      id: item.id,
+      name: item.name,
+      success,
+      reason,
+      dbms: item.dbms.state,
+      dashboard: item.dashboard.state,
+      scraper: item.scraper.state,
+      from_portfolio_id: opts.from_portfolio_id,
+      from_portfolio_name: opts.from_portfolio_name,
+      to_portfolio_id: opts.to_portfolio_id,
+      to_portfolio_name: opts.to_portfolio_name
+    }
+  }
+
+  private isItemOverallSuccess(item: UploadJobEntity): boolean {
+    const states = [item.dbms.state, item.dashboard.state, item.scraper.state]
+    if (states.some(s => FAILED_STATES.has(s))) return false
+    if (item.dbms.state === 'pending' || item.dbms.state === 'processing') {
+      return false
+    }
+    return (
+      SUCCESS_STATES.has(item.dbms.state) || item.dbms.state === 'skipped'
+    )
+  }
+}

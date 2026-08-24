@@ -46,6 +46,10 @@ export interface UploadJobEntity {
    *  user selected. Absent for file-driven jobs, where `row` identifies it. */
   id?: string
   name: string
+  /** Snapshotted portfolio name for property rows (import / update / transfer source). */
+  portfolioName?: string
+  /** DBMS portfolio id for property rows (source portfolio; before transfer for bulk-transfer). */
+  portfolioId?: string
   dbms: EntitySyncStatus
   scraper: EntitySyncStatus
   dashboard: EntitySyncStatus
@@ -66,8 +70,14 @@ export interface UploadJobData {
    *  this carries the target portfolio name instead, so the same status
    *  document and report email stay renderable for every job source. */
   filename: string
+  /** DBMS target portfolio id for `bulk-transfer` jobs. */
+  targetPortfolioId?: string
   userId: string
   userEmail: string
+  /** Snapshotted display name for durable action logs / report emails. */
+  userName?: string
+  /** Snapshotted role name for durable action logs. */
+  userRole?: string
   status: UploadJobStatus
   error?: string
   /** `processed` = how many items have reached a terminal state (created/updated/skipped/failed)
