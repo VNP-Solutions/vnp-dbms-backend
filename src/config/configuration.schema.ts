@@ -180,4 +180,9 @@ export class ConfigurationSchema {
   @IsNotEmpty()
   @IsString()
   JWT_COMMUNICATION_SECRET: string
+
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  IPINFO_TOKEN?: string
 }

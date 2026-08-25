@@ -156,6 +156,9 @@ export interface Configuration {
   cors: {
     origins: string[]
   }
+  ipinfo: {
+    token?: string
+  }
 }
 
 export default (): Configuration => {
@@ -296,6 +299,9 @@ export default (): Configuration => {
     },
     cors: {
       origins: corsOrigins
+    },
+    ipinfo: {
+      token: process.env.IPINFO_TOKEN || undefined
     }
   }
 }
