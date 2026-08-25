@@ -1,11 +1,11 @@
 import {
-    BadRequestException,
-    ConflictException,
-    ForbiddenException,
-    Inject,
-    Injectable,
-    Logger,
-    NotFoundException
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Inject,
+  Injectable,
+  Logger,
+  NotFoundException
 } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import type { Priority } from '@prisma/client'
@@ -16,8 +16,8 @@ import type { PaginatedResult } from '../../common/dto/query.dto'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
 import { GlobalFilterCacheService } from '../../common/services/global-filter-cache.service'
 import {
-    RunDateCalculatorService,
-    type RunDateOtaType
+  RunDateCalculatorService,
+  type RunDateOtaType
 } from '../../common/services/run-date-calculator.service'
 import { SyncCommunicationService } from '../../common/services/sync-communication.service'
 import { SyncActionLogWriter } from '../../common/services/sync-action-log-writer.service'
@@ -26,12 +26,12 @@ import { EmailUtil } from '../../common/utils/email.util'
 import { EncryptionUtil } from '../../common/utils/encryption.util'
 import { S3ExportUtil } from '../../common/utils/s3-export.util'
 import {
-    EXCEL_HISTORICAL_DATE_HEADERS,
-    PROPERTY_EXPORT_COLUMN_CODES,
-    findExcelCellValue,
-    findExcelDateValue,
-    mapPropertyToExcelRow,
-    writePropertyExportBuffer
+  EXCEL_HISTORICAL_DATE_HEADERS,
+  PROPERTY_EXPORT_COLUMN_CODES,
+  findExcelCellValue,
+  findExcelDateValue,
+  mapPropertyToExcelRow,
+  writePropertyExportBuffer
 } from '../../common/utils/property-excel.util'
 import { withTimeout } from '../../common/utils/promise-timeout.util'
 import {
@@ -52,50 +52,46 @@ import { RedisService } from '../redis/redis.service'
 import type { ISubportfolioService } from '../subportfolio/subportfolio.interface'
 import { applyColumnFilter } from './property-column-filter.util'
 import {
-    collectPropertyUniqueConflicts,
-    normalizePropertyIdentifier,
-    propertyIdentifierKey
+  collectPropertyUniqueConflicts,
+  normalizePropertyIdentifier,
+  propertyIdentifierKey
 } from './property-uniqueness.util'
 import type {
-    SyncBulkDeleteResponseDto,
-    UploadJobAcceptedDto
+  SyncBulkDeleteResponseDto,
+  UploadJobAcceptedDto
 } from './property.dto'
 import {
-    BulkUpdateResultDto,
-    CreatePropertyDto,
-    ExportPropertyExcelDto,
-    GetPropertyCredentialDto,
-    PropertyFilterDto,
-    RequiredFieldType,
-    SyncBulkDeleteBodyDto,
-    SyncByOtaDto,
-    UpdatePropertyDto
+  BulkUpdateResultDto,
+  CreatePropertyDto,
+  ExportPropertyExcelDto,
+  GetPropertyCredentialDto,
+  PropertyFilterDto,
+  RequiredFieldType,
+  SyncBulkDeleteBodyDto,
+  SyncByOtaDto,
+  UpdatePropertyDto
 } from './property.dto'
 import type {
-    AllDataForGlobalFilterResponse,
-    EntitySyncState,
-    EntitySyncStatus,
-    ImportPropertiesResult,
-    ImportPropertyRow,
-    IPropertyRepository,
-    IPropertyService,
-    PropertyContact,
-    PropertySyncOutcome,
-    PropertyWithRelations,
-    TransferPortfolioResult,
-    UploadJobData,
-    UploadJobEntity
+  AllDataForGlobalFilterResponse,
+  EntitySyncState,
+  EntitySyncStatus,
+  ImportPropertiesResult,
+  ImportPropertyRow,
+  IPropertyRepository,
+  IPropertyService,
+  PropertyContact,
+  PropertySyncOutcome,
+  PropertyWithRelations,
+  TransferPortfolioResult,
+  UploadJobData,
+  UploadJobEntity
 } from './property.interface'
 
 const CACHE_TTL_ITEM = 5 * 60 * 1000 // 5 minutes for individual records
 const CACHE_TTL_ALL = 60 * 60 * 1000 // 1 hour for all properties cache
 const CACHE_KEY = (id: string) => `property:${id}`
 /** OTAs whose run date is derived from the historical "to" date and CRS. */
-const RUN_DATE_OTAS: readonly RunDateOtaType[] = [
-  'expedia',
-  'booking',
-  'agoda'
-]
+const RUN_DATE_OTAS: readonly RunDateOtaType[] = ['expedia', 'booking', 'agoda']
 const GLOBAL_FILTER_KEY = (userId: string) => `global-filter:all:${userId}`
 
 @Injectable()
@@ -234,12 +230,8 @@ export class PropertyService implements IPropertyService {
 
   /** An item counts as "processed" (done, for progress-bar purposes) once every
    *  system it goes through has reached a terminal state — no longer pending/processing. */
-  private static readonly TERMINAL_STATES: ReadonlySet<EntitySyncState> = new Set([
-    'created',
-    'updated',
-    'skipped',
-    'failed'
-  ])
+  private static readonly TERMINAL_STATES: ReadonlySet<EntitySyncState> =
+    new Set(['created', 'updated', 'skipped', 'failed'])
   private static isEntityProcessed(item: UploadJobEntity): boolean {
     return (
       PropertyService.TERMINAL_STATES.has(item.dbms.state) &&
@@ -275,7 +267,10 @@ export class PropertyService implements IPropertyService {
   }
 
   private actorName(user: IUserWithPermissions): string {
-    const name = [user.first_name, user.last_name].filter(Boolean).join(' ').trim()
+    const name = [user.first_name, user.last_name]
+      .filter(Boolean)
+      .join(' ')
+      .trim()
     return name || user.email
   }
 
@@ -384,10 +379,11 @@ export class PropertyService implements IPropertyService {
       // The downstream call is an upsert, so label it to match what actually
       // happened in DBMS — an already-existing portfolio reports as updated.
       const syncState: EntitySyncState = res.created ? 'created' : 'updated'
-      const sync = await this.portfolioService.syncUpsertPortfolioToScraperAndDashboard(
-        res.id,
-        UPLOAD_JOB_HTTP_TIMEOUT_MS
-      )
+      const sync =
+        await this.portfolioService.syncUpsertPortfolioToScraperAndDashboard(
+          res.id,
+          UPLOAD_JOB_HTTP_TIMEOUT_MS
+        )
       item.scraper = sync.scraper.success
         ? { state: syncState }
         : { state: 'failed', reason: sync.scraper.reason }
@@ -428,11 +424,20 @@ export class PropertyService implements IPropertyService {
       if (full?.id) {
         item.id = full.id
       }
-      if (full?.portfolio?.name) {
-        item.portfolioName = full.portfolio.name
-      }
-      if (full?.portfolio_id) {
-        item.portfolioId = full.portfolio_id
+      // For bulk-transfer jobs, item.portfolioId/portfolioName were
+      // snapshotted with the *source* portfolio before the DB update so the
+      // sync action log can show a correct from -> to. `full` here is the
+      // property *after* the transfer, so it must not overwrite that
+      // snapshot (otherwise from/to end up identical). Other job sources
+      // (import/bulk-update) use these fields to reflect the current
+      // portfolio, so they should still be refreshed from `full`.
+      if (job.source !== 'bulk-transfer') {
+        if (full?.portfolio?.name) {
+          item.portfolioName = full.portfolio.name
+        }
+        if (full?.portfolio_id) {
+          item.portfolioId = full.portfolio_id
+        }
       }
       // Mirror the DBMS outcome: only a freshly created property reports as
       // created downstream — an updated or pre-existing one reports as updated.
@@ -595,12 +600,11 @@ export class PropertyService implements IPropertyService {
       entity_id: property.id,
       entity_name: property.name,
       success: dashboardResult.success && parserResult.success,
-      reason:
-        !dashboardResult.success
-          ? dashboardResult.reason
-          : !parserResult.success
-            ? parserResult.reason
-            : undefined,
+      reason: !dashboardResult.success
+        ? dashboardResult.reason
+        : !parserResult.success
+          ? parserResult.reason
+          : undefined,
       dbms: 'created',
       dashboard: dashboardResult.success ? 'created' : 'failed',
       scraper: parserResult.success ? 'created' : 'failed',
@@ -1761,12 +1765,11 @@ export class PropertyService implements IPropertyService {
       entity_id: updated.id,
       entity_name: updated.name,
       success: dashboardResult.success && parserResult.success,
-      reason:
-        !dashboardResult.success
-          ? dashboardResult.reason
-          : !parserResult.success
-            ? parserResult.reason
-            : undefined,
+      reason: !dashboardResult.success
+        ? dashboardResult.reason
+        : !parserResult.success
+          ? parserResult.reason
+          : undefined,
       dbms: 'updated',
       dashboard: dashboardResult.success ? 'updated' : 'failed',
       scraper: parserResult.success ? 'updated' : 'failed',
@@ -1904,12 +1907,11 @@ export class PropertyService implements IPropertyService {
       entity_id: before.id,
       entity_name: before.name,
       success: dashboard.success && scraper.success,
-      reason:
-        !dashboard.success
-          ? dashboard.reason
-          : !scraper.success
-            ? scraper.reason
-            : undefined,
+      reason: !dashboard.success
+        ? dashboard.reason
+        : !scraper.success
+          ? scraper.reason
+          : undefined,
       dbms: 'deleted',
       dashboard: dashboard.success ? 'deleted' : 'failed',
       scraper: scraper.success ? 'deleted' : 'failed',
@@ -1965,12 +1967,11 @@ export class PropertyService implements IPropertyService {
       entity_id: updated.id,
       entity_name: updated.name,
       success: sync.dashboard.success && sync.scraper.success,
-      reason:
-        !sync.dashboard.success
-          ? sync.dashboard.reason
-          : !sync.scraper.success
-            ? sync.scraper.reason
-            : undefined,
+      reason: !sync.dashboard.success
+        ? sync.dashboard.reason
+        : !sync.scraper.success
+          ? sync.scraper.reason
+          : undefined,
       dbms: 'updated',
       dashboard: sync.dashboard.success ? 'updated' : 'failed',
       scraper: sync.scraper.success ? 'updated' : 'failed',
@@ -3290,9 +3291,7 @@ export class PropertyService implements IPropertyService {
       job.error = e?.message ?? String(e)
       job.completedAt = new Date().toISOString()
       await this.saveUploadJob(job)
-      this.syncLogger.error(
-        `[async] import job ${jobId} failed: ${job.error}`
-      )
+      this.syncLogger.error(`[async] import job ${jobId} failed: ${job.error}`)
       await this.sendUploadJobReportEmail(job)
     }
   }
@@ -3524,7 +3523,9 @@ export class PropertyService implements IPropertyService {
       const uniquePortfolioNames = [
         ...new Set(
           data
-            .map(r => findValue(r, ['Portfolio', 'Portfolio Name', 'Portfolio name']))
+            .map(r =>
+              findValue(r, ['Portfolio', 'Portfolio Name', 'Portfolio name'])
+            )
             .filter((v): v is string => !!v)
         )
       ]
@@ -4917,7 +4918,9 @@ export class PropertyService implements IPropertyService {
       // failure on the job so the frontend (polling) surfaces it.
       const reason =
         error instanceof Error ? error.message : 'Unknown error occurred'
-      this.syncLogger.error(`[async] bulk-update job ${jobId} failed: ${reason}`)
+      this.syncLogger.error(
+        `[async] bulk-update job ${jobId} failed: ${reason}`
+      )
       job.status = 'failed'
       job.error = reason
       job.completedAt = new Date().toISOString()
@@ -5817,7 +5820,6 @@ export class PropertyService implements IPropertyService {
     }
   }
 
-
   private async syncUpsertPropertyToScraper(
     property: PropertyWithRelations,
     timeoutMs?: number
@@ -5843,9 +5845,7 @@ export class PropertyService implements IPropertyService {
       ReturnType<typeof this.credentialsService.findByPropertyId>
     >
     try {
-      credentials = await this.credentialsService.findByPropertyId(
-        property.id
-      )
+      credentials = await this.credentialsService.findByPropertyId(property.id)
     } catch (e: any) {
       const reason = `Failed to load credentials: ${e?.message ?? String(e)}`
       this.logger.error(`[sync] scraper property upsert failed: ${reason}`)
@@ -6107,9 +6107,7 @@ export class PropertyService implements IPropertyService {
       ReturnType<typeof this.credentialsService.findByPropertyId>
     >
     try {
-      credentials = await this.credentialsService.findByPropertyId(
-        property.id
-      )
+      credentials = await this.credentialsService.findByPropertyId(property.id)
     } catch (e: any) {
       const reason = `Failed to load credentials: ${e?.message ?? String(e)}`
       this.logger.error(`[sync] dashboard property upsert failed: ${reason}`)
