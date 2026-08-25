@@ -42,6 +42,7 @@ import { OtpStatusModule } from './modules/otp-status/otp-status.module'
 import { ColumnTemplateModule } from './modules/column-template/column-template.module'
 import { NoteModule } from './modules/note/note.module'
 import { GoogleOAuthModule } from './modules/google-oauth/google-oauth.module'
+import { IpInfoModule } from './modules/ipinfo/ipinfo.module'
 
 @Module({
   imports: [
@@ -80,7 +81,8 @@ import { GoogleOAuthModule } from './modules/google-oauth/google-oauth.module'
     OtpStatusModule,
     ColumnTemplateModule,
     NoteModule,
-    GoogleOAuthModule
+    GoogleOAuthModule,
+    IpInfoModule
   ],
   controllers: [AppController],
   providers: [
