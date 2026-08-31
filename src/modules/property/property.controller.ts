@@ -265,7 +265,7 @@ export class PropertyController {
   @ApiResponse({
     status: 200,
     description:
-      'Paginated list of properties. When masked=false with invalid credentials, returns masked data with error message in metadata.error',
+      'Paginated list of properties. When masked=false and user_name/user_password are supplied but invalid, returns masked data with an error message in metadata.error',
     schema: {
       type: 'object',
       properties: {
@@ -293,7 +293,7 @@ export class PropertyController {
   @ApiBody({
     type: PropertyFilterDto,
     description:
-      'Filter, pagination, and search parameters with multi-field sorting. When masked=false, user_name and user_password are required for authentication to view decrypted credentials.',
+      'Filter, pagination, and search parameters with multi-field sorting. When masked=false, user_name and user_password are optional: send them to have the login verified before decrypted credentials are returned, or omit both to skip verification.',
     examples: {
       'Basic filter': {
         value: {
@@ -431,6 +431,19 @@ export class PropertyController {
           masked: false,
           user_name: 'user@example.com',
           user_password: 'your_password'
+        }
+      },
+      'Unmask credentials without authentication': {
+        value: {
+          filters: [
+            {
+              name: 'portfolio_id',
+              in: ['507f1f77bcf86cd799439013']
+            }
+          ],
+          page: 1,
+          limit: 10,
+          masked: false
         }
       }
     }

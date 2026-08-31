@@ -1235,7 +1235,7 @@ export class PropertyQueryDto extends QueryDto {
 
   @ApiPropertyOptional({
     description:
-      'If true (default), credentials are masked/encrypted. If false, credentials are decrypted. When false, user_name and user_password may be required for validation.',
+      'If true (default), credentials are masked/encrypted. If false, credentials are decrypted. user_name and user_password are optional — send them to have the login verified, omit them to skip the check.',
     example: true
   })
   @IsOptional()
@@ -1251,7 +1251,7 @@ export class PropertyQueryDto extends QueryDto {
 
   @ApiPropertyOptional({
     description:
-      'User email/username for validation when masked=false. Required when masked=false with credential validation enabled.'
+      'Optional. User email/username to verify when masked=false. Omit together with user_password to skip verification; if either field is sent, both must match the authenticated user.'
   })
   @IsOptional()
   @IsString()
@@ -1259,7 +1259,7 @@ export class PropertyQueryDto extends QueryDto {
 
   @ApiPropertyOptional({
     description:
-      'User password for validation when masked=false. Required when masked=false with credential validation enabled.'
+      'Optional. User password to verify when masked=false. Omit together with user_name to skip verification; if either field is sent, both must match the authenticated user.'
   })
   @IsOptional()
   @IsString()
@@ -1507,10 +1507,10 @@ const PROPERTY_FILTER_FIELD_NAMES_LIST = PROPERTY_FILTER_FIELD_NAMES.join(', ')
 
 const PROPERTY_FILTER_ITEM_NAME_DESCRIPTION = `Field to filter or sort. Allowed values: ${PROPERTY_FILTER_FIELD_NAMES_LIST}. Use in: [] with sort_by only for created_at / updated_at. Booleans accept true/false or "true"/"false". IDs (expedia_id, booking_id, agoda_id) and *_duration use numbers in in[]. OTA date range filters: *_from and *_to MUST be provided together as a pair (e.g., expedia_from + expedia_to). When both are present, they create a range filter that finds properties with overlapping date ranges. Individual *_from or *_to filters without their pair are ignored.`
 
-const PROPERTY_FILTER_DTO_FILTERS_DESCRIPTION = `Each item: name (required, one of: ${PROPERTY_FILTER_FIELD_NAMES_LIST}), in (required; OR match; empty only for sort-only on created_at/updated_at), sort_by (optional asc|desc). Root fields: page, limit, search (name, description, hotel_address, property_identifier, portfolio_contact, card_descriptor), start_date, end_date, is_active, masked, user_name, user_password.`
+const PROPERTY_FILTER_DTO_FILTERS_DESCRIPTION = `Each item: name (required, one of: ${PROPERTY_FILTER_FIELD_NAMES_LIST}), in (required; OR match; empty only for sort-only on created_at/updated_at), sort_by (optional asc|desc). Root fields: page, limit, search (name, description, hotel_address, property_identifier, portfolio_contact, card_descriptor), start_date, end_date, is_active, masked, user_name (optional), user_password (optional).`
 
 /** Full narrative for POST /property/filter Swagger operation text. */
-export const PROPERTY_FILTER_OPERATION_DESCRIPTION = `Returns properties with optional pagination. filters[].name must be one of: ${PROPERTY_FILTER_FIELD_NAMES_LIST}. Each filter row: in = array of values (OR match); use in: [] only with sort_by for created_at or updated_at. Boolean fields (expedia_access_level, expedia_scheduler, booking_access_level, booking_scheduler, agoda_access_level, agoda_scheduler) accept true/false or "true"/"false". Numeric in values: expedia_id, booking_id, agoda_id, expedia_duration, booking_duration, agoda_duration. OTA date range filtering: *_from and *_to filters MUST be provided together as pairs (e.g., expedia_from + expedia_to). When both are present, they automatically create a range filter that finds properties where their OTA date ranges overlap with the provided range. Individual *_from or *_to filters without their pair are ignored. Enum strings: billing types VCC, DB, EBS; frequencies REGULAR, ONE_TIME, STOP; processors QuantumPay, Stripe, FreedomPay; OTA run-date priorities expedia_priority, booking_priority, agoda_priority accept REGULAR or HIGH (case-insensitive). currency_id accepts MongoDB ObjectId strings. Root body (outside filters): page, limit, search, start_date, end_date, is_active, masked, user_name, user_password (when masked=false).`
+export const PROPERTY_FILTER_OPERATION_DESCRIPTION = `Returns properties with optional pagination. filters[].name must be one of: ${PROPERTY_FILTER_FIELD_NAMES_LIST}. Each filter row: in = array of values (OR match); use in: [] only with sort_by for created_at or updated_at. Boolean fields (expedia_access_level, expedia_scheduler, booking_access_level, booking_scheduler, agoda_access_level, agoda_scheduler) accept true/false or "true"/"false". Numeric in values: expedia_id, booking_id, agoda_id, expedia_duration, booking_duration, agoda_duration. OTA date range filtering: *_from and *_to filters MUST be provided together as pairs (e.g., expedia_from + expedia_to). When both are present, they automatically create a range filter that finds properties where their OTA date ranges overlap with the provided range. Individual *_from or *_to filters without their pair are ignored. Enum strings: billing types VCC, DB, EBS; frequencies REGULAR, ONE_TIME, STOP; processors QuantumPay, Stripe, FreedomPay; OTA run-date priorities expedia_priority, booking_priority, agoda_priority accept REGULAR or HIGH (case-insensitive). currency_id accepts MongoDB ObjectId strings. Root body (outside filters): page, limit, search, start_date, end_date, is_active, masked, and the optional user_name / user_password pair. When masked=false, credentials are verified only if user_name or user_password is present; omit both to get decrypted data without a check.`
 
 export class PropertyFilterItem {
   @ApiProperty({
