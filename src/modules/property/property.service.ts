@@ -1312,37 +1312,51 @@ export class PropertyService implements IPropertyService {
     const shouldDecrypt = filterDto.masked === false
 
     if (shouldDecrypt) {
-      // Verify credentials when requesting decrypted data
-      this.logger.debug('Decryption requested, verifying user credentials')
-      const isValidCredentials = await this.verifyUserCredentials(
-        filterDto.user_name,
-        filterDto.user_password,
-        user
+      // user_name / user_password are optional. Omit both and the check is
+      // skipped entirely; send either one and it must be a valid login for
+      // the authenticated user, so a half-filled or wrong pair still errors
+      // rather than quietly passing through as "not provided".
+      const credentialsProvided = Boolean(
+        filterDto.user_name?.trim() || filterDto.user_password?.trim()
       )
 
-      if (!isValidCredentials) {
-        // Return masked data with error message
-        this.logger.warn(
-          `Failed credential verification for user: ${user.email}`
+      if (credentialsProvided) {
+        this.logger.debug('Decryption requested, verifying user credentials')
+        const isValidCredentials = await this.verifyUserCredentials(
+          filterDto.user_name,
+          filterDto.user_password,
+          user
         )
-        const dataWithMaskedCredentials = data.map(p =>
-          applyFilter(this.maskCredentialsForResponse(p))
+
+        if (!isValidCredentials) {
+          // Return masked data with error message
+          this.logger.warn(
+            `Failed credential verification for user: ${user.email}`
+          )
+          const dataWithMaskedCredentials = data.map(p =>
+            applyFilter(this.maskCredentialsForResponse(p))
+          )
+          return {
+            data: dataWithMaskedCredentials,
+            metadata: {
+              totalDocuments: total,
+              currentPage,
+              totalPages,
+              limit,
+              error: 'Invalid username or password' as string | undefined
+            }
+          } as PaginatedResult<PropertyWithRelations>
+        }
+
+        this.logger.debug(
+          'Credentials verified successfully, returning decrypted data'
         )
-        return {
-          data: dataWithMaskedCredentials,
-          metadata: {
-            totalDocuments: total,
-            currentPage,
-            totalPages,
-            limit,
-            error: 'Invalid username or password' as string | undefined
-          }
-        } as PaginatedResult<PropertyWithRelations>
+      } else {
+        this.logger.debug(
+          'Decryption requested without credentials, skipping verification'
+        )
       }
 
-      this.logger.debug(
-        'Credentials verified successfully, returning decrypted data'
-      )
       const dataWithDecryptedCredentials = data.map(p =>
         applyFilter(this.decryptCredentialsForResponse(p))
       )
