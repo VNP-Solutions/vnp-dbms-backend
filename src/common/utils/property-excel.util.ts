@@ -1,6 +1,86 @@
 import * as XLSX from 'xlsx-js-style'
 import { normalizeParserJobDate } from './parser-job-date.util'
 
+/**
+ * Canonical Excel header for every column whose spelling used to differ
+ * between the export and the two upload parsers, together with the legacy
+ * spellings that are still accepted.
+ *
+ * The export writes `header`; import and bulk-update match `header` first and
+ * then each alias, so a file produced by any version of the export can still
+ * be uploaded. Matching is case-insensitive, so aliases only need to list
+ * genuinely different wording — not case variants.
+ */
+export const EXCEL_COLUMN_HEADERS = {
+  subportfolio: {
+    header: 'Sub Portfolio',
+    aliases: ['Sub-Portfolio', 'Subportfolio', 'Sub Portfolio Name']
+  },
+  hotelAddress: {
+    header: 'Hotel Address',
+    aliases: ['Address', 'Property Address']
+  },
+  expediaUsername: {
+    header: 'Expedia Username',
+    aliases: ['User Name Expedia']
+  },
+  expediaPassword: {
+    header: 'Expedia Password',
+    aliases: ['Password Expedia']
+  },
+  bookingUsername: {
+    header: 'Booking Username',
+    aliases: ['User Name Booking']
+  },
+  bookingPassword: {
+    header: 'Booking Password',
+    aliases: ['Password Booking']
+  },
+  agodaUsername: {
+    header: 'Agoda Username',
+    aliases: ['User Name Agoda']
+  },
+  agodaPassword: {
+    header: 'Agoda Password',
+    aliases: ['Password Agoda']
+  },
+  expediaSecondaryUsername: {
+    header: 'Expedia Secondary Username',
+    aliases: ['Expedia Secondary User Name']
+  },
+  expediaSecondaryPassword: {
+    header: 'Expedia Secondary Password',
+    aliases: []
+  },
+  fpUsername: {
+    header: 'FP Username',
+    aliases: ['FP User Name']
+  },
+  bookingOtpPhone: {
+    header: 'Booking OTP Phone',
+    aliases: ['Booking OTP Phone Number']
+  },
+  isActive: {
+    header: 'Is Active',
+    aliases: ['Active', 'is_active']
+  },
+  nextDueDate: {
+    header: 'Next Due Date',
+    aliases: ['Due Date']
+  }
+} as const satisfies Record<
+  string,
+  { header: string; aliases: readonly string[] }
+>
+
+export type ExcelColumnKey = keyof typeof EXCEL_COLUMN_HEADERS
+
+/** Canonical header followed by every accepted alias, for parser lookups. */
+export function excelHeaderNames(key: ExcelColumnKey): readonly string[] {
+  const entry = EXCEL_COLUMN_HEADERS[key]
+  return [entry.header, ...entry.aliases]
+}
+
 /** Preferred Excel headers with legacy aliases for import/bulk-update. */
 export const EXCEL_HISTORICAL_DATE_HEADERS = {
   expediaFrom: ['Expedia Historical From', 'Expedia From'],
@@ -237,7 +317,7 @@ export const PROPERTY_EXPORT_COLUMNS: readonly PropertyExportColumnDef[] = [
   singleCol('portfolio_id', 'Portfolio', 'general', p => p.portfolio?.name ?? ''),
   singleCol(
     'subportfolio_id',
-    'Sub-Portfolio',
+    EXCEL_COLUMN_HEADERS.subportfolio.header,
     'general',
     p => p.subportfolio?.name ?? ''
   ),
@@ -341,21 +421,27 @@ export const PROPERTY_EXPORT_COLUMNS: readonly PropertyExportColumnDef[] = [
     'expedia',
     p => p.expedia_otp_number ?? ''
   ),
-  singleCol('userNameExpedia', 'User Name Expedia', 'expedia', p =>
-    cred(p).expediaUsername ?? ''
+  singleCol(
+    'userNameExpedia',
+    EXCEL_COLUMN_HEADERS.expediaUsername.header,
+    'expedia',
+    p => cred(p).expediaUsername ?? ''
   ),
-  singleCol('passwordExpedia', 'Password Expedia', 'expedia', p =>
-    cred(p).expediaPassword ?? ''
+  singleCol(
+    'passwordExpedia',
+    EXCEL_COLUMN_HEADERS.expediaPassword.header,
+    'expedia',
+    p => cred(p).expediaPassword ?? ''
   ),
   singleCol(
     'expedia_secondary_username',
-    'Expedia Secondary User Name',
+    EXCEL_COLUMN_HEADERS.expediaSecondaryUsername.header,
     'expedia',
     p => cred(p).expediaSecondaryUsername ?? ''
   ),
   singleCol(
     'expedia_secondary_password',
-    'Expedia Secondary Password',
+    EXCEL_COLUMN_HEADERS.expediaSecondaryPassword.header,
     'expedia',
     p => cred(p).expediaSecondaryPassword ?? ''
   ),
@@ -402,15 +488,21 @@ export const PROPERTY_EXPORT_COLUMNS: readonly PropertyExportColumnDef[] = [
     'booking',
     p => p.booking_processor?.name ?? ''
   ),
-  singleCol('userNameBooking', 'User Name Booking', 'booking', p =>
-    cred(p).bookingUsername ?? ''
+  singleCol(
+    'userNameBooking',
+    EXCEL_COLUMN_HEADERS.bookingUsername.header,
+    'booking',
+    p => cred(p).bookingUsername ?? ''
   ),
-  singleCol('passwordBooking', 'Password Booking', 'booking', p =>
-    cred(p).bookingPassword ?? ''
+  singleCol(
+    'passwordBooking',
+    EXCEL_COLUMN_HEADERS.bookingPassword.header,
+    'booking',
+    p => cred(p).bookingPassword ?? ''
   ),
   singleCol(
     'booking_otp_phone',
-    'Booking OTP Phone Number',
+    EXCEL_COLUMN_HEADERS.bookingOtpPhone.header,
     'booking',
     p => p.booking_otp_phone ?? ''
   ),
@@ -452,11 +544,17 @@ export const PROPERTY_EXPORT_COLUMNS: readonly PropertyExportColumnDef[] = [
     'agoda',
     p => p.agoda_processor?.name ?? ''
   ),
-  singleCol('userNameAgoda', 'User Name Agoda', 'agoda', p =>
-    cred(p).agodaUsername ?? ''
+  singleCol(
+    'userNameAgoda',
+    EXCEL_COLUMN_HEADERS.agodaUsername.header,
+    'agoda',
+    p => cred(p).agodaUsername ?? ''
   ),
-  singleCol('passwordAgoda', 'Password Agoda', 'agoda', p =>
-    cred(p).agodaPassword ?? ''
+  singleCol(
+    'passwordAgoda',
+    EXCEL_COLUMN_HEADERS.agodaPassword.header,
+    'agoda',
+    p => cred(p).agodaPassword ?? ''
   ),
   singleCol(
     'agoda_otp_number',
@@ -466,7 +564,7 @@ export const PROPERTY_EXPORT_COLUMNS: readonly PropertyExportColumnDef[] = [
   ),
   singleCol(
     'hotel_address',
-    'Hotel Address',
+    EXCEL_COLUMN_HEADERS.hotelAddress.header,
     'contact',
     p => p.hotel_address ?? ''
   ),
@@ -507,7 +605,12 @@ export const PROPERTY_EXPORT_COLUMNS: readonly PropertyExportColumnDef[] = [
   ),
   singleCol('qp_username', 'QP Username', 'contact', p => p.qp_username ?? ''),
   singleCol('qp_password', 'QP Password', 'contact', p => p.qp_password ?? ''),
-  singleCol('fp_username', 'FP User Name', 'contact', p => p.fp_username ?? ''),
+  singleCol(
+    'fp_username',
+    EXCEL_COLUMN_HEADERS.fpUsername.header,
+    'contact',
+    p => p.fp_username ?? ''
+  ),
   singleCol('fp_password', 'FP Password', 'contact', p => p.fp_password ?? ''),
   singleCol('sales_rep', 'Sales Rep', 'contact', p => p.sales_rep ?? ''),
   singleCol(

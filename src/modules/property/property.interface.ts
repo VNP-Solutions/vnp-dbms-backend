@@ -192,9 +192,7 @@ export interface ImportPropertyRow {
   expediaCrs?: string
   expediaCrsDb?: string
   expediaRunDateFrom?: string
-  expediaRunDateTo?: string
   expediaRunDateDbFrom?: string
-  expediaRunDateDbTo?: string
   expediaRevisedDate?: string
   expediaSchedulerReviewFrom?: string
   expediaSchedulerReviewTo?: string
@@ -210,7 +208,6 @@ export interface ImportPropertyRow {
   bookingServiceFee?: string
   bookingCrs?: string
   bookingRunDateFrom?: string
-  bookingRunDateTo?: string
   bookingRevisedDate?: string
   bookingCredentialVerified?: string
   bookingOtpNumber?: string
@@ -218,11 +215,12 @@ export interface ImportPropertyRow {
   agodaServiceFee?: string
   agodaCrs?: string
   agodaRunDateFrom?: string
-  agodaRunDateTo?: string
   agodaRevisedDate?: string
   agodaCredentialVerified?: string
   agodaOtpNumber?: string
   // Misc new fields
+  isActive?: string
+  nextDueDate?: string
   priority?: string
   expediaPriority?: string
   bookingPriority?: string
