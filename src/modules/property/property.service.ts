@@ -4824,41 +4824,38 @@ export class PropertyService implements IPropertyService {
             )
           }
 
-          // Apply credentials update
+          // Apply credentials update. Passwords are passed as plain text —
+          // PropertyCredentialsRepository encrypts them on write, so
+          // encrypting here would store a doubly-encrypted value.
           if (hasCredentialsUpdate) {
             const credentialsData: Record<string, any> = {}
             if (expediaUsername !== undefined)
               credentialsData.expediaUsername = expediaUsername
             if (expediaPassword)
-              credentialsData.expediaPassword =
-                this.encryptionUtil.encrypt(expediaPassword)
+              credentialsData.expediaPassword = expediaPassword
             if (agodaUsername !== undefined)
               credentialsData.agodaUsername = agodaUsername
-            if (agodaPassword)
-              credentialsData.agodaPassword =
-                this.encryptionUtil.encrypt(agodaPassword)
+            if (agodaPassword) credentialsData.agodaPassword = agodaPassword
             if (bookingUsername !== undefined)
               credentialsData.bookingUsername = bookingUsername
             if (bookingPassword)
-              credentialsData.bookingPassword =
-                this.encryptionUtil.encrypt(bookingPassword)
+              credentialsData.bookingPassword = bookingPassword
             if (expediaSecondaryUsername !== undefined)
               credentialsData.expediaSecondaryUsername =
                 expediaSecondaryUsername
             if (expediaSecondaryPassword)
               credentialsData.expediaSecondaryPassword =
-                this.encryptionUtil.encrypt(expediaSecondaryPassword)
+                expediaSecondaryPassword
             if (bookingSecondaryUsername !== undefined)
               credentialsData.bookingSecondaryUsername =
                 bookingSecondaryUsername
             if (bookingSecondaryPassword)
               credentialsData.bookingSecondaryPassword =
-                this.encryptionUtil.encrypt(bookingSecondaryPassword)
+                bookingSecondaryPassword
             if (agodaSecondaryUsername !== undefined)
               credentialsData.agodaSecondaryUsername = agodaSecondaryUsername
             if (agodaSecondaryPassword)
-              credentialsData.agodaSecondaryPassword =
-                this.encryptionUtil.encrypt(agodaSecondaryPassword)
+              credentialsData.agodaSecondaryPassword = agodaSecondaryPassword
 
             const existingCredentials = await withTimeout(
               this.credentialsService.findByPropertyId(propertyId),
