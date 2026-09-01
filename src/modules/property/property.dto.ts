@@ -1618,7 +1618,7 @@ export class PropertyFilterDto {
 
   @ApiPropertyOptional({
     description:
-      'If true (default), credentials are masked. If false, credentials are decrypted. When false, user_name and user_password are required.',
+      'If true (default), credentials are masked. If false, credentials are decrypted. user_name and user_password are optional — send them to have the login verified, omit them to skip the check.',
     example: true
   })
   @Transform(({ value }) => {
@@ -1632,7 +1632,7 @@ export class PropertyFilterDto {
 
   @ApiPropertyOptional({
     description:
-      'User email for authentication when masked=false. Required when requesting decrypted credentials.',
+      'Optional. User email to verify when masked=false. Omit together with user_password to skip verification; if either field is sent, both must match the authenticated user.',
     example: 'user@example.com'
   })
   @IsOptional()
@@ -1641,7 +1641,7 @@ export class PropertyFilterDto {
 
   @ApiPropertyOptional({
     description:
-      'User password for authentication when masked=false. Required when requesting decrypted credentials.',
+      'Optional. User password to verify when masked=false. Omit together with user_name to skip verification; if either field is sent, both must match the authenticated user.',
     example: 'password123'
   })
   @IsOptional()

@@ -28,6 +28,7 @@ import { S3ExportUtil } from '../../common/utils/s3-export.util'
 import {
   EXCEL_HISTORICAL_DATE_HEADERS,
   PROPERTY_EXPORT_COLUMN_CODES,
+  excelHeaderNames,
   findExcelCellValue,
   findExcelDateValue,
   mapPropertyToExcelRow,
@@ -2733,14 +2734,14 @@ export class PropertyService implements IPropertyService {
         return {
           propertyName,
           portfolioName,
-          subportfolioName: findExcelCellValue(r, [
-            'Sub Portfolio',
-            'Subportfolio',
-            'Sub Portfolio Name'
-          ]),
-          propertyAddress: r['Property Address']
-            ? String(r['Property Address']).trim()
-            : undefined,
+          subportfolioName: findExcelCellValue(
+            r,
+            excelHeaderNames('subportfolio')
+          ),
+          propertyAddress: findExcelCellValue(
+            r,
+            excelHeaderNames('hotelAddress')
+          ),
           cardDescriptor: r['Card Descriptor']
             ? String(r['Card Descriptor']).trim()
             : undefined,
@@ -2760,23 +2761,36 @@ export class PropertyService implements IPropertyService {
           bookingId: r['Booking ID']
             ? String(r['Booking ID']).trim()
             : undefined,
-          expediaUsername: r['Expedia Username']
-            ? String(r['Expedia Username']).trim()
-            : undefined,
-          agodaUsername: r['Agoda Username']
-            ? String(r['Agoda Username']).trim()
-            : undefined,
-          bookingUsername: r['Booking Username']
-            ? String(r['Booking Username']).trim()
-            : undefined,
-          expediaPassword: encryptPassword(r['Expedia Password']),
-          bookingPassword: encryptPassword(r['Booking Password']),
-          agodaPassword: encryptPassword(r['Agoda Password']),
-          expediaSecondaryUsername: r['Expedia Secondary Username']
-            ? String(r['Expedia Secondary Username']).trim()
-            : undefined,
+          expediaUsername: findExcelCellValue(
+            r,
+            excelHeaderNames('expediaUsername')
+          ),
+          agodaUsername: findExcelCellValue(
+            r,
+            excelHeaderNames('agodaUsername')
+          ),
+          bookingUsername: findExcelCellValue(
+            r,
+            excelHeaderNames('bookingUsername')
+          ),
+          expediaPassword: encryptPassword(
+            findExcelCellValue(r, excelHeaderNames('expediaPassword'))
+          ),
+          bookingPassword: encryptPassword(
+            findExcelCellValue(r, excelHeaderNames('bookingPassword'))
+          ),
+          agodaPassword: encryptPassword(
+            findExcelCellValue(r, excelHeaderNames('agodaPassword'))
+          ),
+          expediaSecondaryUsername: findExcelCellValue(
+            r,
+            excelHeaderNames('expediaSecondaryUsername')
+          ),
           expediaSecondaryPassword: encryptPassword(
-            r['Expedia Secondary Password']
+            findExcelCellValue(
+              r,
+              excelHeaderNames('expediaSecondaryPassword')
+            )
           ),
           bookingSecondaryUsername: r['Booking Secondary Username']
             ? String(r['Booking Secondary Username']).trim()
@@ -2801,9 +2815,7 @@ export class PropertyService implements IPropertyService {
             : undefined,
           qpPassword: encryptPassword(r['Qp Password']),
           qpApiKey: encryptPassword(r['Qp Api Key']),
-          fpUsername: r['FP Username']
-            ? String(r['FP Username']).trim()
-            : undefined,
+          fpUsername: findExcelCellValue(r, excelHeaderNames('fpUsername')),
           fpPassword: encryptPassword(r['FP Password']),
           newDomainsEmail: r['New Domains Email']
             ? String(r['New Domains Email']).trim()
@@ -2913,9 +2925,10 @@ export class PropertyService implements IPropertyService {
             ? String(r['Agoda Duration']).trim()
             : undefined,
           needAnotherDomain: parseBool(r['Need Another Domain']),
-          bookingOtpPhone: r['Booking OTP Phone']
-            ? String(r['Booking OTP Phone']).trim()
-            : undefined,
+          bookingOtpPhone: findExcelCellValue(
+            r,
+            excelHeaderNames('bookingOtpPhone')
+          ),
           serviceTypeName: r['Service Type']
             ? String(r['Service Type'])
                 .trim()
@@ -2939,12 +2952,10 @@ export class PropertyService implements IPropertyService {
             'Expedia Run Date From',
             'Expedia Run Date'
           ]),
-          expediaRunDateTo: dateCol(['Expedia Run Date To']),
           expediaRunDateDbFrom: dateCol([
             'Expedia Run Date DB From',
             'Expedia Run Date DB'
           ]),
-          expediaRunDateDbTo: dateCol(['Expedia Run Date DB To']),
           expediaRevisedDate: dateCol(['Expedia Revised Date']),
           expediaSchedulerReviewFrom: dateCol([
             'Expedia Scheduler Review From'
@@ -2981,7 +2992,6 @@ export class PropertyService implements IPropertyService {
             'Booking Run Date From',
             'Booking Run Date'
           ]),
-          bookingRunDateTo: dateCol(['Booking Run Date To']),
           bookingRevisedDate: dateCol(['Booking Revised Date']),
           bookingCredentialVerified: parseBool(
             r['Booking Credential Verified']
@@ -2995,7 +3005,6 @@ export class PropertyService implements IPropertyService {
             : undefined,
           agodaCrs: r['Agoda CRS'] ? String(r['Agoda CRS']).trim() : undefined,
           agodaRunDateFrom: dateCol(['Agoda Run Date From', 'Agoda Run Date']),
-          agodaRunDateTo: dateCol(['Agoda Run Date To']),
           agodaRevisedDate: dateCol(['Agoda Revised Date']),
           agodaCredentialVerified: parseBool(r['Agoda Credential Verified']),
           agodaOtpNumber: r['Agoda OTP Number']
@@ -3019,6 +3028,13 @@ export class PropertyService implements IPropertyService {
           stripeConnectedEmail: r['Stripe Connected Email']
             ? String(r['Stripe Connected Email']).trim()
             : undefined,
+          isActive: parseBool(
+            findExcelCellValue(r, excelHeaderNames('isActive'))
+          ),
+          nextDueDate: findExcelDateValue(
+            r,
+            excelHeaderNames('nextDueDate')
+          ),
           notes: r['Notes'] ? String(r['Notes']).trim() : undefined
         } satisfies ImportPropertyRow
       })
@@ -3412,7 +3428,7 @@ export class PropertyService implements IPropertyService {
     // Helper to find a column value with flexible header matching (case-insensitive, strips asterisks)
     const findValue = (
       row: Record<string, any>,
-      names: string[]
+      names: readonly string[]
     ): string | undefined => {
       for (const name of names) {
         const val = row[name]
@@ -3438,7 +3454,10 @@ export class PropertyService implements IPropertyService {
     }
 
     // Helper to get raw value (preserves type for dates and numbers)
-    const getRawValue = (row: Record<string, any>, names: string[]): any => {
+    const getRawValue = (
+      row: Record<string, any>,
+      names: readonly string[]
+    ): any => {
       for (const name of names) {
         const val = row[name]
         if (val !== undefined && val !== null && val !== '') return val
@@ -3957,12 +3976,10 @@ export class PropertyService implements IPropertyService {
           }
 
           // Hotel address
-          const hotelAddress = findValue(row, [
-            'Hotel Address',
-            'Hotel address',
-            'Address',
-            'Property Address'
-          ])
+          const hotelAddress = findValue(
+            row,
+            excelHeaderNames('hotelAddress')
+          )
           if (hotelAddress !== undefined)
             updateData.hotel_address = hotelAddress
 
@@ -4009,11 +4026,10 @@ export class PropertyService implements IPropertyService {
           }
 
           // Next due date
-          const nextDueDateRaw = getRawValue(row, [
-            'Next Due Date',
-            'Next due date',
-            'Due Date'
-          ])
+          const nextDueDateRaw = getRawValue(
+            row,
+            excelHeaderNames('nextDueDate')
+          )
           if (nextDueDateRaw) {
             const nextDueDate = parseDate(nextDueDateRaw)
             if (!nextDueDate) {
@@ -4056,11 +4072,10 @@ export class PropertyService implements IPropertyService {
             updateData.portfolio_id = portfolioResult.id
           }
 
-          const subportfolioName = findValue(row, [
-            'Sub Portfolio',
-            'Subportfolio',
-            'Sub Portfolio Name'
-          ])
+          const subportfolioName = findValue(
+            row,
+            excelHeaderNames('subportfolio')
+          )
           if (subportfolioName !== undefined && subportfolioName.trim()) {
             const portfolioId =
               updateData.portfolio_id ?? existingProperty.portfolio_id
@@ -4187,11 +4202,7 @@ export class PropertyService implements IPropertyService {
             updateData.portfolio_contact_email = portfolioContactEmail
 
           // is_active flag
-          const isActiveStr = findValue(row, [
-            'Is Active',
-            'is_active',
-            'Active'
-          ])
+          const isActiveStr = findValue(row, excelHeaderNames('isActive'))
           if (isActiveStr !== undefined) {
             const lower = isActiveStr.toLowerCase()
             if (lower === 'true' || lower === '1' || lower === 'yes')
@@ -4502,10 +4513,10 @@ export class PropertyService implements IPropertyService {
           ])
           if (bookingOtpNumber !== undefined)
             updateData.booking_otp_number = bookingOtpNumber
-          const bookingOtpPhone = findValue(row, [
-            'Booking OTP Phone',
-            'Booking otp phone'
-          ])
+          const bookingOtpPhone = findValue(
+            row,
+            excelHeaderNames('bookingOtpPhone')
+          )
           if (bookingOtpPhone !== undefined)
             updateData.booking_otp_phone = bookingOtpPhone
 
@@ -4662,7 +4673,7 @@ export class PropertyService implements IPropertyService {
           ])
           if (qpApiKeyVal !== undefined)
             updateData.qp_api_key = this.encryptionUtil.encrypt(qpApiKeyVal)
-          const fpUsernameVal = findValue(row, ['FP Username', 'Fp Username'])
+          const fpUsernameVal = findValue(row, excelHeaderNames('fpUsername'))
           if (fpUsernameVal !== undefined)
             updateData.fp_username = fpUsernameVal
           const fpPasswordVal = findValue(row, ['FP Password', 'Fp Password'])
@@ -4677,38 +4688,38 @@ export class PropertyService implements IPropertyService {
               this.encryptionUtil.encrypt(webmailPasswordVal)
 
           // ── Credential fields (PropertyCredentials collection) ─────────────
-          const expediaUsername = findValue(row, [
-            'Expedia Username',
-            'Expedia username'
-          ])
-          const expediaPassword = findValue(row, [
-            'Expedia Password',
-            'Expedia password'
-          ])
-          const agodaUsername = findValue(row, [
-            'Agoda Username',
-            'Agoda username'
-          ])
-          const agodaPassword = findValue(row, [
-            'Agoda Password',
-            'Agoda password'
-          ])
-          const bookingUsername = findValue(row, [
-            'Booking Username',
-            'Booking username'
-          ])
-          const bookingPassword = findValue(row, [
-            'Booking Password',
-            'Booking password'
-          ])
-          const expediaSecondaryUsername = findValue(row, [
-            'Expedia Secondary Username',
-            'Expedia secondary username'
-          ])
-          const expediaSecondaryPassword = findValue(row, [
-            'Expedia Secondary Password',
-            'Expedia secondary password'
-          ])
+          const expediaUsername = findValue(
+            row,
+            excelHeaderNames('expediaUsername')
+          )
+          const expediaPassword = findValue(
+            row,
+            excelHeaderNames('expediaPassword')
+          )
+          const agodaUsername = findValue(
+            row,
+            excelHeaderNames('agodaUsername')
+          )
+          const agodaPassword = findValue(
+            row,
+            excelHeaderNames('agodaPassword')
+          )
+          const bookingUsername = findValue(
+            row,
+            excelHeaderNames('bookingUsername')
+          )
+          const bookingPassword = findValue(
+            row,
+            excelHeaderNames('bookingPassword')
+          )
+          const expediaSecondaryUsername = findValue(
+            row,
+            excelHeaderNames('expediaSecondaryUsername')
+          )
+          const expediaSecondaryPassword = findValue(
+            row,
+            excelHeaderNames('expediaSecondaryPassword')
+          )
           const bookingSecondaryUsername = findValue(row, [
             'Booking Secondary Username',
             'Booking secondary username'
@@ -4824,41 +4835,38 @@ export class PropertyService implements IPropertyService {
             )
           }
 
-          // Apply credentials update
+          // Apply credentials update. Passwords are passed as plain text —
+          // PropertyCredentialsRepository encrypts them on write, so
+          // encrypting here would store a doubly-encrypted value.
           if (hasCredentialsUpdate) {
             const credentialsData: Record<string, any> = {}
             if (expediaUsername !== undefined)
               credentialsData.expediaUsername = expediaUsername
             if (expediaPassword)
-              credentialsData.expediaPassword =
-                this.encryptionUtil.encrypt(expediaPassword)
+              credentialsData.expediaPassword = expediaPassword
             if (agodaUsername !== undefined)
               credentialsData.agodaUsername = agodaUsername
-            if (agodaPassword)
-              credentialsData.agodaPassword =
-                this.encryptionUtil.encrypt(agodaPassword)
+            if (agodaPassword) credentialsData.agodaPassword = agodaPassword
             if (bookingUsername !== undefined)
               credentialsData.bookingUsername = bookingUsername
             if (bookingPassword)
-              credentialsData.bookingPassword =
-                this.encryptionUtil.encrypt(bookingPassword)
+              credentialsData.bookingPassword = bookingPassword
             if (expediaSecondaryUsername !== undefined)
               credentialsData.expediaSecondaryUsername =
                 expediaSecondaryUsername
             if (expediaSecondaryPassword)
               credentialsData.expediaSecondaryPassword =
-                this.encryptionUtil.encrypt(expediaSecondaryPassword)
+                expediaSecondaryPassword
             if (bookingSecondaryUsername !== undefined)
               credentialsData.bookingSecondaryUsername =
                 bookingSecondaryUsername
             if (bookingSecondaryPassword)
               credentialsData.bookingSecondaryPassword =
-                this.encryptionUtil.encrypt(bookingSecondaryPassword)
+                bookingSecondaryPassword
             if (agodaSecondaryUsername !== undefined)
               credentialsData.agodaSecondaryUsername = agodaSecondaryUsername
             if (agodaSecondaryPassword)
-              credentialsData.agodaSecondaryPassword =
-                this.encryptionUtil.encrypt(agodaSecondaryPassword)
+              credentialsData.agodaSecondaryPassword = agodaSecondaryPassword
 
             const existingCredentials = await withTimeout(
               this.credentialsService.findByPropertyId(propertyId),
@@ -4882,6 +4890,30 @@ export class PropertyService implements IPropertyService {
                 }),
                 UPLOAD_JOB_DB_TIMEOUT_MS,
                 `create credentials (row ${rowNumber})`
+              )
+            }
+          }
+
+          // Notes — semicolon-separated texts, each stored as its own record
+          // (same column and splitting rule as the import flow).
+          const notesRaw = findValue(row, ['Notes'])
+          if (notesRaw) {
+            const noteTexts = notesRaw
+              .split(';')
+              .map(t => t.trim())
+              .filter(Boolean)
+            if (noteTexts.length > 0) {
+              await withTimeout(
+                this.prisma.note.createMany({
+                  data: noteTexts.map(text => ({
+                    text,
+                    property_id: propertyId,
+                    user_id: user.id,
+                    is_done: false
+                  }))
+                }),
+                UPLOAD_JOB_DB_TIMEOUT_MS,
+                `create notes (row ${rowNumber})`
               )
             }
           }
