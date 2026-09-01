@@ -1083,6 +1083,13 @@ export class PropertyRepository implements IPropertyRepository {
       if (row.adyenLocation) propertyPayload.adyen_location = row.adyenLocation
       if (row.stripeConnectedEmail)
         propertyPayload.stripe_connected_email = row.stripeConnectedEmail
+      if (row.isActive !== undefined)
+        propertyPayload.is_active = row.isActive === 'true'
+      if (row.nextDueDate) {
+        const nextDueDate = new Date(`${row.nextDueDate}T00:00:00.000Z`)
+        if (!Number.isNaN(nextDueDate.getTime()))
+          propertyPayload.next_due_date = nextDueDate
+      }
 
       if (row.serviceTypeName) {
         propertyPayload.service_type_id = await resolveServiceType(
