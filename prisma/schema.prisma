@@ -331,9 +331,10 @@ model Subportfolio {
   description  String?
   // Optional: a subportfolio is a standalone label and is no longer required to
   // belong to (or match) any particular portfolio — properties may reference a
-  // subportfolio regardless of which portfolio they're under.
+  // subportfolio regardless of which portfolio they're under. Deleting the
+  // portfolio therefore only detaches the subportfolio instead of removing it.
   portfolio_id String?    @db.ObjectId
-  portfolio    Portfolio? @relation(fields: [portfolio_id], references: [id], onDelete: Cascade)
+  portfolio    Portfolio? @relation(fields: [portfolio_id], references: [id], onDelete: SetNull)
 
   properties                   Property[]
   userFeatureAccessPermissions UserFeatureAccessPermission[]
@@ -346,7 +347,8 @@ model Subportfolio {
 
 model Property {
   id              String    @id @default(auto()) @map("_id") @db.ObjectId
-  name            String    @unique
+  // Names may repeat across properties — property_identifier is the unique key.
+  name            String
   card_descriptor String?
   is_active       Boolean   @default(true)
   next_due_date   DateTime?
@@ -525,6 +527,7 @@ model Property {
   @@index([booking_id])
   @@index([agoda_id])
   @@index([property_identifier])
+  @@index([name])
 }
 
 model UserFeatureAccessPermission {

@@ -1,11 +1,11 @@
 import { Inject, Injectable, Logger } from '@nestjs/common'
 import { PrismaService } from '../prisma/prisma.service'
-import { CreatePropertyDto, UpdatePropertyDto } from './property.dto'
 import {
   collectPropertyUniqueConflicts,
   normalizePropertyIdentifier,
   propertyIdentifierKey
 } from './property-uniqueness.util'
+import { CreatePropertyDto, UpdatePropertyDto } from './property.dto'
 import type {
   ImportPropertiesResult,
   ImportPropertyRow,
@@ -274,8 +274,12 @@ export class PropertyRepository implements IPropertyRepository {
     return rows.map(r => r.id)
   }
 
-  async findByName(name: string) {
-    return this.prisma.property.findUnique({ where: { name } })
+  async findByPropertyIdentifier(identifier: string) {
+    return this.prisma.property.findFirst({
+      where: {
+        property_identifier: { equals: identifier, mode: 'insensitive' }
+      }
+    })
   }
 
   async update(
@@ -597,8 +601,10 @@ export class PropertyRepository implements IPropertyRepository {
         }
       }
 
-      // Check if property already exists
-      const existingProp = await this.findByName(propertyName)
+      // Names may repeat, so an already-imported property is recognised by its
+      // Property Identifier — the only unique field.
+      const existingProp =
+        await this.findByPropertyIdentifier(normalizedIdentifier)
       if (existingProp) {
         // Property already exists — only create/update credentials if provided
         const credPayloadExisting: any = {}
@@ -700,7 +706,7 @@ export class PropertyRepository implements IPropertyRepository {
 
         skippedProperties.push({
           name: propertyName,
-          reason: 'Property already exists (credentials updated if provided)'
+          reason: `A property already uses the identifier "${normalizedIdentifier}" (credentials updated if provided)`
         })
         propertiesSkipped++
         continue
@@ -1012,10 +1018,10 @@ export class PropertyRepository implements IPropertyRepository {
           parseInt(row.expediaServiceFee) || undefined
       if (row.expediaCrs) propertyPayload.expedia_crs = row.expediaCrs
       if (row.expediaCrsDb) propertyPayload.expedia_crs_db = row.expediaCrsDb
-      if (row.expediaRunDateFrom)
-        propertyPayload.expedia_run_date = row.expediaRunDateFrom
-      if (row.expediaRunDateDbFrom)
-        propertyPayload.expedia_run_date_db = row.expediaRunDateDbFrom
+      if (row.expediaRunDate)
+        propertyPayload.expedia_run_date = row.expediaRunDate
+      if (row.expediaRunDateDb)
+        propertyPayload.expedia_run_date_db = row.expediaRunDateDb
       if (row.expediaRevisedDate)
         propertyPayload.expedia_revised_date = row.expediaRevisedDate
       if (row.expediaSchedulerReviewFrom)
@@ -1047,8 +1053,8 @@ export class PropertyRepository implements IPropertyRepository {
         propertyPayload.booking_service_fee =
           parseInt(row.bookingServiceFee) || undefined
       if (row.bookingCrs) propertyPayload.booking_crs = row.bookingCrs
-      if (row.bookingRunDateFrom)
-        propertyPayload.booking_run_date = row.bookingRunDateFrom
+      if (row.bookingRunDate)
+        propertyPayload.booking_run_date = row.bookingRunDate
       if (row.bookingRevisedDate)
         propertyPayload.booking_revised_date = row.bookingRevisedDate
       if (row.bookingCredentialVerified !== undefined)
@@ -1061,8 +1067,8 @@ export class PropertyRepository implements IPropertyRepository {
         propertyPayload.agoda_service_fee =
           parseInt(row.agodaServiceFee) || undefined
       if (row.agodaCrs) propertyPayload.agoda_crs = row.agodaCrs
-      if (row.agodaRunDateFrom)
-        propertyPayload.agoda_run_date = row.agodaRunDateFrom
+      if (row.agodaRunDate)
+        propertyPayload.agoda_run_date = row.agodaRunDate
       if (row.agodaRevisedDate)
         propertyPayload.agoda_revised_date = row.agodaRevisedDate
       if (row.agodaCredentialVerified !== undefined)
@@ -1108,13 +1114,7 @@ export class PropertyRepository implements IPropertyRepository {
 
       const uniqueConflicts = await collectPropertyUniqueConflicts(
         this.prisma,
-        {
-          name: propertyPayload.name,
-          property_identifier: propertyPayload.property_identifier,
-          expedia_id: propertyPayload.expedia_id,
-          booking_id: propertyPayload.booking_id,
-          agoda_id: propertyPayload.agoda_id
-        }
+        { property_identifier: propertyPayload.property_identifier }
       )
       if (uniqueConflicts.length) {
         skippedProperties.push({
