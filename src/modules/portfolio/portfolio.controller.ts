@@ -224,7 +224,11 @@ export class PortfolioController {
 
   @Delete(':id')
   @RequirePermission(ModuleType.PORTFOLIO, PermissionAction.DELETE, true)
-  @ApiOperation({ summary: 'Delete portfolio by ID' })
+  @ApiOperation({
+    summary: 'Delete portfolio by ID',
+    description:
+      'Deletes the portfolio itself. Its properties are moved to "Internal Portfolio", and its subportfolios are kept — they are detached (portfolio_id set to null) rather than deleted, and remain listed under /subportfolio.'
+  })
   @ApiResponse({ status: 200, description: 'Portfolio deleted' })
   @ApiResponse({ status: 404, description: 'Portfolio not found' })
   remove(@Param('id') id: string, @CurrentUser() user: IUserWithPermissions) {

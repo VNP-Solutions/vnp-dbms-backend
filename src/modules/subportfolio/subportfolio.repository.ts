@@ -75,15 +75,22 @@ export class SubportfolioRepository implements ISubportfolioRepository {
     const { where, skip, take, orderBy } = queryOptions
 
     // Guard against orphaned subportfolios (MongoDB doesn't enforce FK constraints,
-    // so some records may reference a deleted portfolio). Pre-filtering by existing
-    // portfolio IDs prevents Prisma's "required relation returned null" error.
+    // so some records may reference a deleted portfolio). Detached subportfolios —
+    // portfolio_id set to null when their portfolio was deleted — are still listed.
     const existingPortfolioIds = await this.prisma.portfolio
       .findMany({ select: { id: true } })
       .then(rows => rows.map(r => r.id))
 
     const safeWhere = {
-      ...where,
-      portfolio_id: { in: existingPortfolioIds }
+      AND: [
+        where,
+        {
+          OR: [
+            { portfolio_id: null },
+            { portfolio_id: { in: existingPortfolioIds } }
+          ]
+        }
+      ]
     }
 
     const list = await this.prisma.subportfolio.findMany({
@@ -110,7 +117,17 @@ export class SubportfolioRepository implements ISubportfolioRepository {
       .then(rows => rows.map(r => r.id))
 
     return this.prisma.subportfolio.count({
-      where: { ...where, portfolio_id: { in: existingPortfolioIds } }
+      where: {
+        AND: [
+          where,
+          {
+            OR: [
+              { portfolio_id: null },
+              { portfolio_id: { in: existingPortfolioIds } }
+            ]
+          }
+        ]
+      }
     })
   }
 

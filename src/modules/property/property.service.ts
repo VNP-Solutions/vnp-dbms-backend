@@ -19,22 +19,22 @@ import {
   RunDateCalculatorService,
   type RunDateOtaType
 } from '../../common/services/run-date-calculator.service'
-import { SyncCommunicationService } from '../../common/services/sync-communication.service'
 import { SyncActionLogWriter } from '../../common/services/sync-action-log-writer.service'
+import { SyncCommunicationService } from '../../common/services/sync-communication.service'
 import { ColoredLogger } from '../../common/utils/colored-logger.util'
 import { EmailUtil } from '../../common/utils/email.util'
 import { EncryptionUtil } from '../../common/utils/encryption.util'
-import { S3ExportUtil } from '../../common/utils/s3-export.util'
+import { withTimeout } from '../../common/utils/promise-timeout.util'
 import {
   EXCEL_HISTORICAL_DATE_HEADERS,
-  PROPERTY_EXPORT_COLUMN_CODES,
   excelHeaderNames,
   findExcelCellValue,
   findExcelDateValue,
   mapPropertyToExcelRow,
+  PROPERTY_EXPORT_COLUMN_CODES,
   writePropertyExportBuffer
 } from '../../common/utils/property-excel.util'
-import { withTimeout } from '../../common/utils/promise-timeout.util'
+import { S3ExportUtil } from '../../common/utils/s3-export.util'
 import {
   PROPERTY_EXPORT_ATTACHMENT_MAX_BYTES,
   PROPERTY_EXPORT_CONTENT_TYPE,
@@ -55,7 +55,8 @@ import { applyColumnFilter } from './property-column-filter.util'
 import {
   collectPropertyUniqueConflicts,
   normalizePropertyIdentifier,
-  propertyIdentifierKey
+  propertyIdentifierKey,
+  type PropertyUniqueFieldValues
 } from './property-uniqueness.util'
 import type {
   SyncBulkDeleteResponseDto,
@@ -479,11 +480,7 @@ export class PropertyService implements IPropertyService {
       data.property_identifier
     )
     const conflicts = await collectPropertyUniqueConflicts(this.prisma, {
-      property_identifier: normalizedIdentifier,
-      name: data.name,
-      expedia_id: data.expedia_id,
-      booking_id: data.booking_id,
-      agoda_id: data.agoda_id
+      property_identifier: normalizedIdentifier
     })
     if (conflicts.length) {
       throw new ConflictException(conflicts.join('; '))
@@ -1594,22 +1591,10 @@ export class PropertyService implements IPropertyService {
         ? (normalizePropertyIdentifier(data.property_identifier) ?? null)
         : undefined
 
-    const fieldsToCheck: {
-      name?: string | null
-      property_identifier?: string | null
-      expedia_id?: number | null
-      booking_id?: number | null
-      agoda_id?: number | null
-    } = {}
+    const fieldsToCheck: PropertyUniqueFieldValues = {}
     if (normalizedIdentifier !== undefined) {
       fieldsToCheck.property_identifier = normalizedIdentifier
     }
-    if (data.name !== undefined) fieldsToCheck.name = data.name
-    if (data.expedia_id !== undefined)
-      fieldsToCheck.expedia_id = data.expedia_id
-    if (data.booking_id !== undefined)
-      fieldsToCheck.booking_id = data.booking_id
-    if (data.agoda_id !== undefined) fieldsToCheck.agoda_id = data.agoda_id
 
     const conflicts = await collectPropertyUniqueConflicts(
       this.prisma,
@@ -2810,11 +2795,13 @@ export class PropertyService implements IPropertyService {
           caseContactEmail: r['Case Contact Email']
             ? String(r['Case Contact Email']).trim()
             : undefined,
-          qpUsername: r['Qp Username']
-            ? String(r['Qp Username']).trim()
-            : undefined,
-          qpPassword: encryptPassword(r['Qp Password']),
-          qpApiKey: encryptPassword(r['Qp Api Key']),
+          qpUsername: findExcelCellValue(r, excelHeaderNames('qpUsername')),
+          qpPassword: encryptPassword(
+            findExcelCellValue(r, excelHeaderNames('qpPassword'))
+          ),
+          qpApiKey: encryptPassword(
+            findExcelCellValue(r, excelHeaderNames('qpApiKey'))
+          ),
           fpUsername: findExcelCellValue(r, excelHeaderNames('fpUsername')),
           fpPassword: encryptPassword(r['FP Password']),
           newDomainsEmail: r['New Domains Email']
@@ -2924,7 +2911,9 @@ export class PropertyService implements IPropertyService {
           agodaDuration: r['Agoda Duration']
             ? String(r['Agoda Duration']).trim()
             : undefined,
-          needAnotherDomain: parseBool(r['Need Another Domain']),
+          needAnotherDomain: parseBool(
+            findExcelCellValue(r, excelHeaderNames('needAnotherDomain'))
+          ),
           bookingOtpPhone: findExcelCellValue(
             r,
             excelHeaderNames('bookingOtpPhone')
@@ -2948,14 +2937,8 @@ export class PropertyService implements IPropertyService {
           expediaCrsDb: r['Expedia CRS DB']
             ? String(r['Expedia CRS DB']).trim()
             : undefined,
-          expediaRunDateFrom: dateCol([
-            'Expedia Run Date From',
-            'Expedia Run Date'
-          ]),
-          expediaRunDateDbFrom: dateCol([
-            'Expedia Run Date DB From',
-            'Expedia Run Date DB'
-          ]),
+          expediaRunDate: dateCol(excelHeaderNames('expediaRunDate')),
+          expediaRunDateDb: dateCol(excelHeaderNames('expediaRunDateDb')),
           expediaRevisedDate: dateCol(['Expedia Revised Date']),
           expediaSchedulerReviewFrom: dateCol([
             'Expedia Scheduler Review From'
@@ -2988,10 +2971,7 @@ export class PropertyService implements IPropertyService {
           bookingCrs: r['Booking CRS']
             ? String(r['Booking CRS']).trim()
             : undefined,
-          bookingRunDateFrom: dateCol([
-            'Booking Run Date From',
-            'Booking Run Date'
-          ]),
+          bookingRunDate: dateCol(excelHeaderNames('bookingRunDate')),
           bookingRevisedDate: dateCol(['Booking Revised Date']),
           bookingCredentialVerified: parseBool(
             r['Booking Credential Verified']
@@ -3004,7 +2984,7 @@ export class PropertyService implements IPropertyService {
             ? String(r['Agoda Service Fee']).trim()
             : undefined,
           agodaCrs: r['Agoda CRS'] ? String(r['Agoda CRS']).trim() : undefined,
-          agodaRunDateFrom: dateCol(['Agoda Run Date From', 'Agoda Run Date']),
+          agodaRunDate: dateCol(excelHeaderNames('agodaRunDate')),
           agodaRevisedDate: dateCol(['Agoda Revised Date']),
           agodaCredentialVerified: parseBool(r['Agoda Credential Verified']),
           agodaOtpNumber: r['Agoda OTP Number']
@@ -3734,11 +3714,14 @@ export class PropertyService implements IPropertyService {
           }
 
           if (!existingProperty && propertyName) {
-            existingProperty = await withTimeout(
-              this.prisma.property.findFirst({
+            // Names are not unique, so two matches make the row ambiguous and
+            // the caller has to disambiguate with a Property Identifier.
+            const nameMatches = await withTimeout(
+              this.prisma.property.findMany({
                 where: {
                   name: { equals: propertyName, mode: 'insensitive' }
                 },
+                take: 2,
                 include: {
                   portfolio: { select: { id: true, name: true } }
                 }
@@ -3746,6 +3729,16 @@ export class PropertyService implements IPropertyService {
               UPLOAD_JOB_DB_TIMEOUT_MS,
               `findByName (row ${rowNumber})`
             )
+            if (nameMatches.length > 1) {
+              result.errors.push({
+                row: rowNumber,
+                propertyName: rowLabel,
+                error: `Multiple properties are named "${propertyName}" — add a Property Identifier column to identify the right one`
+              })
+              result.failureCount++
+              continue
+            }
+            existingProperty = nameMatches[0]
           }
 
           const jobItem = job.properties.items[i]
@@ -4324,22 +4317,18 @@ export class PropertyService implements IPropertyService {
           ])
           if (expediaCrsDb !== undefined)
             updateData.expedia_crs_db = expediaCrsDb
-          const expediaRunDateFrom = findExcelDateValue(row, [
-            'Expedia Run Date From',
-            'Expedia run date from',
-            'Expedia Run Date',
-            'Expedia run date'
-          ])
-          if (expediaRunDateFrom !== undefined)
-            updateData.expedia_run_date = expediaRunDateFrom
-          const expediaRunDateDbFrom = findExcelDateValue(row, [
-            'Expedia Run Date DB From',
-            'Expedia run date db from',
-            'Expedia Run Date DB',
-            'Expedia run date db'
-          ])
-          if (expediaRunDateDbFrom !== undefined)
-            updateData.expedia_run_date_db = expediaRunDateDbFrom
+          const expediaRunDate = findExcelDateValue(
+            row,
+            excelHeaderNames('expediaRunDate')
+          )
+          if (expediaRunDate !== undefined)
+            updateData.expedia_run_date = expediaRunDate
+          const expediaRunDateDb = findExcelDateValue(
+            row,
+            excelHeaderNames('expediaRunDateDb')
+          )
+          if (expediaRunDateDb !== undefined)
+            updateData.expedia_run_date_db = expediaRunDateDb
           const expediaRevisedDate = findExcelDateValue(row, [
             'Expedia Revised Date',
             'Expedia revised date'
@@ -4485,14 +4474,12 @@ export class PropertyService implements IPropertyService {
           }
           const bookingCrs = findValue(row, ['Booking CRS', 'Booking crs'])
           if (bookingCrs !== undefined) updateData.booking_crs = bookingCrs
-          const bookingRunDateFrom = findExcelDateValue(row, [
-            'Booking Run Date From',
-            'Booking run date from',
-            'Booking Run Date',
-            'Booking run date'
-          ])
-          if (bookingRunDateFrom !== undefined)
-            updateData.booking_run_date = bookingRunDateFrom
+          const bookingRunDate = findExcelDateValue(
+            row,
+            excelHeaderNames('bookingRunDate')
+          )
+          if (bookingRunDate !== undefined)
+            updateData.booking_run_date = bookingRunDate
           const bookingRevisedDate = findExcelDateValue(row, [
             'Booking Revised Date',
             'Booking revised date'
@@ -4587,14 +4574,12 @@ export class PropertyService implements IPropertyService {
           }
           const agodaCrs = findValue(row, ['Agoda CRS', 'Agoda crs'])
           if (agodaCrs !== undefined) updateData.agoda_crs = agodaCrs
-          const agodaRunDateFrom = findExcelDateValue(row, [
-            'Agoda Run Date From',
-            'Agoda run date from',
-            'Agoda Run Date',
-            'Agoda run date'
-          ])
-          if (agodaRunDateFrom !== undefined)
-            updateData.agoda_run_date = agodaRunDateFrom
+          const agodaRunDate = findExcelDateValue(
+            row,
+            excelHeaderNames('agodaRunDate')
+          )
+          if (agodaRunDate !== undefined)
+            updateData.agoda_run_date = agodaRunDate
           const agodaRevisedDate = findExcelDateValue(row, [
             'Agoda Revised Date',
             'Agoda revised date'
@@ -4618,7 +4603,7 @@ export class PropertyService implements IPropertyService {
 
           // ── Misc fields ───────────────────────────────────────────────────
           const needAnotherDomain = parseBoolCell(
-            findValue(row, ['Need Another Domain', 'Need another domain'])
+            findValue(row, excelHeaderNames('needAnotherDomain'))
           )
           if (needAnotherDomain !== undefined)
             updateData.need_another_domain = needAnotherDomain
@@ -4661,16 +4646,12 @@ export class PropertyService implements IPropertyService {
             updateData.primary_case_email = caseContactEmail
 
           // ── QP / FP credentials (stored on Property, encrypted) ───────────
-          const qpUsername = findValue(row, ['Qp Username', 'QP Username'])
+          const qpUsername = findValue(row, excelHeaderNames('qpUsername'))
           if (qpUsername !== undefined) updateData.qp_username = qpUsername
-          const qpPasswordVal = findValue(row, ['Qp Password', 'QP Password'])
+          const qpPasswordVal = findValue(row, excelHeaderNames('qpPassword'))
           if (qpPasswordVal !== undefined)
             updateData.qp_password = this.encryptionUtil.encrypt(qpPasswordVal)
-          const qpApiKeyVal = findValue(row, [
-            'Qp Api Key',
-            'QP Api Key',
-            'QP API Key'
-          ])
+          const qpApiKeyVal = findValue(row, excelHeaderNames('qpApiKey'))
           if (qpApiKeyVal !== undefined)
             updateData.qp_api_key = this.encryptionUtil.encrypt(qpApiKeyVal)
           const fpUsernameVal = findValue(row, excelHeaderNames('fpUsername'))
@@ -4809,13 +4790,7 @@ export class PropertyService implements IPropertyService {
           if (hasPropertyUpdate) {
             const uniqueConflicts = await collectPropertyUniqueConflicts(
               this.prisma,
-              {
-                name: updateData.name,
-                property_identifier: updateData.property_identifier,
-                expedia_id: updateData.expedia_id,
-                booking_id: updateData.booking_id,
-                agoda_id: updateData.agoda_id
-              },
+              { property_identifier: updateData.property_identifier },
               propertyId
             )
             if (uniqueConflicts.length) {

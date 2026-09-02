@@ -1,67 +1,67 @@
 import {
-  BadRequestException,
-  Body,
-  Controller,
-  Delete,
-  Get,
-  HttpCode,
-  Inject,
-  Param,
-  Patch,
-  Post,
-  UploadedFile,
-  UseGuards,
-  UseInterceptors
+    BadRequestException,
+    Body,
+    Controller,
+    Delete,
+    Get,
+    HttpCode,
+    Inject,
+    Param,
+    Patch,
+    Post,
+    UploadedFile,
+    UseGuards,
+    UseInterceptors
 } from '@nestjs/common'
 import {
-  ApiBearerAuth,
-  ApiBody,
-  ApiConsumes,
-  ApiExtraModels,
-  ApiHeader,
-  ApiOperation,
-  ApiResponse,
-  ApiTags
+    ApiBearerAuth,
+    ApiBody,
+    ApiConsumes,
+    ApiExtraModels,
+    ApiHeader,
+    ApiOperation,
+    ApiResponse,
+    ApiTags
 } from '@nestjs/swagger'
 import { ParseQuery } from '../../common/decorators/parse-query.decorator'
 import { RequirePermission } from '../../common/decorators/require-permission.decorator'
-import { PermissionGuard } from '../../common/guards/permission.guard'
 import { ExternalJwtGuard } from '../../common/guards/external-jwt.guard'
+import { PermissionGuard } from '../../common/guards/permission.guard'
 import { ExcelFileInterceptor } from '../../common/interceptors/excel-file.interceptor'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
 import {
-  ModuleType,
-  PermissionAction
+    ModuleType,
+    PermissionAction
 } from '../../common/interfaces/permission.interface'
 import { CurrentUser } from '../auth/decorators/current-user.decorator'
 import { Public } from '../auth/decorators/public.decorator'
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard'
-import {
-  AllDataForGlobalFilterResponseDto,
-  BulkDeletePropertyDto,
-  BulkTransferPropertyDto,
-  CreatePropertyDto,
-  AgodaCheckPropertiesDto,
-  BookingCheckPropertiesDto,
-  ExpediaCheckPropertiesDto,
-  ExportPropertyExcelDto,
-  GetPropertyCredentialDto,
-  GlobalFilterIdNameDto,
-  GlobalFilterSubportfolioDto,
-  PROPERTY_FILTER_OPERATION_DESCRIPTION,
-  PROPERTY_FILTER_SWAGGER_EXAMPLE_FILTERS,
-  PropertyFilterDto,
-  SyncBulkDeleteBodyDto,
-  TransferPropertyDto,
-  SyncByOtaDto,
-  UpdatePropertyDto,
-  UploadJobAcceptedDto
-} from './property.dto'
-import type { IPropertyService } from './property.interface'
 import { ServiceTokenGuard } from './guards/service-token.guard'
 import { PropertyAgodaCheckerService } from './property-agoda-checker.service'
 import { PropertyBookingCheckerService } from './property-booking-checker.service'
 import { PropertyExpediaCheckerService } from './property-expedia-checker.service'
+import {
+    AgodaCheckPropertiesDto,
+    AllDataForGlobalFilterResponseDto,
+    BookingCheckPropertiesDto,
+    BulkDeletePropertyDto,
+    BulkTransferPropertyDto,
+    CreatePropertyDto,
+    ExpediaCheckPropertiesDto,
+    ExportPropertyExcelDto,
+    GetPropertyCredentialDto,
+    GlobalFilterIdNameDto,
+    GlobalFilterSubportfolioDto,
+    PROPERTY_FILTER_OPERATION_DESCRIPTION,
+    PROPERTY_FILTER_SWAGGER_EXAMPLE_FILTERS,
+    PropertyFilterDto,
+    SyncBulkDeleteBodyDto,
+    SyncByOtaDto,
+    TransferPropertyDto,
+    UpdatePropertyDto,
+    UploadJobAcceptedDto
+} from './property.dto'
+import type { IPropertyService } from './property.interface'
 
 @ApiTags('Property')
 @ApiBearerAuth('JWT-auth')
@@ -115,7 +115,7 @@ export class PropertyController {
   @ApiOperation({
     summary: 'Bulk import properties from Excel',
     description:
-      'Upload Excel file with Property Name (required), Portfolio (required, auto-creates if missing), Property Identifier (required). Optional: Property Address, Card Descriptor, Description, Portfolio Contact, Currency, Expedia/Booking/Agoda IDs/Statuses/Usernames/Passwords, Expedia/Booking/Agoda Secondary Username/Password, Need Another Domain (true/false), Booking OTP Phone, Case Management/Access/Reporting Contacts, Portfolio/Case Contact Emails, QP Username/Password/Api Key, FP Username/Password/MID, Stripe Account Email, New Domains Email, Webmail Password, Expedia/Booking/Agoda Processors (QuantumPay/Stripe/FreedomPay), Expedia/Booking/Agoda Billing Type (VCC/DB/EBS), Service Type, Frequency (REGULAR/ONE_TIME/STOP), Access Level (true/false), Expedia/Booking/Agoda Priority (REGULAR/HIGH — both require historical To; HIGH sets run_date to creation date + 1 day), Expedia/Booking/Agoda Historical From/To dates (MM/DD/YYYY or YYYY-MM-DD), DB Historical From/To, Scheduler (true/false), Duration (number). Passwords auto-encrypted. Existing property names skipped.'
+      'Upload Excel file with Property Name (required), Portfolio (required, auto-creates if missing), Property Identifier (required). Optional: Property Address, Card Descriptor, Description, Portfolio Contact, Currency, Expedia/Booking/Agoda IDs/Statuses/Usernames/Passwords, Expedia/Booking/Agoda Secondary Username/Password, Need Another Domain (true/false), Booking OTP Phone, Case Management/Access/Reporting Contacts, Portfolio/Case Contact Emails, QP Username/Password/Api Key, FP Username/Password/MID, Stripe Account Email, New Domains Email, Webmail Password, Expedia/Booking/Agoda Processors (QuantumPay/Stripe/FreedomPay), Expedia/Booking/Agoda Billing Type (VCC/DB/EBS), Service Type, Frequency (REGULAR/ONE_TIME/STOP), Access Level (true/false), Expedia/Booking/Agoda Priority (REGULAR/HIGH — both require historical To; HIGH sets run_date to creation date + 1 day), Expedia/Booking/Agoda Historical From/To dates (MM/DD/YYYY or YYYY-MM-DD), DB Historical From/To, Scheduler (true/false), Duration (number), Is Active (true/false), Next Due Date, Notes (semicolon-separated). Passwords auto-encrypted. Property Identifier is the only unique field — property names, Expedia/Booking/Agoda IDs may repeat. A row whose Property Identifier already exists is skipped (its credentials are still updated). A file produced by POST /property/export-excel can be re-uploaded as-is — every exported column header is accepted here.'
   })
   @ApiBody({
     schema: {
@@ -157,8 +157,8 @@ export class PropertyController {
     Upload an Excel (.xlsx, .xls) or CSV file to bulk update existing properties.
 
     Property matching (checked in this order):
-    1. Property Identifier/Property identifier/Identifier — preferred lookup key
-    2. Property Name/Property name/Name — fallback when identifier is missing or not found
+    1. Property Identifier/Property identifier/Identifier — preferred lookup key, and the only unique field
+    2. Property Name/Property name/Name — fallback when identifier is missing or not found. Names are not unique, so a row matching more than one property is rejected and must supply a Property Identifier.
 
     Renaming:
     - Only possible when matched by Property Identifier.
@@ -187,6 +187,10 @@ export class PropertyController {
     - New Domains Email/new_domain_email
     - Portfolio Contact / Portfolio Contact Email
     - Is Active/Active: true/false/yes/no/1/0
+    - Notes: semicolon-separated, each entry added as a new note
+
+    A file produced by POST /property/export-excel can be re-uploaded as-is —
+    every exported column header is accepted here.
 
     Optional credential columns (username and password must be provided together):
     - Expedia Username / Expedia Password
@@ -460,7 +464,7 @@ export class PropertyController {
   @ApiOperation({
     summary: 'Export filtered properties to Excel and send via email (async)',
     description:
-      "Queues an Excel (.xlsx) export of the filtered property list and returns 200 immediately — the file is generated in the background and emailed to the authenticated user's address. Files up to 10MB arrive as an attachment; larger ones are uploaded to S3 and the email carries a presigned download link valid for 7 days. All filters are optional — send an empty body {} to export everything. Pagination (page/limit) is ignored; all matching records are always exported. Pass `columns` as an array of column codes to include only those columns; omit, null, or [] to export all columns. Columns are additionally narrowed by the caller's role column template, so a restricted role never receives columns it cannot see in the list view. Because the work is backgrounded, outcomes that used to be returned inline (no matching records, no permitted columns, generation failure) are reported by email instead."
+      "Queues an Excel (.xlsx) export of the filtered property list and returns 200 immediately — the file is generated in the background and emailed to the authenticated user's address. Files up to 10MB arrive as an attachment; larger ones are uploaded to S3 and the email carries a presigned download link valid for 7 days. All filters are optional — send an empty body {} to export everything. Pagination (page/limit) is ignored; all matching records are always exported. Column headers are the canonical spellings that /property/import and /property/bulk-update accept, so an exported file can be edited and re-uploaded to either endpoint without renaming anything. Pass `columns` as an array of column codes to include only those columns; omit, null, or [] to export all columns. Columns are additionally narrowed by the caller's role column template, so a restricted role never receives columns it cannot see in the list view. Because the work is backgrounded, outcomes that used to be returned inline (no matching records, no permitted columns, generation failure) are reported by email instead."
   })
   @ApiBody({
     type: ExportPropertyExcelDto,
