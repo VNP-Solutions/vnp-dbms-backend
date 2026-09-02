@@ -4,6 +4,7 @@ import { EmailUtil } from '../../common/utils/email.util'
 import { EncryptionUtil } from '../../common/utils/encryption.util'
 import { S3ExportUtil } from '../../common/utils/s3-export.util'
 import { ConfigService } from '../../config/config.service'
+import { PropertyExportRunnerService } from '../../common/services/property-export-runner.service'
 import { RunDateCalculatorService } from '../../common/services/run-date-calculator.service'
 import { SyncCommunicationService } from '../../common/services/sync-communication.service'
 import { SyncActionLogWriter } from '../../common/services/sync-action-log-writer.service'
@@ -46,6 +47,7 @@ import { ServiceTokenGuard } from './guards/service-token.guard'
     PropertyAgodaCheckerService,
     PropertyBookingCheckerService,
     RunDateCalculatorService,
+    PropertyExportRunnerService,
     SyncCommunicationService,
     SyncActionLogWriter,
     ExternalJwtGuard,

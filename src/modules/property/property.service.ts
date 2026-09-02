@@ -19,6 +19,10 @@ import {
   RunDateCalculatorService,
   type RunDateOtaType
 } from '../../common/services/run-date-calculator.service'
+import {
+  ExportQueueFullError,
+  PropertyExportRunnerService
+} from '../../common/services/property-export-runner.service'
 import { SyncActionLogWriter } from '../../common/services/sync-action-log-writer.service'
 import { SyncCommunicationService } from '../../common/services/sync-communication.service'
 import { ColoredLogger } from '../../common/utils/colored-logger.util'
@@ -31,8 +35,7 @@ import {
   excelHeaderNames,
   findExcelCellValue,
   findExcelDateValue,
-  PROPERTY_EXPORT_COLUMN_CODES,
-  writePropertyExportBuffer
+  PROPERTY_EXPORT_COLUMN_CODES
 } from '../../common/utils/property-excel.util'
 import { S3ExportUtil } from '../../common/utils/s3-export.util'
 import {
@@ -170,7 +173,8 @@ export class PropertyService implements IPropertyService {
     private readonly syncActionLogWriter: SyncActionLogWriter,
     private readonly runDateCalculator: RunDateCalculatorService,
     private readonly globalFilterCache: GlobalFilterCacheService,
-    private readonly s3ExportUtil: S3ExportUtil
+    private readonly s3ExportUtil: S3ExportUtil,
+    private readonly exportRunner: PropertyExportRunnerService
   ) {
     const timeout = SYNC_HTTP_TIMEOUT_MS
     const dashUrl =
@@ -2420,11 +2424,26 @@ export class PropertyService implements IPropertyService {
     // caller needs to know afterwards arrives by email; nothing about the
     // outcome is reported on this response.
     setImmediate(() => {
-      this.runExportExcelJob(dto, user).catch(e =>
-        this.logger.error(
-          `[async] property excel export for ${user.email} failed: ${e?.message ?? e}`
-        )
-      )
+      // Queued behind the export gate: only a couple run at a time, so a rush
+      // of "export all" clicks cannot saturate the CPU or the heap at once.
+      this.exportRunner
+        .run(() => this.runExportExcelJob(dto, user))
+        .catch(e => {
+          if (e instanceof ExportQueueFullError) {
+            this.logger.warn(
+              `[async] property excel export for ${user.email} rejected: ${e.message}`
+            )
+            return this.sendExportNoticeEmail(
+              user.email,
+              'VNP Solutions – Property Export (server busy)',
+              'Too many exports are already queued, so this one was not started.\n\nPlease try again in a few minutes.'
+            ).catch(() => undefined)
+          }
+          this.logger.error(
+            `[async] property excel export for ${user.email} failed: ${e?.message ?? e}`
+          )
+          return undefined
+        })
     })
 
     return Promise.resolve({
@@ -2514,7 +2533,12 @@ export class PropertyService implements IPropertyService {
         }
       }
 
-      const buffer = writePropertyExportBuffer(rows, columnCodes)
+      // Off the event loop: sheet building and zip serialisation are seconds of
+      // synchronous work that would otherwise stall every other request.
+      const buffer = await this.exportRunner.buildWorkbookBuffer(
+        rows,
+        columnCodes ?? null
+      )
       const recordCount = rows.length
       rows.length = 0
 
