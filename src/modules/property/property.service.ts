@@ -70,8 +70,6 @@ import {
   RequiredFieldType,
   SyncBulkDeleteBodyDto,
   SyncByOtaDto,
-  UpdatePropertyAccessLevelDto,
-  UpdatePropertyAccessLevelResultDto,
   UpdatePropertyDto
 } from './property.dto'
 import type {
