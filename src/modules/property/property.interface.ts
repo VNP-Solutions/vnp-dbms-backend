@@ -191,8 +191,8 @@ export interface ImportPropertyRow {
   expediaServiceFee?: string
   expediaCrs?: string
   expediaCrsDb?: string
-  expediaRunDateFrom?: string
-  expediaRunDateDbFrom?: string
+  expediaRunDate?: string
+  expediaRunDateDb?: string
   expediaRevisedDate?: string
   expediaSchedulerReviewFrom?: string
   expediaSchedulerReviewTo?: string
@@ -207,14 +207,14 @@ export interface ImportPropertyRow {
   // New Booking fields
   bookingServiceFee?: string
   bookingCrs?: string
-  bookingRunDateFrom?: string
+  bookingRunDate?: string
   bookingRevisedDate?: string
   bookingCredentialVerified?: string
   bookingOtpNumber?: string
   // New Agoda fields
   agodaServiceFee?: string
   agodaCrs?: string
-  agodaRunDateFrom?: string
+  agodaRunDate?: string
   agodaRevisedDate?: string
   agodaCredentialVerified?: string
   agodaOtpNumber?: string
@@ -378,7 +378,7 @@ export interface IPropertyRepository {
   count(where: any): Promise<number>
   findById(id: string): Promise<PropertyWithRelations | null>
   findByIds(ids: string[]): Promise<PropertyWithRelations[]>
-  findByName(name: string): Promise<Property | null>
+  findByPropertyIdentifier(identifier: string): Promise<Property | null>
   update(id: string, data: UpdatePropertyDto): Promise<PropertyWithRelations>
   delete(id: string): Promise<Property>
   bulkDelete(ids: string[]): Promise<BulkDeleteResult>

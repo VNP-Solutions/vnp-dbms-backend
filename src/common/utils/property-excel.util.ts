@@ -1,5 +1,5 @@
-import * as XLSX from 'xlsx-js-style'
-import { normalizeParserJobDate } from './parser-job-date.util'
+import * as XLSX from 'xlsx-js-style';
+import { normalizeParserJobDate } from './parser-job-date.util';
 
 /**
  * Canonical Excel header for every column whose spelling used to differ
@@ -59,6 +59,38 @@ export const EXCEL_COLUMN_HEADERS = {
   bookingOtpPhone: {
     header: 'Booking OTP Phone',
     aliases: ['Booking OTP Phone Number']
+  },
+  qpUsername: {
+    header: 'QP Username',
+    aliases: ['QP User Name']
+  },
+  qpPassword: {
+    header: 'QP Password',
+    aliases: []
+  },
+  qpApiKey: {
+    header: 'QP API Key',
+    aliases: []
+  },
+  needAnotherDomain: {
+    header: 'Need Another Domain',
+    aliases: []
+  },
+  expediaRunDate: {
+    header: 'Expedia Run Date',
+    aliases: ['Expedia Run Date From']
+  },
+  expediaRunDateDb: {
+    header: 'Expedia Run Date DB',
+    aliases: ['Expedia Run Date DB From']
+  },
+  bookingRunDate: {
+    header: 'Booking Run Date',
+    aliases: ['Booking Run Date From']
+  },
+  agodaRunDate: {
+    header: 'Agoda Run Date',
+    aliases: ['Agoda Run Date From']
   },
   isActive: {
     header: 'Is Active',
@@ -162,9 +194,14 @@ export type PropertyExportColumnCode =
   | 'service_type'
   | 'name'
   | 'property_identifier'
+  | 'description'
+  | 'is_active'
+  | 'next_due_date'
+  | 'priority'
   | 'ota_access_levels'
   | 'ota_credentials_verified'
   | 'expedia_id'
+  | 'expedia_status'
   | 'expedia_priority'
   | 'expedia_billing_type'
   | 'expedia_service_type'
@@ -172,10 +209,16 @@ export type PropertyExportColumnCode =
   | 'expedia_frequency'
   | 'expedia_historical_review'
   | 'expedia_historical_review_db'
+  | 'expedia_duration'
+  | 'expedia_db_duration'
   | 'expedia_crs'
   | 'expedia_crs_db'
   | 'expedia_run_date'
   | 'expedia_run_date_db'
+  | 'expedia_revised_date'
+  | 'expedia_scheduler'
+  | 'expedia_scheduler_review'
+  | 'expedia_scheduler_review_db'
   | 'expedia_processor'
   | 'expedia_otp_number'
   | 'userNameExpedia'
@@ -184,45 +227,68 @@ export type PropertyExportColumnCode =
   | 'expedia_secondary_password'
   | 'need_another_domain'
   | 'booking_id'
+  | 'booking_status'
   | 'booking_priority'
+  | 'booking_billing_type'
   | 'booking_service_type'
   | 'booking_service_fee'
   | 'booking_frequency'
   | 'booking_historical_review'
+  | 'booking_duration'
   | 'booking_crs'
   | 'booking_run_date'
+  | 'booking_revised_date'
+  | 'booking_scheduler'
   | 'booking_processor'
   | 'userNameBooking'
   | 'passwordBooking'
+  | 'booking_secondary_username'
+  | 'booking_secondary_password'
   | 'booking_otp_phone'
+  | 'booking_otp_number'
   | 'agoda_id'
+  | 'agoda_status'
   | 'agoda_priority'
+  | 'agoda_billing_type'
   | 'agoda_service_type'
   | 'agoda_service_fee'
   | 'agoda_frequency'
   | 'agoda_historical_review'
+  | 'agoda_duration'
   | 'agoda_crs'
   | 'agoda_run_date'
+  | 'agoda_revised_date'
+  | 'agoda_scheduler'
   | 'agoda_processor'
   | 'userNameAgoda'
   | 'passwordAgoda'
+  | 'agoda_secondary_username'
+  | 'agoda_secondary_password'
   | 'agoda_otp_number'
   | 'hotel_address'
+  | 'portfolio_contact'
   | 'portfolio_contact_email'
   | 'reporting_contact'
   | 'primary_case_email'
+  | 'case_management_contact'
   | 'access_contact'
   | 'discontinued_email_ids'
+  | 'new_domain_email'
   | 'card_descriptor'
   | 'qp_username'
   | 'qp_password'
+  | 'qp_api_key'
   | 'fp_username'
   | 'fp_password'
+  | 'fp_mid'
+  | 'webmail_password'
   | 'sales_rep'
   | 'cybersource_mid'
   | 'adyen_location'
   | 'stripe_connected_email'
+  | 'stripe_account_email'
   | 'currency'
+  | 'notes'
 
 type ExportHeaderGroup = 'general' | 'expedia' | 'booking' | 'agoda' | 'contact'
 
@@ -334,6 +400,20 @@ export const PROPERTY_EXPORT_COLUMNS: readonly PropertyExportColumnDef[] = [
     'general',
     p => p.property_identifier ?? ''
   ),
+  singleCol('description', 'Description', 'general', p => p.description ?? ''),
+  singleCol(
+    'is_active',
+    EXCEL_COLUMN_HEADERS.isActive.header,
+    'general',
+    p => formatYesNo(p.is_active)
+  ),
+  singleCol(
+    'next_due_date',
+    EXCEL_COLUMN_HEADERS.nextDueDate.header,
+    'general',
+    p => formatExportDate(p.next_due_date)
+  ),
+  singleCol('priority', 'Priority', 'general', p => p.priority?.name ?? ''),
   multiCol('ota_access_levels', [
     sheetCol('Expedia Access Level', 'general', p =>
       formatYesNo(p.expedia_access_level)
@@ -357,6 +437,12 @@ export const PROPERTY_EXPORT_COLUMNS: readonly PropertyExportColumnDef[] = [
     )
   ]),
   singleCol('expedia_id', 'Expedia ID', 'expedia', p => formatCell(p.expedia_id)),
+  singleCol(
+    'expedia_status',
+    'Expedia Status',
+    'expedia',
+    p => p.expedia_status ?? ''
+  ),
   singleCol(
     'expedia_priority',
     'Expedia Priority',
@@ -396,6 +482,12 @@ export const PROPERTY_EXPORT_COLUMNS: readonly PropertyExportColumnDef[] = [
     sheetCol('DB Historical From', 'expedia', p => formatExportDate(p.from_db)),
     sheetCol('DB Historical To', 'expedia', p => formatExportDate(p.to_db))
   ]),
+  singleCol('expedia_duration', 'Expedia Duration', 'expedia', p =>
+    formatCell(p.expedia_duration)
+  ),
+  singleCol('expedia_db_duration', 'Expedia DB Duration', 'expedia', p =>
+    formatCell(p.expedia_db_duration)
+  ),
   singleCol('expedia_crs', 'Expedia CRS', 'expedia', p => p.expedia_crs ?? ''),
   singleCol(
     'expedia_crs_db',
@@ -403,12 +495,43 @@ export const PROPERTY_EXPORT_COLUMNS: readonly PropertyExportColumnDef[] = [
     'expedia',
     p => p.expedia_crs_db ?? ''
   ),
-  singleCol('expedia_run_date', 'Expedia Run Date', 'expedia', p =>
-    formatExportDate(p.expedia_run_date)
+  singleCol(
+    'expedia_run_date',
+    EXCEL_COLUMN_HEADERS.expediaRunDate.header,
+    'expedia',
+    p => formatExportDate(p.expedia_run_date)
   ),
-  singleCol('expedia_run_date_db', 'Expedia Run Date DB', 'expedia', p =>
-    formatExportDate(p.expedia_run_date_db)
+  singleCol(
+    'expedia_run_date_db',
+    EXCEL_COLUMN_HEADERS.expediaRunDateDb.header,
+    'expedia',
+    p => formatExportDate(p.expedia_run_date_db)
   ),
+  singleCol('expedia_revised_date', 'Expedia Revised Date', 'expedia', p =>
+    formatExportDate(p.expedia_revised_date)
+  ),
+  singleCol('expedia_scheduler', 'Expedia Scheduler', 'expedia', p =>
+    formatYesNo(p.expedia_scheduler)
+  ),
+  multiCol('expedia_scheduler_review', [
+    sheetCol('Expedia Scheduler Review From', 'expedia', p =>
+      formatExportDate(p.expedia_scheduler_review_from)
+    ),
+    sheetCol('Expedia Scheduler Review To', 'expedia', p =>
+      formatExportDate(p.expedia_scheduler_review_to)
+    )
+  ]),
+  multiCol('expedia_scheduler_review_db', [
+    sheetCol('Expedia Scheduler DB', 'expedia', p =>
+      formatCell(p.expedia_scheduler_db)
+    ),
+    sheetCol('Expedia Scheduler Review DB From', 'expedia', p =>
+      formatExportDate(p.expedia_scheduler_review_db_from)
+    ),
+    sheetCol('Expedia Scheduler Review DB To', 'expedia', p =>
+      formatExportDate(p.expedia_scheduler_review_db_to)
+    )
+  ]),
   singleCol(
     'expedia_processor',
     'Expedia Processor',
@@ -445,15 +568,30 @@ export const PROPERTY_EXPORT_COLUMNS: readonly PropertyExportColumnDef[] = [
     'expedia',
     p => cred(p).expediaSecondaryPassword ?? ''
   ),
-  singleCol('need_another_domain', 'Need another Domain', 'expedia', p =>
-    formatYesNo(p.need_another_domain)
+  singleCol(
+    'need_another_domain',
+    EXCEL_COLUMN_HEADERS.needAnotherDomain.header,
+    'expedia',
+    p => formatYesNo(p.need_another_domain)
   ),
   singleCol('booking_id', 'Booking ID', 'booking', p => formatCell(p.booking_id)),
+  singleCol(
+    'booking_status',
+    'Booking Status',
+    'booking',
+    p => p.booking_status ?? ''
+  ),
   singleCol(
     'booking_priority',
     'Booking Priority',
     'booking',
     p => p.booking_priority ?? ''
+  ),
+  singleCol(
+    'booking_billing_type',
+    'Booking Billing Type',
+    'booking',
+    p => p.booking_billing_type?.name ?? ''
   ),
   singleCol(
     'booking_service_type',
@@ -478,9 +616,21 @@ export const PROPERTY_EXPORT_COLUMNS: readonly PropertyExportColumnDef[] = [
       formatExportDate(p.booking_to)
     )
   ]),
+  singleCol('booking_duration', 'Booking Duration', 'booking', p =>
+    formatCell(p.booking_duration)
+  ),
   singleCol('booking_crs', 'Booking CRS', 'booking', p => p.booking_crs ?? ''),
-  singleCol('booking_run_date', 'Booking Run Date', 'booking', p =>
-    formatExportDate(p.booking_run_date)
+  singleCol(
+    'booking_run_date',
+    EXCEL_COLUMN_HEADERS.bookingRunDate.header,
+    'booking',
+    p => formatExportDate(p.booking_run_date)
+  ),
+  singleCol('booking_revised_date', 'Booking Revised Date', 'booking', p =>
+    formatExportDate(p.booking_revised_date)
+  ),
+  singleCol('booking_scheduler', 'Booking Scheduler', 'booking', p =>
+    formatYesNo(p.booking_scheduler)
   ),
   singleCol(
     'booking_processor',
@@ -501,17 +651,42 @@ export const PROPERTY_EXPORT_COLUMNS: readonly PropertyExportColumnDef[] = [
     p => cred(p).bookingPassword ?? ''
   ),
   singleCol(
+    'booking_secondary_username',
+    'Booking Secondary Username',
+    'booking',
+    p => cred(p).bookingSecondaryUsername ?? ''
+  ),
+  singleCol(
+    'booking_secondary_password',
+    'Booking Secondary Password',
+    'booking',
+    p => cred(p).bookingSecondaryPassword ?? ''
+  ),
+  singleCol(
     'booking_otp_phone',
     EXCEL_COLUMN_HEADERS.bookingOtpPhone.header,
     'booking',
     p => p.booking_otp_phone ?? ''
   ),
+  singleCol(
+    'booking_otp_number',
+    'Booking OTP Number',
+    'booking',
+    p => p.booking_otp_number ?? ''
+  ),
   singleCol('agoda_id', 'Agoda ID', 'agoda', p => formatCell(p.agoda_id)),
+  singleCol('agoda_status', 'Agoda Status', 'agoda', p => p.agoda_status ?? ''),
   singleCol(
     'agoda_priority',
     'Agoda Priority',
     'agoda',
     p => p.agoda_priority ?? ''
+  ),
+  singleCol(
+    'agoda_billing_type',
+    'Agoda Billing Type',
+    'agoda',
+    p => p.agoda_billing_type?.name ?? ''
   ),
   singleCol(
     'agoda_service_type',
@@ -534,9 +709,21 @@ export const PROPERTY_EXPORT_COLUMNS: readonly PropertyExportColumnDef[] = [
     ),
     sheetCol('Agoda Historical To', 'agoda', p => formatExportDate(p.agoda_to))
   ]),
+  singleCol('agoda_duration', 'Agoda Duration', 'agoda', p =>
+    formatCell(p.agoda_duration)
+  ),
   singleCol('agoda_crs', 'Agoda CRS', 'agoda', p => p.agoda_crs ?? ''),
-  singleCol('agoda_run_date', 'Agoda Run Date', 'agoda', p =>
-    formatExportDate(p.agoda_run_date)
+  singleCol(
+    'agoda_run_date',
+    EXCEL_COLUMN_HEADERS.agodaRunDate.header,
+    'agoda',
+    p => formatExportDate(p.agoda_run_date)
+  ),
+  singleCol('agoda_revised_date', 'Agoda Revised Date', 'agoda', p =>
+    formatExportDate(p.agoda_revised_date)
+  ),
+  singleCol('agoda_scheduler', 'Agoda Scheduler', 'agoda', p =>
+    formatYesNo(p.agoda_scheduler)
   ),
   singleCol(
     'agoda_processor',
@@ -557,6 +744,18 @@ export const PROPERTY_EXPORT_COLUMNS: readonly PropertyExportColumnDef[] = [
     p => cred(p).agodaPassword ?? ''
   ),
   singleCol(
+    'agoda_secondary_username',
+    'Agoda Secondary Username',
+    'agoda',
+    p => cred(p).agodaSecondaryUsername ?? ''
+  ),
+  singleCol(
+    'agoda_secondary_password',
+    'Agoda Secondary Password',
+    'agoda',
+    p => cred(p).agodaSecondaryPassword ?? ''
+  ),
+  singleCol(
     'agoda_otp_number',
     'Agoda OTP Number',
     'agoda',
@@ -567,6 +766,12 @@ export const PROPERTY_EXPORT_COLUMNS: readonly PropertyExportColumnDef[] = [
     EXCEL_COLUMN_HEADERS.hotelAddress.header,
     'contact',
     p => p.hotel_address ?? ''
+  ),
+  singleCol(
+    'portfolio_contact',
+    'Portfolio Contact',
+    'contact',
+    p => p.portfolio_contact ?? ''
   ),
   singleCol(
     'portfolio_contact_email',
@@ -587,6 +792,12 @@ export const PROPERTY_EXPORT_COLUMNS: readonly PropertyExportColumnDef[] = [
     p => p.primary_case_email ?? ''
   ),
   singleCol(
+    'case_management_contact',
+    'Case Management Contact',
+    'contact',
+    p => p.case_management_contact ?? ''
+  ),
+  singleCol(
     'access_contact',
     'Access Contact',
     'contact',
@@ -603,8 +814,24 @@ export const PROPERTY_EXPORT_COLUMNS: readonly PropertyExportColumnDef[] = [
     'contact',
     p => p.card_descriptor ?? ''
   ),
-  singleCol('qp_username', 'QP Username', 'contact', p => p.qp_username ?? ''),
-  singleCol('qp_password', 'QP Password', 'contact', p => p.qp_password ?? ''),
+  singleCol(
+    'qp_username',
+    EXCEL_COLUMN_HEADERS.qpUsername.header,
+    'contact',
+    p => p.qp_username ?? ''
+  ),
+  singleCol(
+    'qp_password',
+    EXCEL_COLUMN_HEADERS.qpPassword.header,
+    'contact',
+    p => p.qp_password ?? ''
+  ),
+  singleCol(
+    'qp_api_key',
+    EXCEL_COLUMN_HEADERS.qpApiKey.header,
+    'contact',
+    p => p.qp_api_key ?? ''
+  ),
   singleCol(
     'fp_username',
     EXCEL_COLUMN_HEADERS.fpUsername.header,
@@ -612,6 +839,19 @@ export const PROPERTY_EXPORT_COLUMNS: readonly PropertyExportColumnDef[] = [
     p => p.fp_username ?? ''
   ),
   singleCol('fp_password', 'FP Password', 'contact', p => p.fp_password ?? ''),
+  singleCol('fp_mid', 'FP MID', 'contact', p => p.fp_mid ?? ''),
+  singleCol(
+    'webmail_password',
+    'Webmail Password',
+    'contact',
+    p => p.webmail_password ?? ''
+  ),
+  singleCol(
+    'new_domain_email',
+    'New Domains Email',
+    'contact',
+    p => p.new_domain_email ?? ''
+  ),
   singleCol('sales_rep', 'Sales Rep', 'contact', p => p.sales_rep ?? ''),
   singleCol(
     'cybersource_mid',
@@ -632,10 +872,25 @@ export const PROPERTY_EXPORT_COLUMNS: readonly PropertyExportColumnDef[] = [
     p => p.stripe_connected_email ?? ''
   ),
   singleCol(
+    'stripe_account_email',
+    'Stripe Account Email',
+    'contact',
+    p => p.stripe_account_email ?? ''
+  ),
+  singleCol(
     'currency',
     'Currency',
     'contact',
     p => p.currency?.code ?? p.currency?.name ?? ''
+  ),
+  // Semicolon-separated so the bulk-update parser can split them back apart.
+  singleCol('notes', 'Notes', 'contact', p =>
+    Array.isArray(p.notes)
+      ? p.notes
+          .map((n: any) => String(n?.text ?? '').trim())
+          .filter(Boolean)
+          .join('; ')
+      : ''
   )
 ]
 

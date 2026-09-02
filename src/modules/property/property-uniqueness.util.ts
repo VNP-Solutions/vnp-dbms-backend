@@ -1,9 +1,9 @@
+/**
+ * property_identifier is the only unique property field. Names, Expedia,
+ * Booking and Agoda IDs may all be shared by several properties.
+ */
 export type PropertyUniqueFieldValues = {
-  name?: string | null
   property_identifier?: string | null
-  expedia_id?: number | null
-  booking_id?: number | null
-  agoda_id?: number | null
 }
 
 type PropertyLookupClient = {
@@ -24,10 +24,6 @@ export function normalizePropertyIdentifier(
 
 function hasStringValue(value: string | null | undefined): value is string {
   return value != null && String(value).trim() !== ''
-}
-
-function hasNumericValue(value: number | null | undefined): value is number {
-  return value != null && !Number.isNaN(value)
 }
 
 async function findPropertyIdentifierConflict(
@@ -55,9 +51,7 @@ export async function collectPropertyUniqueConflicts(
   excludeId?: string
 ): Promise<string[]> {
   const errors: string[] = []
-  const excludeSelf = excludeId ? { id: { not: excludeId } } : {}
 
-  // Property identifier is checked first — must be unique when present (case-insensitive).
   if (hasStringValue(fields.property_identifier)) {
     const propertyIdentifier = fields.property_identifier.trim()
     const identifierConflict = await findPropertyIdentifierConflict(
@@ -66,49 +60,6 @@ export async function collectPropertyUniqueConflicts(
       excludeId
     )
     if (identifierConflict) errors.push(identifierConflict)
-  }
-
-  if (hasStringValue(fields.name)) {
-    const name = fields.name.trim()
-    const existing = await prisma.property.findFirst({
-      where: { name, ...excludeSelf }
-    })
-    if (existing) {
-      errors.push(`Another property already has the name: ${name}`)
-    }
-  }
-
-  if (hasNumericValue(fields.expedia_id)) {
-    const existing = await prisma.property.findFirst({
-      where: { expedia_id: fields.expedia_id, ...excludeSelf }
-    })
-    if (existing) {
-      errors.push(
-        `Another property already has the Expedia ID: ${fields.expedia_id}`
-      )
-    }
-  }
-
-  if (hasNumericValue(fields.booking_id)) {
-    const existing = await prisma.property.findFirst({
-      where: { booking_id: fields.booking_id, ...excludeSelf }
-    })
-    if (existing) {
-      errors.push(
-        `Another property already has the Booking ID: ${fields.booking_id}`
-      )
-    }
-  }
-
-  if (hasNumericValue(fields.agoda_id)) {
-    const existing = await prisma.property.findFirst({
-      where: { agoda_id: fields.agoda_id, ...excludeSelf }
-    })
-    if (existing) {
-      errors.push(
-        `Another property already has the Agoda ID: ${fields.agoda_id}`
-      )
-    }
   }
 
   return errors

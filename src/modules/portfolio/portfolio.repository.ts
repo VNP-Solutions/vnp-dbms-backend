@@ -19,12 +19,11 @@ export class PortfolioRepository implements IPortfolioRepository {
     fromPortfolioId: string,
     toPortfolioId: string
   ): Promise<number> {
+    // Subportfolios outlive their portfolio and are not tied to the property's
+    // portfolio, so the existing subportfolio link is carried over as-is.
     const result = await this.prisma.property.updateMany({
       where: { portfolio_id: fromPortfolioId },
-      data: {
-        portfolio_id: toPortfolioId,
-        subportfolio_id: null
-      }
+      data: { portfolio_id: toPortfolioId }
     })
   
     return result.count

@@ -1,6 +1,6 @@
+import { NodeEnvironment } from './configuration.schema'
 import { resolveCookieDomain, resolveCookieSettings } from './cookie.config'
 import { normalizeCorsOrigin } from './cors.config'
-import { NodeEnvironment } from './configuration.schema'
 
 /** Axios timeout for dashboard/scraper bulk-sync HTTP calls (per chunk). */
 export const SYNC_HTTP_TIMEOUT_MS = 3 * 60 * 60 * 1000

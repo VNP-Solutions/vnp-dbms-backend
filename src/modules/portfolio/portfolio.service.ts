@@ -620,8 +620,13 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
         `[sync] unexpected on portfolio sync-delete: ${e?.message ?? e}`
       )
     }
+    const detachedSubportfolios = portfolio.total_subportfolios ?? 0
     return {
-      message: `Portfolio deleted successfully. ${movedProperties} properties were moved to "${INTERNAL_PORTFOLIO_NAME}".`
+      message:
+        `Portfolio deleted successfully. ${movedProperties} properties were moved to "${INTERNAL_PORTFOLIO_NAME}".` +
+        (detachedSubportfolios > 0
+          ? ` ${detachedSubportfolios} subportfolios were kept and are no longer linked to a portfolio.`
+          : '')
     }
   }
 
