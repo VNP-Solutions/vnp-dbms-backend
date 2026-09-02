@@ -228,6 +228,20 @@ export class PropertyRepository implements IPropertyRepository {
   }
 
   /**
+   * Ids only, for callers that stream large result sets in chunks instead of
+   * materialising every property (with relations) at once.
+   */
+  async findIds(where: any, orderBy?: any): Promise<string[]> {
+    const safeWhere = await this.withValidPortfolioFilter(where)
+    const rows = await this.prisma.property.findMany({
+      where: safeWhere,
+      orderBy,
+      select: { id: true }
+    })
+    return rows.map(r => r.id)
+  }
+
+  /**
    * MongoDB does not enforce referential integrity. Properties whose portfolio_id
    * references a deleted portfolio cause Prisma to throw
    * "required relation returned null" when the portfolio is included.

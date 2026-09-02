@@ -45,6 +45,19 @@ export const PROPERTY_EXPORT_DOWNLOAD_TTL_SECONDS = 7 * 24 * 60 * 60
 export const PROPERTY_EXPORT_CONTENT_TYPE =
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 
+/** Properties loaded (with relations) per batch while building an export. */
+export const PROPERTY_EXPORT_CHUNK_SIZE = 250
+
+/**
+ * Row ceiling for a single export. The workbook is held in memory cell by cell
+ * and serialised to XML in one pass, so an unbounded export can exhaust the
+ * container's heap and get the process OOM-killed. Beyond this the caller is
+ * emailed and asked to narrow the filters. Override with PROPERTY_EXPORT_MAX_ROWS.
+ */
+export const PROPERTY_EXPORT_MAX_ROWS = Number(
+  process.env.PROPERTY_EXPORT_MAX_ROWS ?? 25_000
+)
+
 /**
  * Bound (via Promise.race, see `withTimeout`) on individual Prisma/Mongo calls
  * made inside the upload-job pipeline (DBMS create/update, run-date persist,
