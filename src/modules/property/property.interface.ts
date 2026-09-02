@@ -20,8 +20,6 @@ import {
   PropertyFilterDto,
   SyncBulkDeleteBodyDto,
   SyncByOtaDto,
-  UpdatePropertyAccessLevelDto,
-  UpdatePropertyAccessLevelResultDto,
   UpdatePropertyDto
 } from './property.dto'
 
