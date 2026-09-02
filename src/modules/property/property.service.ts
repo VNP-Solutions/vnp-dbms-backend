@@ -70,6 +70,8 @@ import {
   RequiredFieldType,
   SyncBulkDeleteBodyDto,
   SyncByOtaDto,
+  UpdatePropertyAccessLevelDto,
+  UpdatePropertyAccessLevelResultDto,
   UpdatePropertyDto
 } from './property.dto'
 import type {
@@ -6106,6 +6108,60 @@ export class PropertyService implements IPropertyService {
     return { status: 'updated', id: updated.id }
   }
 
+  /** OTA access level fields this endpoint is allowed to touch. */
+  private readonly accessLevelFields = [
+    'expedia_access_level',
+    'booking_access_level',
+    'agoda_access_level'
+  ] as const
+
+  /**
+   * Partial access level update for `PATCH /property/:id/access-level`.
+   *
+   * Cannot go through `update()`/`updateAndSync()` — those take an
+   * `IUserWithPermissions` to scope the property, and this endpoint is
+   * unauthenticated. Only the keys present in the body are written, so a
+   * request carrying one OTA leaves the other two alone.
+   *
+   * Fans out to the dashboard only. The scraper has no access level columns,
+   * so there is nothing to send it.
+   */
+  async updateAccessLevels(
+    id: string,
+    dto: UpdatePropertyAccessLevelDto
+  ): Promise<UpdatePropertyAccessLevelResultDto> {
+    const existing = await this.repo.findById(id)
+    if (!existing) throw new NotFoundException('Property not found')
+
+    const patch: Record<string, boolean | null> = {}
+    for (const field of this.accessLevelFields) {
+      const value = dto[field]
+      if (value !== undefined) patch[field] = value
+    }
+
+    if (!Object.keys(patch).length) {
+      return { status: 'no_op', id, applied: {} }
+    }
+
+    const updated = await this.repo.update(id, patch as UpdatePropertyDto)
+    await Promise.all([
+      this.redisService.del(CACHE_KEY(id)),
+      this.invalidateCaches()
+    ])
+
+    const dashboard = await this.syncUpsertPropertyToDashboard(updated).catch(
+      e => ({ success: false, reason: e?.message ?? String(e) })
+    )
+
+    this.logger.log(
+      `[access-level] ${id} updated ${JSON.stringify(patch)} — dashboard sync ${
+        dashboard.success ? 'ok' : `failed: ${dashboard.reason}`
+      }`
+    )
+
+    return { status: 'updated', id, applied: patch, dashboard }
+  }
+
   private async syncBulkDeleteToDashboard(parentIds: string[]): Promise<void> {
     if (!parentIds.length) return
 
@@ -6183,6 +6239,11 @@ export class PropertyService implements IPropertyService {
       },
       card_descriptor: property.card_descriptor ?? '',
       portfolio_parent_id: property.portfolio_id,
+      // DBMS owns the OTA access levels, so send them unconditionally — a null
+      // has to reach the dashboard and clear the old value there.
+      expedia_access_level: property.expedia_access_level ?? null,
+      booking_access_level: property.booking_access_level ?? null,
+      agoda_access_level: property.agoda_access_level ?? null,
       credentials: {
         expedia_id: property.expedia_id?.toString() ?? '',
         expedia_username: credentials?.expediaUsername ?? '',
