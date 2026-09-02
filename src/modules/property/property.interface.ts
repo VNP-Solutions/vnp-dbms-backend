@@ -376,6 +376,7 @@ export interface IPropertyRepository {
     orderBy?: any
   }): Promise<PropertyWithRelations[]>
   count(where: any): Promise<number>
+  findIds(where: any, orderBy?: any): Promise<string[]>
   findById(id: string): Promise<PropertyWithRelations | null>
   findByIds(ids: string[]): Promise<PropertyWithRelations[]>
   findByPropertyIdentifier(identifier: string): Promise<Property | null>

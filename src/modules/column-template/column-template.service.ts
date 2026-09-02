@@ -42,7 +42,7 @@ export class ColumnTemplateService implements IColumnTemplateService {
         where: { id: user.user_role_id },
         select: { user_column_template: { select: { column_list: true } } }
       }),
-      this.repo.findByUserId(user.id)
+      this.repo.findAll()
     ])
 
     return {

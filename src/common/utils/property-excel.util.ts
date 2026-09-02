@@ -954,24 +954,32 @@ function headerCellStyle(group: ExportHeaderGroup) {
   }
 }
 
-function columnWidth(header: string, values: (string | number)[]): number {
-  const maxLen = Math.max(
-    header.length,
-    ...values.map(v => String(v ?? '').length)
-  )
-  return Math.min(Math.max(maxLen + 2, 12), 60)
+function columnWidth(maxContentLength: number): number {
+  return Math.min(Math.max(maxContentLength + 2, 12), 60)
+}
+
+/**
+ * Resolves the column set once and returns a mapper, so exporting N properties
+ * doesn't re-resolve the column list N times.
+ */
+export function createPropertyExcelRowMapper(
+  columnCodes?: string[] | null
+): (property: any) => Record<string, string | number> {
+  const columns = resolvePropertyExportColumns(columnCodes)
+  return property => {
+    const row: Record<string, string | number> = {}
+    for (const col of columns) {
+      row[col.header] = col.getValue(property)
+    }
+    return row
+  }
 }
 
 export function mapPropertyToExcelRow(
   property: any,
   columnCodes?: string[] | null
 ): Record<string, string | number> {
-  const columns = resolvePropertyExportColumns(columnCodes)
-  const row: Record<string, string | number> = {}
-  for (const col of columns) {
-    row[col.header] = col.getValue(property)
-  }
-  return row
+  return createPropertyExcelRowMapper(columnCodes)(property)
 }
 
 export function buildPropertyExportWorkbook(
@@ -982,7 +990,9 @@ export function buildPropertyExportWorkbook(
   const headers = columns.map(c => c.header)
   const worksheet = XLSX.utils.json_to_sheet(rows, { header: headers })
   const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1')
-  const columnValues: (string | number)[][] = headers.map(() => [])
+  // Running maximum per column — keeping every cell value around a second time
+  // just to size the columns is what made large exports blow up.
+  const maxContentLength = headers.map(h => h.length)
 
   for (let c = 0; c < columns.length; c++) {
     const headerAddr = XLSX.utils.encode_cell({ r: 0, c })
@@ -996,12 +1006,13 @@ export function buildPropertyExportWorkbook(
       const cell = worksheet[addr]
       if (!cell) continue
       cell.s = DATA_CELL_STYLE
-      columnValues[c].push(cell.v as string | number)
+      const len = String(cell.v ?? '').length
+      if (len > maxContentLength[c]) maxContentLength[c] = len
     }
   }
 
-  worksheet['!cols'] = headers.map((header, index) => ({
-    wch: columnWidth(header, columnValues[index])
+  worksheet['!cols'] = maxContentLength.map(len => ({
+    wch: columnWidth(len)
   }))
 
   const workbook = XLSX.utils.book_new()
