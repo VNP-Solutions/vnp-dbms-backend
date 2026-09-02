@@ -1,27 +1,27 @@
 import {
-    BadRequestException,
-    Body,
-    Controller,
-    Delete,
-    Get,
-    HttpCode,
-    Inject,
-    Param,
-    Patch,
-    Post,
-    UploadedFile,
-    UseGuards,
-    UseInterceptors
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Inject,
+  Param,
+  Patch,
+  Post,
+  UploadedFile,
+  UseGuards,
+  UseInterceptors
 } from '@nestjs/common'
 import {
-    ApiBearerAuth,
-    ApiBody,
-    ApiConsumes,
-    ApiExtraModels,
-    ApiHeader,
-    ApiOperation,
-    ApiResponse,
-    ApiTags
+  ApiBearerAuth,
+  ApiBody,
+  ApiConsumes,
+  ApiExtraModels,
+  ApiHeader,
+  ApiOperation,
+  ApiResponse,
+  ApiTags
 } from '@nestjs/swagger'
 import { ParseQuery } from '../../common/decorators/parse-query.decorator'
 import { RequirePermission } from '../../common/decorators/require-permission.decorator'
@@ -30,8 +30,8 @@ import { PermissionGuard } from '../../common/guards/permission.guard'
 import { ExcelFileInterceptor } from '../../common/interceptors/excel-file.interceptor'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
 import {
-    ModuleType,
-    PermissionAction
+  ModuleType,
+  PermissionAction
 } from '../../common/interfaces/permission.interface'
 import { CurrentUser } from '../auth/decorators/current-user.decorator'
 import { Public } from '../auth/decorators/public.decorator'
@@ -41,25 +41,27 @@ import { PropertyAgodaCheckerService } from './property-agoda-checker.service'
 import { PropertyBookingCheckerService } from './property-booking-checker.service'
 import { PropertyExpediaCheckerService } from './property-expedia-checker.service'
 import {
-    AgodaCheckPropertiesDto,
-    AllDataForGlobalFilterResponseDto,
-    BookingCheckPropertiesDto,
-    BulkDeletePropertyDto,
-    BulkTransferPropertyDto,
-    CreatePropertyDto,
-    ExpediaCheckPropertiesDto,
-    ExportPropertyExcelDto,
-    GetPropertyCredentialDto,
-    GlobalFilterIdNameDto,
-    GlobalFilterSubportfolioDto,
-    PROPERTY_FILTER_OPERATION_DESCRIPTION,
-    PROPERTY_FILTER_SWAGGER_EXAMPLE_FILTERS,
-    PropertyFilterDto,
-    SyncBulkDeleteBodyDto,
-    SyncByOtaDto,
-    TransferPropertyDto,
-    UpdatePropertyDto,
-    UploadJobAcceptedDto
+  AgodaCheckPropertiesDto,
+  AllDataForGlobalFilterResponseDto,
+  BookingCheckPropertiesDto,
+  BulkDeletePropertyDto,
+  BulkTransferPropertyDto,
+  CreatePropertyDto,
+  ExpediaCheckPropertiesDto,
+  ExportPropertyExcelDto,
+  GetPropertyCredentialDto,
+  GlobalFilterIdNameDto,
+  GlobalFilterSubportfolioDto,
+  PROPERTY_FILTER_OPERATION_DESCRIPTION,
+  PROPERTY_FILTER_SWAGGER_EXAMPLE_FILTERS,
+  PropertyFilterDto,
+  SyncBulkDeleteBodyDto,
+  SyncByOtaDto,
+  UpdatePropertyAccessLevelDto,
+  UpdatePropertyAccessLevelResultDto,
+  TransferPropertyDto,
+  UpdatePropertyDto,
+  UploadJobAcceptedDto
 } from './property.dto'
 import type { IPropertyService } from './property.interface'
 
@@ -242,19 +244,26 @@ export class PropertyController {
     description:
       'Useful to resume watching progress after a page refresh. Returns undefined if the caller has no job in the last 24 hours.'
   })
-  @ApiResponse({ status: 200, description: 'Latest upload job status (or empty body if none)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Latest upload job status (or empty body if none)'
+  })
   getCurrentUploadJob(@CurrentUser() user: IUserWithPermissions) {
     return this.propertyService.getLatestUploadJobForUser(user.id)
   }
 
   @Get('upload-job/:jobId')
   @ApiOperation({
-    summary: 'Poll the live status of a background bulk import / bulk-update job',
+    summary:
+      'Poll the live status of a background bulk import / bulk-update job',
     description:
       'The import and bulk-update endpoints return instantly with a jobId. Poll this endpoint to watch per-portfolio and per-property progress across DBMS, scraper and dashboard (state: pending | processing | created | updated | skipped | failed). Job status is retained in Redis for 24 hours after completion; a fresh file upload always starts a new job.'
   })
   @ApiResponse({ status: 200, description: 'Upload job status' })
-  @ApiResponse({ status: 404, description: 'Job not found (expired or unknown jobId)' })
+  @ApiResponse({
+    status: 404,
+    description: 'Job not found (expired or unknown jobId)'
+  })
   getUploadJob(@Param('jobId') jobId: string) {
     return this.propertyService.getUploadJobStatus(jobId)
   }
@@ -734,7 +743,7 @@ export class PropertyController {
   @ApiOperation({
     summary: 'Transfer property to a different portfolio',
     description:
-      "Moves a property to a new portfolio in DBMS, then pushes the new " +
+      'Moves a property to a new portfolio in DBMS, then pushes the new ' +
       "portfolio to the dashboard and the scraper. Requires the caller's " +
       'account password for confirmation. The two downstream upserts are ' +
       'independent — one failing never prevents the other. A 200 means the ' +
@@ -845,7 +854,10 @@ export class PropertyController {
         message: 'Property deleted successfully',
         sync: {
           dashboard: { success: true },
-          scraper: { success: false, reason: 'Property not found with parent_id: abc' }
+          scraper: {
+            success: false,
+            reason: 'Property not found with parent_id: abc'
+          }
         }
       }
     }
@@ -962,7 +974,7 @@ export class PropertyController {
   @ApiOperation({
     summary: 'Bulk transfer properties to a different portfolio',
     description:
-      "Accepts the transfer and runs it in the background, like bulk update. " +
+      'Accepts the transfer and runs it in the background, like bulk update. ' +
       "The caller's account password, the target portfolio and the property " +
       'ids are validated up front (a bad password or portfolio still returns ' +
       '400 immediately); everything after that — the DBMS moves and the ' +
@@ -1106,6 +1118,56 @@ export class PropertySyncController {
   @ApiOperation({ summary: 'Internal: sync property from scraper by OTA id' })
   syncByOta(@Body() dto: SyncByOtaDto) {
     return this.propertyService.syncByOta(dto)
+  }
+
+  // Deliberately unguarded: no @UseGuards here, unlike its siblings on this
+  // controller. The class-level @Public() opts the route out of the global
+  // JwtAuthGuard/PermissionGuard. Adding a guard later is a one-line change
+  // that does not affect the request or response contract.
+  @Patch(':id/access-level')
+  @ApiOperation({
+    summary: "Update a property's OTA access levels and sync to the dashboard",
+    description:
+      'Unauthenticated. `:id` is the DBMS property id (the value the dashboard stores as `parent_id`). ' +
+      'Each field is independently optional: omit a key to leave that OTA untouched, send null to clear it. ' +
+      'A body with none of the three fields is a no-op. Writes DBMS first, then syncs to the dashboard; ' +
+      'the scraper is not involved because it has no access level columns. ' +
+      'If the dashboard leg fails the DBMS write still stands — retry the same request.'
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'DBMS property id',
+    example: '507f1f77bcf86cd799439011'
+  })
+  @ApiBody({
+    type: UpdatePropertyAccessLevelDto,
+    examples: {
+      single: {
+        summary: 'Grant Booking access only, leaving Expedia and Agoda as-is',
+        value: { booking_access_level: true }
+      },
+      all: {
+        summary: 'Set all three',
+        value: {
+          expedia_access_level: true,
+          booking_access_level: false,
+          agoda_access_level: true
+        }
+      },
+      clear: {
+        summary: 'Clear the Expedia value back to unrecorded',
+        value: { expedia_access_level: null }
+      }
+    }
+  })
+  @ApiResponse({ status: 200, type: UpdatePropertyAccessLevelResultDto })
+  @ApiResponse({ status: 404, description: 'Property not found' })
+  @HttpCode(200)
+  updateAccessLevels(
+    @Param('id') id: string,
+    @Body() dto: UpdatePropertyAccessLevelDto
+  ) {
+    return this.propertyService.updateAccessLevels(id, dto)
   }
 
   @Post('expedia-check/trigger-lambda')

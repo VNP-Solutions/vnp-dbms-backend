@@ -2814,10 +2814,7 @@ export class PropertyService implements IPropertyService {
             excelHeaderNames('expediaSecondaryUsername')
           ),
           expediaSecondaryPassword: encryptPassword(
-            findExcelCellValue(
-              r,
-              excelHeaderNames('expediaSecondaryPassword')
-            )
+            findExcelCellValue(r, excelHeaderNames('expediaSecondaryPassword'))
           ),
           bookingSecondaryUsername: r['Booking Secondary Username']
             ? String(r['Booking Secondary Username']).trim()
@@ -3053,10 +3050,7 @@ export class PropertyService implements IPropertyService {
           isActive: parseBool(
             findExcelCellValue(r, excelHeaderNames('isActive'))
           ),
-          nextDueDate: findExcelDateValue(
-            r,
-            excelHeaderNames('nextDueDate')
-          ),
+          nextDueDate: findExcelDateValue(r, excelHeaderNames('nextDueDate')),
           notes: r['Notes'] ? String(r['Notes']).trim() : undefined
         } satisfies ImportPropertyRow
       })
@@ -4011,10 +4005,7 @@ export class PropertyService implements IPropertyService {
           }
 
           // Hotel address
-          const hotelAddress = findValue(
-            row,
-            excelHeaderNames('hotelAddress')
-          )
+          const hotelAddress = findValue(row, excelHeaderNames('hotelAddress'))
           if (hotelAddress !== undefined)
             updateData.hotel_address = hotelAddress
 
@@ -6200,6 +6191,11 @@ export class PropertyService implements IPropertyService {
       },
       card_descriptor: property.card_descriptor ?? '',
       portfolio_parent_id: property.portfolio_id,
+      // DBMS owns the OTA access levels, so send them unconditionally — a null
+      // has to reach the dashboard and clear the old value there.
+      expedia_access_level: property.expedia_access_level ?? null,
+      booking_access_level: property.booking_access_level ?? null,
+      agoda_access_level: property.agoda_access_level ?? null,
       credentials: {
         expedia_id: property.expedia_id?.toString() ?? '',
         expedia_username: credentials?.expediaUsername ?? '',
