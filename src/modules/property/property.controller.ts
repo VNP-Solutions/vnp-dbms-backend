@@ -20,7 +20,6 @@ import {
   ApiExtraModels,
   ApiHeader,
   ApiOperation,
-  ApiParam,
   ApiResponse,
   ApiTags
 } from '@nestjs/swagger'
@@ -55,8 +54,6 @@ import {
   SyncBulkDeleteBodyDto,
   TransferPropertyDto,
   SyncByOtaDto,
-  UpdatePropertyAccessLevelDto,
-  UpdatePropertyAccessLevelResultDto,
   UpdatePropertyDto,
   UploadJobAcceptedDto
 } from './property.dto'
@@ -1105,56 +1102,6 @@ export class PropertySyncController {
   @ApiOperation({ summary: 'Internal: sync property from scraper by OTA id' })
   syncByOta(@Body() dto: SyncByOtaDto) {
     return this.propertyService.syncByOta(dto)
-  }
-
-  // Deliberately unguarded: no @UseGuards here, unlike its siblings on this
-  // controller. The class-level @Public() opts the route out of the global
-  // JwtAuthGuard/PermissionGuard. Adding a guard later is a one-line change
-  // that does not affect the request or response contract.
-  @Patch(':id/access-level')
-  @ApiOperation({
-    summary: 'Update a property\'s OTA access levels and sync to the dashboard',
-    description:
-      'Unauthenticated. `:id` is the DBMS property id (the value the dashboard stores as `parent_id`). ' +
-      'Each field is independently optional: omit a key to leave that OTA untouched, send null to clear it. ' +
-      'A body with none of the three fields is a no-op. Writes DBMS first, then syncs to the dashboard; ' +
-      'the scraper is not involved because it has no access level columns. ' +
-      'If the dashboard leg fails the DBMS write still stands — retry the same request.'
-  })
-  @ApiParam({
-    name: 'id',
-    description: 'DBMS property id',
-    example: '507f1f77bcf86cd799439011'
-  })
-  @ApiBody({
-    type: UpdatePropertyAccessLevelDto,
-    examples: {
-      single: {
-        summary: 'Grant Booking access only, leaving Expedia and Agoda as-is',
-        value: { booking_access_level: true }
-      },
-      all: {
-        summary: 'Set all three',
-        value: {
-          expedia_access_level: true,
-          booking_access_level: false,
-          agoda_access_level: true
-        }
-      },
-      clear: {
-        summary: 'Clear the Expedia value back to unrecorded',
-        value: { expedia_access_level: null }
-      }
-    }
-  })
-  @ApiResponse({ status: 200, type: UpdatePropertyAccessLevelResultDto })
-  @ApiResponse({ status: 404, description: 'Property not found' })
-  @HttpCode(200)
-  updateAccessLevels(
-    @Param('id') id: string,
-    @Body() dto: UpdatePropertyAccessLevelDto
-  ) {
-    return this.propertyService.updateAccessLevels(id, dto)
   }
 
   @Post('expedia-check/trigger-lambda')

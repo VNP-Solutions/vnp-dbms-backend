@@ -514,10 +514,6 @@ export interface IPropertyService {
   syncByOta(
     dto: SyncByOtaDto
   ): Promise<{ status: string; id?: string; candidates?: string[] }>
-  updateAccessLevels(
-    id: string,
-    dto: UpdatePropertyAccessLevelDto
-  ): Promise<UpdatePropertyAccessLevelResultDto>
   /// Accepted-and-backgrounded, like `bulkUpdate`: the DBMS moves and the
   /// downstream sync-upserts run off-request, tracked as an upload job.
   bulkTransferPortfolio(
