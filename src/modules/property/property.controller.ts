@@ -20,7 +20,6 @@ import {
   ApiExtraModels,
   ApiHeader,
   ApiOperation,
-  ApiParam,
   ApiResponse,
   ApiTags
 } from '@nestjs/swagger'
