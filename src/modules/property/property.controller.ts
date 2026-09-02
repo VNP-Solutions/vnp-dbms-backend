@@ -238,19 +238,26 @@ export class PropertyController {
     description:
       'Useful to resume watching progress after a page refresh. Returns undefined if the caller has no job in the last 24 hours.'
   })
-  @ApiResponse({ status: 200, description: 'Latest upload job status (or empty body if none)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Latest upload job status (or empty body if none)'
+  })
   getCurrentUploadJob(@CurrentUser() user: IUserWithPermissions) {
     return this.propertyService.getLatestUploadJobForUser(user.id)
   }
 
   @Get('upload-job/:jobId')
   @ApiOperation({
-    summary: 'Poll the live status of a background bulk import / bulk-update job',
+    summary:
+      'Poll the live status of a background bulk import / bulk-update job',
     description:
       'The import and bulk-update endpoints return instantly with a jobId. Poll this endpoint to watch per-portfolio and per-property progress across DBMS, scraper and dashboard (state: pending | processing | created | updated | skipped | failed). Job status is retained in Redis for 24 hours after completion; a fresh file upload always starts a new job.'
   })
   @ApiResponse({ status: 200, description: 'Upload job status' })
-  @ApiResponse({ status: 404, description: 'Job not found (expired or unknown jobId)' })
+  @ApiResponse({
+    status: 404,
+    description: 'Job not found (expired or unknown jobId)'
+  })
   getUploadJob(@Param('jobId') jobId: string) {
     return this.propertyService.getUploadJobStatus(jobId)
   }
@@ -730,7 +737,7 @@ export class PropertyController {
   @ApiOperation({
     summary: 'Transfer property to a different portfolio',
     description:
-      "Moves a property to a new portfolio in DBMS, then pushes the new " +
+      'Moves a property to a new portfolio in DBMS, then pushes the new ' +
       "portfolio to the dashboard and the scraper. Requires the caller's " +
       'account password for confirmation. The two downstream upserts are ' +
       'independent — one failing never prevents the other. A 200 means the ' +
@@ -841,7 +848,10 @@ export class PropertyController {
         message: 'Property deleted successfully',
         sync: {
           dashboard: { success: true },
-          scraper: { success: false, reason: 'Property not found with parent_id: abc' }
+          scraper: {
+            success: false,
+            reason: 'Property not found with parent_id: abc'
+          }
         }
       }
     }
@@ -958,7 +968,7 @@ export class PropertyController {
   @ApiOperation({
     summary: 'Bulk transfer properties to a different portfolio',
     description:
-      "Accepts the transfer and runs it in the background, like bulk update. " +
+      'Accepts the transfer and runs it in the background, like bulk update. ' +
       "The caller's account password, the target portfolio and the property " +
       'ids are validated up front (a bad password or portfolio still returns ' +
       '400 immediately); everything after that — the DBMS moves and the ' +

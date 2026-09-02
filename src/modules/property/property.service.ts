@@ -2787,10 +2787,7 @@ export class PropertyService implements IPropertyService {
             excelHeaderNames('expediaSecondaryUsername')
           ),
           expediaSecondaryPassword: encryptPassword(
-            findExcelCellValue(
-              r,
-              excelHeaderNames('expediaSecondaryPassword')
-            )
+            findExcelCellValue(r, excelHeaderNames('expediaSecondaryPassword'))
           ),
           bookingSecondaryUsername: r['Booking Secondary Username']
             ? String(r['Booking Secondary Username']).trim()
@@ -3031,10 +3028,7 @@ export class PropertyService implements IPropertyService {
           isActive: parseBool(
             findExcelCellValue(r, excelHeaderNames('isActive'))
           ),
-          nextDueDate: findExcelDateValue(
-            r,
-            excelHeaderNames('nextDueDate')
-          ),
+          nextDueDate: findExcelDateValue(r, excelHeaderNames('nextDueDate')),
           notes: r['Notes'] ? String(r['Notes']).trim() : undefined
         } satisfies ImportPropertyRow
       })
@@ -3976,10 +3970,7 @@ export class PropertyService implements IPropertyService {
           }
 
           // Hotel address
-          const hotelAddress = findValue(
-            row,
-            excelHeaderNames('hotelAddress')
-          )
+          const hotelAddress = findValue(row, excelHeaderNames('hotelAddress'))
           if (hotelAddress !== undefined)
             updateData.hotel_address = hotelAddress
 

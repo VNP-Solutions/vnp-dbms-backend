@@ -395,15 +395,11 @@ export interface IPropertyRepository {
   ): Promise<ImportPropertiesResult>
   resolveOrCreatePortfolio(
     portfolioName: string
-  ): Promise<
-    { id: string; name: string; created: boolean } | { error: string }
-  >
+  ): Promise<{ id: string; name: string; created: boolean } | { error: string }>
   resolveOrCreateSubportfolio(
     subName: string,
     portfolioId?: string
-  ): Promise<
-    { id: string; created: boolean } | { error: string }
-  >
+  ): Promise<{ id: string; created: boolean } | { error: string }>
   findIdsByOtaIds(ota: {
     expedia_id?: number | null
     booking_id?: number | null
