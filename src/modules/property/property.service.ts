@@ -26,19 +26,21 @@ import { EmailUtil } from '../../common/utils/email.util'
 import { EncryptionUtil } from '../../common/utils/encryption.util'
 import { withTimeout } from '../../common/utils/promise-timeout.util'
 import {
+  createPropertyExcelRowMapper,
   EXCEL_HISTORICAL_DATE_HEADERS,
   excelHeaderNames,
   findExcelCellValue,
   findExcelDateValue,
-  mapPropertyToExcelRow,
   PROPERTY_EXPORT_COLUMN_CODES,
   writePropertyExportBuffer
 } from '../../common/utils/property-excel.util'
 import { S3ExportUtil } from '../../common/utils/s3-export.util'
 import {
   PROPERTY_EXPORT_ATTACHMENT_MAX_BYTES,
+  PROPERTY_EXPORT_CHUNK_SIZE,
   PROPERTY_EXPORT_CONTENT_TYPE,
   PROPERTY_EXPORT_DOWNLOAD_TTL_SECONDS,
+  PROPERTY_EXPORT_MAX_ROWS,
   SYNC_HTTP_TIMEOUT_MS,
   UPLOAD_JOB_DB_TIMEOUT_MS,
   UPLOAD_JOB_HTTP_TIMEOUT_MS,
@@ -612,28 +614,15 @@ export class PropertyService implements IPropertyService {
     return property
   }
 
-  async findAllWithFilters(
+  /**
+   * Translates a filter DTO into the Prisma where/orderBy pair. Kept separate
+   * from findAllWithFilters so the Excel export can reuse the exact same
+   * filtering without materialising every matching property.
+   */
+  private buildPropertyFilterQuery(
     filterDto: PropertyFilterDto,
-    user: IUserWithPermissions
-  ): Promise<PaginatedResult<PropertyWithRelations>> {
-    this.logger.log(
-      `property:findAllWithFilters — fetching from MongoDB (no cache)`
-    )
-
-    const accessibleIds = await this.repo.getAccessiblePropertyIds(user.id)
-    if (Array.isArray(accessibleIds) && accessibleIds.length === 0) {
-      const usePagination = filterDto.page != null && filterDto.limit != null
-      return {
-        data: [],
-        metadata: {
-          totalDocuments: 0,
-          currentPage: usePagination ? filterDto.page || 1 : 1,
-          totalPages: 0,
-          limit: usePagination ? filterDto.limit || 10 : 0
-        }
-      }
-    }
-
+    accessibleIds: string[] | 'all'
+  ): { where: any; orderBy: any } {
     const baseWhere: any =
       accessibleIds === 'all' ? {} : { id: { in: accessibleIds } }
     const whereConditions: any[] = []
@@ -1281,6 +1270,36 @@ export class PropertyService implements IPropertyService {
       whereConditions.length > 0
         ? { AND: [baseWhere, ...whereConditions] }
         : baseWhere
+
+    return { where, orderBy }
+  }
+
+  async findAllWithFilters(
+    filterDto: PropertyFilterDto,
+    user: IUserWithPermissions
+  ): Promise<PaginatedResult<PropertyWithRelations>> {
+    this.logger.log(
+      `property:findAllWithFilters — fetching from MongoDB (no cache)`
+    )
+
+    const accessibleIds = await this.repo.getAccessiblePropertyIds(user.id)
+    if (Array.isArray(accessibleIds) && accessibleIds.length === 0) {
+      const usePagination = filterDto.page != null && filterDto.limit != null
+      return {
+        data: [],
+        metadata: {
+          totalDocuments: 0,
+          currentPage: usePagination ? filterDto.page || 1 : 1,
+          totalPages: 0,
+          limit: usePagination ? filterDto.limit || 10 : 0
+        }
+      }
+    }
+
+    const { where, orderBy } = this.buildPropertyFilterQuery(
+      filterDto,
+      accessibleIds
+    )
 
     const usePagination = filterDto.page != null && filterDto.limit != null
     const skip = usePagination
@@ -2441,16 +2460,22 @@ export class PropertyService implements IPropertyService {
         return
       }
 
-      // Step 2 — apply filters (masking doesn't matter here; we only need the IDs)
-      const filterDto: PropertyFilterDto = {
-        ...dto,
-        page: undefined,
-        limit: undefined
-      }
-      const filtered = await this.findAllWithFilters(filterDto, user)
-      const filteredData = filtered.data as any[]
+      // Step 2 — resolve which properties match, fetching ids only. Loading the
+      // full records here (with relations, notes and credentials) is what used
+      // to exhaust the container's memory on large exports.
+      const accessibleIds = await this.repo.getAccessiblePropertyIds(user.id)
+      const ids =
+        Array.isArray(accessibleIds) && accessibleIds.length === 0
+          ? []
+          : await this.repo.findIds(
+              this.buildPropertyFilterQuery(
+                { ...dto, page: undefined, limit: undefined },
+                accessibleIds
+              ).where,
+              { created_at: 'desc' }
+            )
 
-      if (filteredData.length === 0) {
+      if (ids.length === 0) {
         await this.sendExportNoticeEmail(
           user.email,
           'VNP Solutions – Property Export (no matching records)',
@@ -2459,26 +2484,43 @@ export class PropertyService implements IPropertyService {
         return
       }
 
-      // Step 3 — re-fetch the same properties directly from the repo (bypassing the
-      // masking layer), then decrypt every credential field explicitly.
-      const ids = filteredData.map((p: any) => p.id)
-      const raw = await this.repo.findAll({
-        where: { id: { in: ids } },
-        orderBy: { created_at: 'desc' }
-      })
-      const properties = raw.map(p => this.decryptCredentialsForResponse(p))
+      if (ids.length > PROPERTY_EXPORT_MAX_ROWS) {
+        this.logger.warn(
+          `Property excel export for ${user.email} matched ${ids.length} properties, above the ${PROPERTY_EXPORT_MAX_ROWS} row limit`
+        )
+        await this.sendExportNoticeEmail(
+          user.email,
+          'VNP Solutions – Property Export (too many records)',
+          `Your export matched ${ids.length} properties, which is more than the ${PROPERTY_EXPORT_MAX_ROWS} rows a single file can hold.\n\nPlease narrow the filters — for example by portfolio or date range — and try again.`
+        )
+        return
+      }
 
-      const rows = properties.map(p => mapPropertyToExcelRow(p, columnCodes))
+      // Step 3 — build the sheet rows in chunks. Only one chunk of full property
+      // records is alive at a time; everything that outlives the loop is the
+      // flat row data that ends up in the workbook.
+      const mapRow = createPropertyExcelRowMapper(columnCodes)
+      const rows: Record<string, string | number>[] = []
+      for (let i = 0; i < ids.length; i += PROPERTY_EXPORT_CHUNK_SIZE) {
+        const chunkIds = ids.slice(i, i + PROPERTY_EXPORT_CHUNK_SIZE)
+        const chunk = await this.repo.findByIds(chunkIds)
+        // findByIds does not preserve the requested order.
+        const byId = new Map(chunk.map(p => [p.id, p]))
+        for (const id of chunkIds) {
+          const property = byId.get(id)
+          if (property) {
+            rows.push(mapRow(this.decryptCredentialsForResponse(property)))
+          }
+        }
+      }
+
       const buffer = writePropertyExportBuffer(rows, columnCodes)
+      const recordCount = rows.length
+      rows.length = 0
 
       const filename = `properties-export-${new Date().toISOString().slice(0, 10)}.xlsx`
 
-      await this.deliverExportExcel(
-        user.email,
-        filename,
-        buffer,
-        properties.length
-      )
+      await this.deliverExportExcel(user.email, filename, buffer, recordCount)
     } catch (error) {
       this.logger.error(
         `Property excel export for ${user.email} failed: ${error instanceof Error ? error.message : String(error)}`
