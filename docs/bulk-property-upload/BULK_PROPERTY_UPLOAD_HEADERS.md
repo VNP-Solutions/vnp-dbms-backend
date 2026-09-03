@@ -11,6 +11,24 @@ Authorization: Bearer {JWT_TOKEN}
 Required Permission: PROPERTY.CREATE
 ```
 
+## Clearing a Field with `NULL`
+
+An empty cell means "leave the existing value alone". To clear a field instead,
+put the literal text `NULL` in the cell (case-insensitive). It applies to both
+`POST /property/import` and `POST /property/bulk-update`, and it skips all the
+usual parsing — a `NULL` date, number, yes/no or dropdown cell is never
+validated or looked up, it just becomes empty.
+
+Four columns can't be cleared, because the database can't store them as empty:
+**Property Name**, **Property Identifier**, **Portfolio** and **Is Active**. A
+`NULL` in any of those fails the row with a `<column> cannot be set to NULL`
+error. **Notes** is also unaffected, since notes are appended records rather
+than a field.
+
+Cleared columns are forwarded to the scraper and the dashboard as the string
+`"NULL"` in the sync request body, because both services read a missing key as
+"unchanged".
+
 ## Required Headers
 
 These columns **must** be present in your Excel file:

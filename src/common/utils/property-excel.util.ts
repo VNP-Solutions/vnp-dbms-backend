@@ -129,6 +129,41 @@ export const EXCEL_HISTORICAL_DATE_HEADERS = {
   agodaTo: ['Agoda Historical To', 'Agoda To']
 } as const
 
+/**
+ * Cell literal that clears a field outright, instead of the usual "empty cell
+ * means leave the existing value alone".
+ *
+ * Both upload parsers carry this exact token through their whole field
+ * mapping — no date/number/boolean parsing and no find-or-create lookup is
+ * applied to it — so `applyExcelNullTokens` can turn every occurrence into
+ * `null` in one pass at the end and report which columns were cleared. The
+ * scraper/dashboard payloads then repeat the token for those columns, because
+ * an omitted key means "unchanged" to both of them.
+ */
+export const EXCEL_NULL_TOKEN = 'NULL'
+
+export function isExcelNullToken(value: unknown): boolean {
+  // Only a text cell can carry the token — a date serial or a number never
+  // reads as "NULL".
+  if (typeof value !== 'string') return false
+  return value.trim().toUpperCase() === EXCEL_NULL_TOKEN
+}
+
+/**
+ * Replaces every NULL-token value in `data` with `null`, in place, and returns
+ * the keys that were cleared.
+ */
+export function applyExcelNullTokens(data: Record<string, any>): string[] {
+  const cleared: string[] = []
+  for (const key of Object.keys(data)) {
+    if (isExcelNullToken(data[key])) {
+      data[key] = null
+      cleared.push(key)
+    }
+  }
+  return cleared
+}
+
 export function findExcelCellValue(
   row: Record<string, unknown>,
   names: readonly string[]
@@ -168,6 +203,7 @@ export function findExcelDateValue(
   for (const name of names) {
     const val = row[name]
     if (val !== undefined && val !== null && val !== '') {
+      if (isExcelNullToken(val)) return EXCEL_NULL_TOKEN
       const normalized = normalizeParserJobDate(val)
       if (normalized) return normalized
     }
@@ -179,6 +215,7 @@ export function findExcelDateValue(
       if (cleanKey.toLowerCase() === name.toLowerCase()) {
         const val = row[key]
         if (val !== undefined && val !== null && val !== '') {
+          if (isExcelNullToken(val)) return EXCEL_NULL_TOKEN
           const normalized = normalizeParserJobDate(val)
           if (normalized) return normalized
         }
