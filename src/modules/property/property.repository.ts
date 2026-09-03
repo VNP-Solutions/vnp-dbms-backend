@@ -1,4 +1,9 @@
 import { Inject, Injectable, Logger } from '@nestjs/common'
+import {
+  applyExcelNullTokens,
+  EXCEL_NULL_TOKEN,
+  isExcelNullToken
+} from '../../common/utils/property-excel.util'
 import { PrismaService } from '../prisma/prisma.service'
 import {
   collectPropertyUniqueConflicts,
@@ -557,9 +562,46 @@ export class PropertyRepository implements IPropertyRepository {
       portfolio_id: string
     }> = []
     const seenIdentifiersInBatch = new Set<string>()
+    // Union of the columns that `rows` cleared with a NULL cell. The upload job
+    // calls this one row at a time, so the union is that row's cleared set —
+    // which is what the scraper/dashboard payloads need.
+    const nulledFields: string[] = []
+
+    // Typed cell coercions. A NULL cell keeps the raw token so the final token
+    // pass clears the column; anything unparseable is dropped, as before.
+    const intField = (val?: string): number | string | undefined => {
+      if (!val) return undefined
+      if (isExcelNullToken(val)) return EXCEL_NULL_TOKEN
+      return parseInt(val) || undefined
+    }
+    const boolField = (val?: string): boolean | string | undefined => {
+      if (val === undefined) return undefined
+      if (isExcelNullToken(val)) return EXCEL_NULL_TOKEN
+      return val === 'true'
+    }
 
     for (const row of rows) {
       const { propertyName, portfolioName } = row
+
+      // Columns the schema can't store as null, or that the row is keyed by.
+      // Failing the row is clearer than quietly ignoring the NULL.
+      const notNullable: Array<[string, string | undefined]> = [
+        ['Property Name', propertyName],
+        ['Property Identifier', row.propertyIdentifier],
+        ['Portfolio', portfolioName],
+        ['Is Active', row.isActive]
+      ]
+      const nullNotAllowed = notNullable.find(([, value]) =>
+        isExcelNullToken(value)
+      )
+      if (nullNotAllowed) {
+        skippedProperties.push({
+          name: propertyName,
+          reason: `${nullNotAllowed[0]} cannot be set to NULL`
+        })
+        propertiesSkipped++
+        continue
+      }
 
       const normalizedIdentifier = normalizePropertyIdentifier(
         row.propertyIdentifier
@@ -592,7 +634,8 @@ export class PropertyRepository implements IPropertyRepository {
       }
 
       let subportfolioId: string | undefined
-      if (row.subportfolioName) {
+      const clearSubportfolio = isExcelNullToken(row.subportfolioName)
+      if (!clearSubportfolio && row.subportfolioName) {
         const subResult = await this.resolveOrCreateSubportfolio(
           row.subportfolioName,
           portfolio.id
@@ -653,6 +696,9 @@ export class PropertyRepository implements IPropertyRepository {
           credPayloadExisting.agodaSecondaryPassword =
             row.agodaSecondaryPassword
 
+        nulledFields.push(...applyExcelNullTokens(credPayloadExisting))
+        if (clearSubportfolio) nulledFields.push('subportfolio_id')
+
         if (Object.keys(credPayloadExisting).length > 0) {
           const existingCred = await this.prisma.propertyCredentials.findFirst({
             where: { property_id: existingProp.id }
@@ -680,10 +726,14 @@ export class PropertyRepository implements IPropertyRepository {
           )
         }
 
-        const existingUpdates: { subportfolio_id?: string; portfolio_id?: string } =
-          {}
+        const existingUpdates: {
+          subportfolio_id?: string | null
+          portfolio_id?: string
+        } = {}
         if (subportfolioId) {
           existingUpdates.subportfolio_id = subportfolioId
+        } else if (clearSubportfolio) {
+          existingUpdates.subportfolio_id = null
         }
         if (portfolio.id !== existingProp.portfolio_id) {
           existingUpdates.portfolio_id = portfolio.id
@@ -743,12 +793,9 @@ export class PropertyRepository implements IPropertyRepository {
       propertyPayload.property_identifier = normalizedIdentifier
       if (row.portfolioContact)
         propertyPayload.portfolio_contact = row.portfolioContact
-      if (row.expediaId)
-        propertyPayload.expedia_id = parseInt(row.expediaId) || undefined
-      if (row.agodaId)
-        propertyPayload.agoda_id = parseInt(row.agodaId) || undefined
-      if (row.bookingId)
-        propertyPayload.booking_id = parseInt(row.bookingId) || undefined
+      if (row.expediaId) propertyPayload.expedia_id = intField(row.expediaId)
+      if (row.agodaId) propertyPayload.agoda_id = intField(row.agodaId)
+      if (row.bookingId) propertyPayload.booking_id = intField(row.bookingId)
       if (row.portfolioContactEmail)
         propertyPayload.portfolio_contact_email = row.portfolioContactEmail
       if (row.newDomainsEmail)
@@ -777,11 +824,14 @@ export class PropertyRepository implements IPropertyRepository {
           .replace(/_+/g, '_')
           .replace(/^_|_$/, '')
 
-      // Helper: resolve processor name → ID (find or create)
+      // Helpers: resolve a name to an ID (find or create). A NULL cell is
+      // passed straight through so the final token pass clears the FK —
+      // resolving it would create a record literally named "NULL".
       const resolveProcessor = async (
         name?: string
       ): Promise<string | undefined> => {
         if (!name) return undefined
+        if (isExcelNullToken(name)) return EXCEL_NULL_TOKEN
         const normalized = name.trim()
         let rec = await this.prisma.processor.findFirst({
           where: { name: { equals: normalized, mode: 'insensitive' } }
@@ -808,6 +858,7 @@ export class PropertyRepository implements IPropertyRepository {
         name?: string
       ): Promise<string | undefined> => {
         if (!name) return undefined
+        if (isExcelNullToken(name)) return EXCEL_NULL_TOKEN
         const normalized = toUpperSnakeCase(name)
         let rec = await this.prisma.serviceType.findFirst({
           where: { type: { equals: normalized, mode: 'insensitive' } }
@@ -834,6 +885,7 @@ export class PropertyRepository implements IPropertyRepository {
         name?: string
       ): Promise<string | undefined> => {
         if (!name) return undefined
+        if (isExcelNullToken(name)) return EXCEL_NULL_TOKEN
         const normalized = name.trim()
         let rec = await this.prisma.billingType.findFirst({
           where: { name: { equals: normalized, mode: 'insensitive' } }
@@ -860,6 +912,7 @@ export class PropertyRepository implements IPropertyRepository {
         name?: string
       ): Promise<string | undefined> => {
         if (!name) return undefined
+        if (isExcelNullToken(name)) return EXCEL_NULL_TOKEN
         const normalized = toUpperSnakeCase(name)
         let rec = await this.prisma.frequency.findFirst({
           where: { name: { equals: normalized, mode: 'insensitive' } }
@@ -886,6 +939,7 @@ export class PropertyRepository implements IPropertyRepository {
         name?: string
       ): Promise<string | undefined> => {
         if (!name) return undefined
+        if (isExcelNullToken(name)) return EXCEL_NULL_TOKEN
         const normalized = name.trim()
         let rec = await this.prisma.priority.findFirst({
           where: { name: { equals: normalized, mode: 'insensitive' } }
@@ -912,6 +966,7 @@ export class PropertyRepository implements IPropertyRepository {
         code?: string
       ): Promise<string | undefined> => {
         if (!code) return undefined
+        if (isExcelNullToken(code)) return EXCEL_NULL_TOKEN
         const normalized = code.trim().toUpperCase()
         let rec = await this.prisma.currency.findFirst({
           where: { code: { equals: normalized, mode: 'insensitive' } }
@@ -969,14 +1024,13 @@ export class PropertyRepository implements IPropertyRepository {
         propertyPayload.booking_priority = row.bookingPriority
       if (row.agodaPriority) propertyPayload.agoda_priority = row.agodaPriority
       if (row.expediaAccessLevel)
-        propertyPayload.expedia_access_level = row.expediaAccessLevel === 'true'
+        propertyPayload.expedia_access_level = boolField(row.expediaAccessLevel)
       if (row.expediaFrom) propertyPayload.expedia_from = row.expediaFrom
       if (row.expediaTo) propertyPayload.expedia_to = row.expediaTo
       if (row.expediaScheduler)
-        propertyPayload.expedia_scheduler = row.expediaScheduler === 'true'
+        propertyPayload.expedia_scheduler = boolField(row.expediaScheduler)
       if (row.expediaDuration)
-        propertyPayload.expedia_duration =
-          parseInt(row.expediaDuration) || undefined
+        propertyPayload.expedia_duration = intField(row.expediaDuration)
       if (row.bookingBillingType)
         propertyPayload.booking_billing_type_id = await resolveBillingType(
           row.bookingBillingType
@@ -990,14 +1044,13 @@ export class PropertyRepository implements IPropertyRepository {
           row.bookingFrequency
         )
       if (row.bookingAccessLevel)
-        propertyPayload.booking_access_level = row.bookingAccessLevel === 'true'
+        propertyPayload.booking_access_level = boolField(row.bookingAccessLevel)
       if (row.bookingFrom) propertyPayload.booking_from = row.bookingFrom
       if (row.bookingTo) propertyPayload.booking_to = row.bookingTo
       if (row.bookingScheduler)
-        propertyPayload.booking_scheduler = row.bookingScheduler === 'true'
+        propertyPayload.booking_scheduler = boolField(row.bookingScheduler)
       if (row.bookingDuration)
-        propertyPayload.booking_duration =
-          parseInt(row.bookingDuration) || undefined
+        propertyPayload.booking_duration = intField(row.bookingDuration)
       if (row.agodaBillingType)
         propertyPayload.agoda_billing_type_id = await resolveBillingType(
           row.agodaBillingType
@@ -1011,25 +1064,23 @@ export class PropertyRepository implements IPropertyRepository {
           row.agodaFrequency
         )
       if (row.agodaAccessLevel)
-        propertyPayload.agoda_access_level = row.agodaAccessLevel === 'true'
+        propertyPayload.agoda_access_level = boolField(row.agodaAccessLevel)
       if (row.agodaFrom) propertyPayload.agoda_from = row.agodaFrom
       if (row.agodaTo) propertyPayload.agoda_to = row.agodaTo
       if (row.agodaScheduler)
-        propertyPayload.agoda_scheduler = row.agodaScheduler === 'true'
+        propertyPayload.agoda_scheduler = boolField(row.agodaScheduler)
       if (row.agodaDuration)
-        propertyPayload.agoda_duration =
-          parseInt(row.agodaDuration) || undefined
+        propertyPayload.agoda_duration = intField(row.agodaDuration)
 
       if (row.needAnotherDomain)
-        propertyPayload.need_another_domain = row.needAnotherDomain === 'true'
+        propertyPayload.need_another_domain = boolField(row.needAnotherDomain)
       if (row.bookingOtpPhone)
         propertyPayload.booking_otp_phone = row.bookingOtpPhone
       if (row.caseContactEmail)
         propertyPayload.primary_case_email = row.caseContactEmail
       // New Expedia fields
       if (row.expediaServiceFee)
-        propertyPayload.expedia_service_fee =
-          parseInt(row.expediaServiceFee) || undefined
+        propertyPayload.expedia_service_fee = intField(row.expediaServiceFee)
       if (row.expediaCrs) propertyPayload.expedia_crs = row.expediaCrs
       if (row.expediaCrsDb) propertyPayload.expedia_crs_db = row.expediaCrsDb
       if (row.expediaRunDate)
@@ -1053,46 +1104,50 @@ export class PropertyRepository implements IPropertyRepository {
         propertyPayload.expedia_scheduler_review_db_to =
           row.expediaSchedulerReviewDbTo
       if (row.expediaDbDuration)
-        propertyPayload.expedia_db_duration =
-          parseInt(row.expediaDbDuration) || undefined
+        propertyPayload.expedia_db_duration = intField(row.expediaDbDuration)
       if (row.expediaCredentialVerified !== undefined)
-        propertyPayload.expedia_credential_verified =
-          row.expediaCredentialVerified === 'true'
+        propertyPayload.expedia_credential_verified = boolField(
+          row.expediaCredentialVerified
+        )
       if (row.expediaOtpNumber)
         propertyPayload.expedia_otp_number = row.expediaOtpNumber
       if (row.fromDb) propertyPayload.from_db = row.fromDb
       if (row.toDb) propertyPayload.to_db = row.toDb
       // New Booking fields
       if (row.bookingServiceFee)
-        propertyPayload.booking_service_fee =
-          parseInt(row.bookingServiceFee) || undefined
+        propertyPayload.booking_service_fee = intField(row.bookingServiceFee)
       if (row.bookingCrs) propertyPayload.booking_crs = row.bookingCrs
       if (row.bookingRunDate)
         propertyPayload.booking_run_date = row.bookingRunDate
       if (row.bookingRevisedDate)
         propertyPayload.booking_revised_date = row.bookingRevisedDate
       if (row.bookingCredentialVerified !== undefined)
-        propertyPayload.booking_credential_verified =
-          row.bookingCredentialVerified === 'true'
+        propertyPayload.booking_credential_verified = boolField(
+          row.bookingCredentialVerified
+        )
       if (row.bookingOtpNumber)
         propertyPayload.booking_otp_number = row.bookingOtpNumber
       // New Agoda fields
       if (row.agodaServiceFee)
-        propertyPayload.agoda_service_fee =
-          parseInt(row.agodaServiceFee) || undefined
+        propertyPayload.agoda_service_fee = intField(row.agodaServiceFee)
       if (row.agodaCrs) propertyPayload.agoda_crs = row.agodaCrs
       if (row.agodaRunDate)
         propertyPayload.agoda_run_date = row.agodaRunDate
       if (row.agodaRevisedDate)
         propertyPayload.agoda_revised_date = row.agodaRevisedDate
       if (row.agodaCredentialVerified !== undefined)
-        propertyPayload.agoda_credential_verified =
-          row.agodaCredentialVerified === 'true'
+        propertyPayload.agoda_credential_verified = boolField(
+          row.agodaCredentialVerified
+        )
       if (row.agodaOtpNumber)
         propertyPayload.agoda_otp_number = row.agodaOtpNumber
       // Misc
       if (row.salesRep) propertyPayload.sales_rep = row.salesRep
-      if (row.discontinuedEmailIds) {
+      if (isExcelNullToken(row.discontinuedEmailIds)) {
+        // Non-nullable String[] — Prisma's default of [] is what a cleared
+        // column means here.
+        propertyPayload.discontinued_email_ids = []
+      } else if (row.discontinuedEmailIds) {
         propertyPayload.discontinued_email_ids = row.discontinuedEmailIds
           .split(',')
           .map(e => e.trim())
@@ -1105,7 +1160,9 @@ export class PropertyRepository implements IPropertyRepository {
         propertyPayload.stripe_connected_email = row.stripeConnectedEmail
       if (row.isActive !== undefined)
         propertyPayload.is_active = row.isActive === 'true'
-      if (row.nextDueDate) {
+      if (isExcelNullToken(row.nextDueDate)) {
+        propertyPayload.next_due_date = EXCEL_NULL_TOKEN
+      } else if (row.nextDueDate) {
         const nextDueDate = new Date(`${row.nextDueDate}T00:00:00.000Z`)
         if (!Number.isNaN(nextDueDate.getTime()))
           propertyPayload.next_due_date = nextDueDate
@@ -1119,12 +1176,16 @@ export class PropertyRepository implements IPropertyRepository {
       if (row.currency)
         propertyPayload.currency_id = await resolveCurrency(row.currency)
 
+      // Still the raw token at this point for any NULL cell, so an explicitly
+      // cleared status doesn't pick up the fallback.
       if (!propertyPayload.expedia_status)
         propertyPayload.expedia_status = 'Access Required'
       if (!propertyPayload.booking_status)
         propertyPayload.booking_status = 'Access Required'
       if (!propertyPayload.agoda_status)
         propertyPayload.agoda_status = 'Access Required'
+
+      nulledFields.push(...applyExcelNullTokens(propertyPayload))
 
       const uniqueConflicts = await collectPropertyUniqueConflicts(
         this.prisma,
@@ -1164,8 +1225,10 @@ export class PropertyRepository implements IPropertyRepository {
         propertiesCreated++
         logger.log(`Property "${propertyName}" created`)
 
-        // Create notes if provided (semicolon-separated texts in the Notes column)
-        if (userId && row.notes) {
+        // Create notes if provided (semicolon-separated texts in the Notes
+        // column). Notes are appended records rather than a field, so a NULL
+        // cell has nothing to clear.
+        if (userId && row.notes && !isExcelNullToken(row.notes)) {
           const noteTexts = row.notes
             .split(';')
             .map(t => t.trim())
@@ -1207,6 +1270,8 @@ export class PropertyRepository implements IPropertyRepository {
         if (row.agodaSecondaryPassword)
           credPayload.agodaSecondaryPassword = row.agodaSecondaryPassword
 
+        nulledFields.push(...applyExcelNullTokens(credPayload))
+
         if (Object.keys(credPayload).length > 0) {
           await this.prisma.propertyCredentials.create({
             data: { property_id: created.id, ...credPayload }
@@ -1233,7 +1298,8 @@ export class PropertyRepository implements IPropertyRepository {
       existingProperties,
       skippedProperties,
       createdPortfolios,
-      createdSubportfolios
+      createdSubportfolios,
+      nulledFields: [...new Set(nulledFields)]
     }
   }
 
