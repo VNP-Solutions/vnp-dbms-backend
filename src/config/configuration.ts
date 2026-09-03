@@ -49,6 +49,28 @@ export const PROPERTY_EXPORT_CONTENT_TYPE =
 export const PROPERTY_EXPORT_CHUNK_SIZE = 250
 
 /**
+ * Exports allowed to run at the same time. Each one holds a chunk of property
+ * data plus a whole workbook in memory and saturates a core while the sheet is
+ * serialised, so letting every caller run at once is what turns a few
+ * simultaneous "export all" clicks into a stalled API.
+ */
+export const PROPERTY_EXPORT_CONCURRENCY = Math.max(
+  1,
+  Number(process.env.PROPERTY_EXPORT_CONCURRENCY ?? 2)
+)
+
+/** Exports allowed to wait for a slot before further requests are rejected. */
+export const PROPERTY_EXPORT_MAX_QUEUED = Math.max(
+  1,
+  Number(process.env.PROPERTY_EXPORT_MAX_QUEUED ?? 20)
+)
+
+/** Ceiling on a single workbook build before the worker is terminated. */
+export const PROPERTY_EXPORT_WORKER_TIMEOUT_MS = Number(
+  process.env.PROPERTY_EXPORT_WORKER_TIMEOUT_MS ?? 5 * 60 * 1000
+)
+
+/**
  * Row ceiling for a single export. The workbook is held in memory cell by cell
  * and serialised to XML in one pass, so an unbounded export can exhaust the
  * container's heap and get the process OOM-killed. Beyond this the caller is

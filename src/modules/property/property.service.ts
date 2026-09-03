@@ -19,6 +19,10 @@ import {
   RunDateCalculatorService,
   type RunDateOtaType
 } from '../../common/services/run-date-calculator.service'
+import {
+  ExportQueueFullError,
+  PropertyExportRunnerService
+} from '../../common/services/property-export-runner.service'
 import { SyncActionLogWriter } from '../../common/services/sync-action-log-writer.service'
 import { SyncCommunicationService } from '../../common/services/sync-communication.service'
 import { ColoredLogger } from '../../common/utils/colored-logger.util'
@@ -26,13 +30,15 @@ import { EmailUtil } from '../../common/utils/email.util'
 import { EncryptionUtil } from '../../common/utils/encryption.util'
 import { withTimeout } from '../../common/utils/promise-timeout.util'
 import {
+  applyExcelNullTokens,
   createPropertyExcelRowMapper,
   EXCEL_HISTORICAL_DATE_HEADERS,
+  EXCEL_NULL_TOKEN,
   excelHeaderNames,
   findExcelCellValue,
   findExcelDateValue,
-  PROPERTY_EXPORT_COLUMN_CODES,
-  writePropertyExportBuffer
+  isExcelNullToken,
+  PROPERTY_EXPORT_COLUMN_CODES
 } from '../../common/utils/property-excel.util'
 import { S3ExportUtil } from '../../common/utils/s3-export.util'
 import {
@@ -97,6 +103,47 @@ const CACHE_KEY = (id: string) => `property:${id}`
 /** OTAs whose run date is derived from the historical "to" date and CRS. */
 const RUN_DATE_OTAS: readonly RunDateOtaType[] = ['expedia', 'booking', 'agoda']
 const GLOBAL_FILTER_KEY = (userId: string) => `global-filter:all:${userId}`
+
+/**
+ * Upload rows can clear a field with a NULL cell, but both sync payloads treat
+ * a missing key as "leave it alone" — so a cleared column has to be sent
+ * explicitly as the string "NULL". These maps name the DBMS column (or
+ * PropertyCredentials field) that each payload key is built from; only columns
+ * listed here reach the downstream services at all.
+ */
+const SCRAPER_NULLABLE_SYNC_FIELDS: Readonly<
+  Record<string, string | readonly string[]>
+> = {
+  subportfolio_id: ['sub_portfolio_parent_id', 'sub_portfolio_name'],
+  expedia_id: 'expedia_id',
+  booking_id: 'booking_id',
+  agoda_id: 'agoda_id',
+  expediaUsername: 'expedia_username',
+  expediaPassword: 'expedia_password',
+  agodaUsername: 'agoda_username',
+  agodaPassword: 'agoda_password',
+  bookingUsername: 'booking_username',
+  bookingPassword: 'booking_password'
+}
+
+const DASHBOARD_NULLABLE_SYNC_FIELDS: Readonly<Record<string, string>> = {
+  hotel_address: 'address',
+  card_descriptor: 'card_descriptor'
+}
+
+const DASHBOARD_NULLABLE_CREDENTIAL_SYNC_FIELDS: Readonly<
+  Record<string, string>
+> = {
+  expedia_id: 'expedia_id',
+  booking_id: 'booking_id',
+  agoda_id: 'agoda_id',
+  expediaUsername: 'expedia_username',
+  expediaPassword: 'expedia_password',
+  agodaUsername: 'agoda_username',
+  agodaPassword: 'agoda_password',
+  bookingUsername: 'booking_username',
+  bookingPassword: 'booking_password'
+}
 
 @Injectable()
 export class PropertyService implements IPropertyService {
@@ -170,7 +217,8 @@ export class PropertyService implements IPropertyService {
     private readonly syncActionLogWriter: SyncActionLogWriter,
     private readonly runDateCalculator: RunDateCalculatorService,
     private readonly globalFilterCache: GlobalFilterCacheService,
-    private readonly s3ExportUtil: S3ExportUtil
+    private readonly s3ExportUtil: S3ExportUtil,
+    private readonly exportRunner: PropertyExportRunnerService
   ) {
     const timeout = SYNC_HTTP_TIMEOUT_MS
     const dashUrl =
@@ -410,15 +458,28 @@ export class PropertyService implements IPropertyService {
    */
   private async processPropertySyncChunk(
     job: UploadJobData,
-    pending: Array<{ item: UploadJobEntity; full: PropertyWithRelations }>
+    pending: Array<{
+      item: UploadJobEntity
+      full: PropertyWithRelations
+      /** Columns an upload row cleared with a NULL cell, echoed downstream. */
+      nulledFields?: readonly string[]
+    }>
   ): Promise<void> {
     if (!pending.length) return
 
     const settled = await Promise.all(
-      pending.map(async ({ item, full }) => {
+      pending.map(async ({ item, full, nulledFields }) => {
         const [dashboardResult, scraperResult] = await Promise.all([
-          this.syncUpsertPropertyToDashboard(full, UPLOAD_JOB_HTTP_TIMEOUT_MS),
-          this.syncUpsertPropertyToScraper(full, UPLOAD_JOB_HTTP_TIMEOUT_MS)
+          this.syncUpsertPropertyToDashboard(
+            full,
+            UPLOAD_JOB_HTTP_TIMEOUT_MS,
+            nulledFields
+          ),
+          this.syncUpsertPropertyToScraper(
+            full,
+            UPLOAD_JOB_HTTP_TIMEOUT_MS,
+            nulledFields
+          )
         ])
         return { item, full, dashboardResult, scraperResult }
       })
@@ -2420,11 +2481,26 @@ export class PropertyService implements IPropertyService {
     // caller needs to know afterwards arrives by email; nothing about the
     // outcome is reported on this response.
     setImmediate(() => {
-      this.runExportExcelJob(dto, user).catch(e =>
-        this.logger.error(
-          `[async] property excel export for ${user.email} failed: ${e?.message ?? e}`
-        )
-      )
+      // Queued behind the export gate: only a couple run at a time, so a rush
+      // of "export all" clicks cannot saturate the CPU or the heap at once.
+      this.exportRunner
+        .run(() => this.runExportExcelJob(dto, user))
+        .catch(e => {
+          if (e instanceof ExportQueueFullError) {
+            this.logger.warn(
+              `[async] property excel export for ${user.email} rejected: ${e.message}`
+            )
+            return this.sendExportNoticeEmail(
+              user.email,
+              'VNP Solutions – Property Export (server busy)',
+              'Too many exports are already queued, so this one was not started.\n\nPlease try again in a few minutes.'
+            ).catch(() => undefined)
+          }
+          this.logger.error(
+            `[async] property excel export for ${user.email} failed: ${e?.message ?? e}`
+          )
+          return undefined
+        })
     })
 
     return Promise.resolve({
@@ -2514,7 +2590,12 @@ export class PropertyService implements IPropertyService {
         }
       }
 
-      const buffer = writePropertyExportBuffer(rows, columnCodes)
+      // Off the event loop: sheet building and zip serialisation are seconds of
+      // synchronous work that would otherwise stall every other request.
+      const buffer = await this.exportRunner.buildWorkbookBuffer(
+        rows,
+        columnCodes ?? null
+      )
       const recordCount = rows.length
       rows.length = 0
 
@@ -2715,15 +2796,18 @@ export class PropertyService implements IPropertyService {
           : ''
         if (!portfolioName) return null
 
-        // Encrypt passwords
+        // Encrypt passwords. A NULL cell stays the raw token — the repository
+        // turns it into a real null once the whole payload is assembled.
         const encryptPassword = (val: any) => {
           if (!val) return undefined
+          if (isExcelNullToken(val)) return EXCEL_NULL_TOKEN
           const str = String(val).trim()
           return str ? this.encryptionUtil.encrypt(str) : undefined
         }
 
         const parseBool = (val: any) => {
           if (val === null || val === undefined || val === '') return undefined
+          if (isExcelNullToken(val)) return EXCEL_NULL_TOKEN
           const str = String(val).trim().toLowerCase()
           if (
             str === 'true' ||
@@ -2814,10 +2898,7 @@ export class PropertyService implements IPropertyService {
             excelHeaderNames('expediaSecondaryUsername')
           ),
           expediaSecondaryPassword: encryptPassword(
-            findExcelCellValue(
-              r,
-              excelHeaderNames('expediaSecondaryPassword')
-            )
+            findExcelCellValue(r, excelHeaderNames('expediaSecondaryPassword'))
           ),
           bookingSecondaryUsername: r['Booking Secondary Username']
             ? String(r['Booking Secondary Username']).trim()
@@ -3053,10 +3134,7 @@ export class PropertyService implements IPropertyService {
           isActive: parseBool(
             findExcelCellValue(r, excelHeaderNames('isActive'))
           ),
-          nextDueDate: findExcelDateValue(
-            r,
-            excelHeaderNames('nextDueDate')
-          ),
+          nextDueDate: findExcelDateValue(r, excelHeaderNames('nextDueDate')),
           notes: r['Notes'] ? String(r['Notes']).trim() : undefined
         } satisfies ImportPropertyRow
       })
@@ -3223,6 +3301,7 @@ export class PropertyService implements IPropertyService {
       const pendingSync: Array<{
         item: UploadJobEntity
         full: PropertyWithRelations
+        nulledFields?: readonly string[]
       }> = []
 
       for (let i = 0; i < rows.length; i++) {
@@ -3312,7 +3391,7 @@ export class PropertyService implements IPropertyService {
           }
           item.dashboard.state = 'processing'
           item.scraper.state = 'processing'
-          pendingSync.push({ item, full })
+          pendingSync.push({ item, full, nulledFields: result.nulledFields })
         } else {
           const reason = loadError ?? 'Property not found after create'
           item.dashboard = { state: 'failed', reason }
@@ -3432,13 +3511,18 @@ export class PropertyService implements IPropertyService {
     }
 
     // Tracks successfully updated properties for post-loop sync
-    const syncQueue: Array<{ rowNumber: number; propertyId: string }> = []
+    const syncQueue: Array<{
+      rowNumber: number
+      propertyId: string
+      nulledFields: readonly string[]
+    }> = []
     // DBMS update happens strictly one row at a time; successfully updated
     // properties are queued here and their scraper/dashboard sync is
     // flushed in small concurrent batches (see processPropertySyncChunk).
     const pendingSync: Array<{
       item: UploadJobEntity
       full: PropertyWithRelations
+      nulledFields?: readonly string[]
     }> = []
     const createdPortfolioIds: string[] = []
     const createdSubportfolios: Array<{
@@ -3667,7 +3751,11 @@ export class PropertyService implements IPropertyService {
             }
             item.dashboard.state = 'processing'
             item.scraper.state = 'processing'
-            pendingSync.push({ item, full })
+            pendingSync.push({
+              item,
+              full,
+              nulledFields: queued?.nulledFields
+            })
           } else {
             const reason = loadError ?? 'Property not found after update'
             item.dashboard = { state: 'failed', reason }
@@ -3719,6 +3807,32 @@ export class PropertyService implements IPropertyService {
             'Property name',
             'Name'
           ])
+
+          // Columns the schema can't store as null, or that the row is matched
+          // by. Failing the row is clearer than quietly ignoring the NULL.
+          const notNullable: Array<[string, string | undefined]> = [
+            ['Property Name', propertyName],
+            ['Property Identifier', propertyIdentifierRaw],
+            [
+              'Portfolio',
+              findValue(row, ['Portfolio', 'Portfolio Name', 'Portfolio name'])
+            ],
+            ['Is Active', findValue(row, excelHeaderNames('isActive'))]
+          ]
+          const nullNotAllowed = notNullable.find(([, value]) =>
+            isExcelNullToken(value)
+          )
+          if (nullNotAllowed) {
+            result.errors.push({
+              row: rowNumber,
+              propertyName: isExcelNullToken(propertyName)
+                ? (normalizedRowIdentifier ?? 'Unknown')
+                : (propertyName ?? normalizedRowIdentifier ?? 'Unknown'),
+              error: `${nullNotAllowed[0]} cannot be set to NULL`
+            })
+            result.failureCount++
+            continue
+          }
 
           if (!normalizedRowIdentifier && !propertyName) {
             result.errors.push({
@@ -3838,11 +3952,15 @@ export class PropertyService implements IPropertyService {
               .replace(/_+/g, '_')
               .replace(/^_|_$/, '')
 
-          // Helper functions to resolve names to ObjectIds (find-or-create)
+          // Helper functions to resolve names to ObjectIds (find-or-create).
+          // A NULL cell is passed straight through so the final token pass
+          // clears the FK — resolving it would create a record literally
+          // named "NULL".
           const resolveProcessor = async (
             name?: string
           ): Promise<string | undefined> => {
             if (!name) return undefined
+            if (isExcelNullToken(name)) return EXCEL_NULL_TOKEN
             const normalized = name.trim()
             let rec = await this.prisma.processor.findFirst({
               where: { name: { equals: normalized, mode: 'insensitive' } }
@@ -3866,6 +3984,7 @@ export class PropertyService implements IPropertyService {
             name?: string
           ): Promise<string | undefined> => {
             if (!name) return undefined
+            if (isExcelNullToken(name)) return EXCEL_NULL_TOKEN
             const normalized = toUpperSnakeCase(name)
             let rec = await this.prisma.serviceType.findFirst({
               where: { type: { equals: normalized, mode: 'insensitive' } }
@@ -3889,6 +4008,7 @@ export class PropertyService implements IPropertyService {
             name?: string
           ): Promise<string | undefined> => {
             if (!name) return undefined
+            if (isExcelNullToken(name)) return EXCEL_NULL_TOKEN
             const normalized = name.trim()
             let rec = await this.prisma.billingType.findFirst({
               where: { name: { equals: normalized, mode: 'insensitive' } }
@@ -3912,6 +4032,7 @@ export class PropertyService implements IPropertyService {
             name?: string
           ): Promise<string | undefined> => {
             if (!name) return undefined
+            if (isExcelNullToken(name)) return EXCEL_NULL_TOKEN
             const normalized = toUpperSnakeCase(name)
             let rec = await this.prisma.frequency.findFirst({
               where: { name: { equals: normalized, mode: 'insensitive' } }
@@ -3935,6 +4056,7 @@ export class PropertyService implements IPropertyService {
             name?: string
           ): Promise<string | undefined> => {
             if (!name) return undefined
+            if (isExcelNullToken(name)) return EXCEL_NULL_TOKEN
             const normalized = name.trim()
             let rec = await this.prisma.priority.findFirst({
               where: { name: { equals: normalized, mode: 'insensitive' } }
@@ -4011,10 +4133,7 @@ export class PropertyService implements IPropertyService {
           }
 
           // Hotel address
-          const hotelAddress = findValue(
-            row,
-            excelHeaderNames('hotelAddress')
-          )
+          const hotelAddress = findValue(row, excelHeaderNames('hotelAddress'))
           if (hotelAddress !== undefined)
             updateData.hotel_address = hotelAddress
 
@@ -4038,7 +4157,9 @@ export class PropertyService implements IPropertyService {
 
           // Currency — resolve code → currency_id (find or create)
           const currencyCode = findValue(row, ['Currency', 'currency'])
-          if (currencyCode !== undefined) {
+          if (isExcelNullToken(currencyCode)) {
+            updateData.currency_id = EXCEL_NULL_TOKEN
+          } else if (currencyCode !== undefined) {
             const normalized = currencyCode.trim().toUpperCase()
             let currencyRec = await this.prisma.currency.findFirst({
               where: { code: { equals: normalized, mode: 'insensitive' } }
@@ -4065,7 +4186,9 @@ export class PropertyService implements IPropertyService {
             row,
             excelHeaderNames('nextDueDate')
           )
-          if (nextDueDateRaw) {
+          if (isExcelNullToken(nextDueDateRaw)) {
+            updateData.next_due_date = EXCEL_NULL_TOKEN
+          } else if (nextDueDateRaw) {
             const nextDueDate = parseDate(nextDueDateRaw)
             if (!nextDueDate) {
               result.errors.push({
@@ -4111,7 +4234,9 @@ export class PropertyService implements IPropertyService {
             row,
             excelHeaderNames('subportfolio')
           )
-          if (subportfolioName !== undefined && subportfolioName.trim()) {
+          if (isExcelNullToken(subportfolioName)) {
+            updateData.subportfolio_id = EXCEL_NULL_TOKEN
+          } else if (subportfolioName !== undefined && subportfolioName.trim()) {
             const portfolioId =
               updateData.portfolio_id ?? existingProperty.portfolio_id
             if (!portfolioId) {
@@ -4246,23 +4371,34 @@ export class PropertyService implements IPropertyService {
               updateData.is_active = false
           }
 
-          // Helper: parse boolean cell values
+          // Helpers: parse typed cell values. Both hand the NULL token back
+          // untouched so the final token pass clears the field rather than
+          // dropping the cell as unparseable.
           const parseBoolCell = (
             val: string | undefined
-          ): boolean | undefined => {
+          ): boolean | string | undefined => {
             if (val === undefined) return undefined
+            if (isExcelNullToken(val)) return EXCEL_NULL_TOKEN
             const l = val.toLowerCase()
             if (l === 'true' || l === '1' || l === 'yes') return true
             if (l === 'false' || l === '0' || l === 'no') return false
             return undefined
           }
 
-          // ── Expedia OTA fields ─────────────────────────────────────────────
-          const expediaIdVal = findValue(row, ['Expedia ID', 'Expedia id'])
-          if (expediaIdVal !== undefined) {
-            const n = parseInt(expediaIdVal)
-            if (!isNaN(n)) updateData.expedia_id = n
+          const parseIntCell = (
+            val: string | undefined
+          ): number | string | undefined => {
+            if (val === undefined) return undefined
+            if (isExcelNullToken(val)) return EXCEL_NULL_TOKEN
+            const n = parseInt(val)
+            return isNaN(n) ? undefined : n
           }
+
+          // ── Expedia OTA fields ─────────────────────────────────────────────
+          const expediaIdVal = parseIntCell(
+            findValue(row, ['Expedia ID', 'Expedia id'])
+          )
+          if (expediaIdVal !== undefined) updateData.expedia_id = expediaIdVal
           const expediaStatus = findValue(row, [
             'Expedia Status',
             'Expedia status'
@@ -4335,22 +4471,16 @@ export class PropertyService implements IPropertyService {
           )
           if (expediaSchedulerBool !== undefined)
             updateData.expedia_scheduler = expediaSchedulerBool
-          const expediaDurationVal = findValue(row, [
-            'Expedia Duration',
-            'Expedia duration'
-          ])
-          if (expediaDurationVal !== undefined) {
-            const n = parseInt(expediaDurationVal)
-            if (!isNaN(n)) updateData.expedia_duration = n
-          }
-          const expediaServiceFeeVal = findValue(row, [
-            'Expedia Service Fee',
-            'Expedia service fee'
-          ])
-          if (expediaServiceFeeVal !== undefined) {
-            const n = parseInt(expediaServiceFeeVal)
-            if (!isNaN(n)) updateData.expedia_service_fee = n
-          }
+          const expediaDurationVal = parseIntCell(
+            findValue(row, ['Expedia Duration', 'Expedia duration'])
+          )
+          if (expediaDurationVal !== undefined)
+            updateData.expedia_duration = expediaDurationVal
+          const expediaServiceFeeVal = parseIntCell(
+            findValue(row, ['Expedia Service Fee', 'Expedia service fee'])
+          )
+          if (expediaServiceFeeVal !== undefined)
+            updateData.expedia_service_fee = expediaServiceFeeVal
           const expediaCrs = findValue(row, ['Expedia CRS', 'Expedia crs'])
           if (expediaCrs !== undefined) updateData.expedia_crs = expediaCrs
           const expediaCrsDb = findValue(row, [
@@ -4410,14 +4540,11 @@ export class PropertyService implements IPropertyService {
           if (expediaSchedulerReviewDbTo !== undefined)
             updateData.expedia_scheduler_review_db_to =
               expediaSchedulerReviewDbTo
-          const expediaDbDurationVal = findValue(row, [
-            'Expedia DB Duration',
-            'Expedia db duration'
-          ])
-          if (expediaDbDurationVal !== undefined) {
-            const n = parseInt(expediaDbDurationVal)
-            if (!isNaN(n)) updateData.expedia_db_duration = n
-          }
+          const expediaDbDurationVal = parseIntCell(
+            findValue(row, ['Expedia DB Duration', 'Expedia db duration'])
+          )
+          if (expediaDbDurationVal !== undefined)
+            updateData.expedia_db_duration = expediaDbDurationVal
           const expediaCredVerified = parseBoolCell(
             findValue(row, [
               'Expedia Credential Verified',
@@ -4446,11 +4573,10 @@ export class PropertyService implements IPropertyService {
           if (toDb !== undefined) updateData.to_db = toDb
 
           // ── Booking OTA fields ────────────────────────────────────────────
-          const bookingIdVal = findValue(row, ['Booking ID', 'Booking id'])
-          if (bookingIdVal !== undefined) {
-            const n = parseInt(bookingIdVal)
-            if (!isNaN(n)) updateData.booking_id = n
-          }
+          const bookingIdVal = parseIntCell(
+            findValue(row, ['Booking ID', 'Booking id'])
+          )
+          if (bookingIdVal !== undefined) updateData.booking_id = bookingIdVal
           const bookingStatus = findValue(row, [
             'Booking Status',
             'Booking status'
@@ -4498,22 +4624,16 @@ export class PropertyService implements IPropertyService {
           )
           if (bookingSchedulerBool !== undefined)
             updateData.booking_scheduler = bookingSchedulerBool
-          const bookingDurationVal = findValue(row, [
-            'Booking Duration',
-            'Booking duration'
-          ])
-          if (bookingDurationVal !== undefined) {
-            const n = parseInt(bookingDurationVal)
-            if (!isNaN(n)) updateData.booking_duration = n
-          }
-          const bookingServiceFeeVal = findValue(row, [
-            'Booking Service Fee',
-            'Booking service fee'
-          ])
-          if (bookingServiceFeeVal !== undefined) {
-            const n = parseInt(bookingServiceFeeVal)
-            if (!isNaN(n)) updateData.booking_service_fee = n
-          }
+          const bookingDurationVal = parseIntCell(
+            findValue(row, ['Booking Duration', 'Booking duration'])
+          )
+          if (bookingDurationVal !== undefined)
+            updateData.booking_duration = bookingDurationVal
+          const bookingServiceFeeVal = parseIntCell(
+            findValue(row, ['Booking Service Fee', 'Booking service fee'])
+          )
+          if (bookingServiceFeeVal !== undefined)
+            updateData.booking_service_fee = bookingServiceFeeVal
           const bookingCrs = findValue(row, ['Booking CRS', 'Booking crs'])
           if (bookingCrs !== undefined) updateData.booking_crs = bookingCrs
           const bookingRunDate = findExcelDateValue(
@@ -4550,11 +4670,10 @@ export class PropertyService implements IPropertyService {
             updateData.booking_otp_phone = bookingOtpPhone
 
           // ── Agoda OTA fields ──────────────────────────────────────────────
-          const agodaIdVal = findValue(row, ['Agoda ID', 'Agoda id'])
-          if (agodaIdVal !== undefined) {
-            const n = parseInt(agodaIdVal)
-            if (!isNaN(n)) updateData.agoda_id = n
-          }
+          const agodaIdVal = parseIntCell(
+            findValue(row, ['Agoda ID', 'Agoda id'])
+          )
+          if (agodaIdVal !== undefined) updateData.agoda_id = agodaIdVal
           const agodaStatus = findValue(row, ['Agoda Status', 'Agoda status'])
           if (agodaStatus !== undefined) updateData.agoda_status = agodaStatus
           const agodaBillingType = findValue(row, [
@@ -4598,22 +4717,16 @@ export class PropertyService implements IPropertyService {
           )
           if (agodaSchedulerBool !== undefined)
             updateData.agoda_scheduler = agodaSchedulerBool
-          const agodaDurationVal = findValue(row, [
-            'Agoda Duration',
-            'Agoda duration'
-          ])
-          if (agodaDurationVal !== undefined) {
-            const n = parseInt(agodaDurationVal)
-            if (!isNaN(n)) updateData.agoda_duration = n
-          }
-          const agodaServiceFeeVal = findValue(row, [
-            'Agoda Service Fee',
-            'Agoda service fee'
-          ])
-          if (agodaServiceFeeVal !== undefined) {
-            const n = parseInt(agodaServiceFeeVal)
-            if (!isNaN(n)) updateData.agoda_service_fee = n
-          }
+          const agodaDurationVal = parseIntCell(
+            findValue(row, ['Agoda Duration', 'Agoda duration'])
+          )
+          if (agodaDurationVal !== undefined)
+            updateData.agoda_duration = agodaDurationVal
+          const agodaServiceFeeVal = parseIntCell(
+            findValue(row, ['Agoda Service Fee', 'Agoda service fee'])
+          )
+          if (agodaServiceFeeVal !== undefined)
+            updateData.agoda_service_fee = agodaServiceFeeVal
           const agodaCrs = findValue(row, ['Agoda CRS', 'Agoda crs'])
           if (agodaCrs !== undefined) updateData.agoda_crs = agodaCrs
           const agodaRunDate = findExcelDateValue(
@@ -4655,7 +4768,11 @@ export class PropertyService implements IPropertyService {
             'Discontinued Email IDs',
             'Discontinued Email Ids'
           ])
-          if (discontinuedEmailIds !== undefined) {
+          if (isExcelNullToken(discontinuedEmailIds)) {
+            // Non-nullable String[] — the repository turns the null back into
+            // an empty array.
+            updateData.discontinued_email_ids = EXCEL_NULL_TOKEN
+          } else if (discontinuedEmailIds !== undefined) {
             updateData.discontinued_email_ids = discontinuedEmailIds
               .split(',')
               .map((e: string) => e.trim())
@@ -4688,27 +4805,30 @@ export class PropertyService implements IPropertyService {
             updateData.primary_case_email = caseContactEmail
 
           // ── QP / FP credentials (stored on Property, encrypted) ───────────
+          const encryptCell = (val: string): string =>
+            isExcelNullToken(val)
+              ? EXCEL_NULL_TOKEN
+              : this.encryptionUtil.encrypt(val)
           const qpUsername = findValue(row, excelHeaderNames('qpUsername'))
           if (qpUsername !== undefined) updateData.qp_username = qpUsername
           const qpPasswordVal = findValue(row, excelHeaderNames('qpPassword'))
           if (qpPasswordVal !== undefined)
-            updateData.qp_password = this.encryptionUtil.encrypt(qpPasswordVal)
+            updateData.qp_password = encryptCell(qpPasswordVal)
           const qpApiKeyVal = findValue(row, excelHeaderNames('qpApiKey'))
           if (qpApiKeyVal !== undefined)
-            updateData.qp_api_key = this.encryptionUtil.encrypt(qpApiKeyVal)
+            updateData.qp_api_key = encryptCell(qpApiKeyVal)
           const fpUsernameVal = findValue(row, excelHeaderNames('fpUsername'))
           if (fpUsernameVal !== undefined)
             updateData.fp_username = fpUsernameVal
           const fpPasswordVal = findValue(row, ['FP Password', 'Fp Password'])
           if (fpPasswordVal !== undefined)
-            updateData.fp_password = this.encryptionUtil.encrypt(fpPasswordVal)
+            updateData.fp_password = encryptCell(fpPasswordVal)
           const webmailPasswordVal = findValue(row, [
             'Webmail Password',
             'Webmail password'
           ])
           if (webmailPasswordVal !== undefined)
-            updateData.webmail_password =
-              this.encryptionUtil.encrypt(webmailPasswordVal)
+            updateData.webmail_password = encryptCell(webmailPasswordVal)
 
           // ── Credential fields (PropertyCredentials collection) ─────────────
           const expediaUsername = findValue(
@@ -4816,6 +4936,11 @@ export class PropertyService implements IPropertyService {
             agodaSecondaryUsername ||
             agodaSecondaryPassword
 
+          // Every NULL cell has travelled this far as the raw token; turn the
+          // whole lot into real nulls at once and remember which columns were
+          // cleared so the sync payloads can say so too.
+          const nulledFields = applyExcelNullTokens(updateData)
+
           const hasPropertyUpdate = Object.keys(updateData).length > 0
 
           if (!hasPropertyUpdate && !hasCredentialsUpdate) {
@@ -4885,6 +5010,8 @@ export class PropertyService implements IPropertyService {
             if (agodaSecondaryPassword)
               credentialsData.agodaSecondaryPassword = agodaSecondaryPassword
 
+            nulledFields.push(...applyExcelNullTokens(credentialsData))
+
             const existingCredentials = await withTimeout(
               this.credentialsService.findByPropertyId(propertyId),
               UPLOAD_JOB_DB_TIMEOUT_MS,
@@ -4913,8 +5040,11 @@ export class PropertyService implements IPropertyService {
 
           // Notes — semicolon-separated texts, each stored as its own record
           // (same column and splitting rule as the import flow).
+          // Notes are appended records rather than a field, so a NULL cell has
+          // nothing to clear — treat it as an empty cell instead of filing a
+          // note that literally reads "NULL".
           const notesRaw = findValue(row, ['Notes'])
-          if (notesRaw) {
+          if (notesRaw && !isExcelNullToken(notesRaw)) {
             const noteTexts = notesRaw
               .split(';')
               .map(t => t.trim())
@@ -4943,7 +5073,11 @@ export class PropertyService implements IPropertyService {
 
           result.successCount++
           result.successfulUpdates.push(existingProperty.name)
-          syncQueue.push({ rowNumber, propertyId: existingProperty.id })
+          syncQueue.push({
+            rowNumber,
+            propertyId: existingProperty.id,
+            nulledFields
+          })
         } catch (error) {
           const nameFromRow =
             findValue(row, [
@@ -5874,6 +6008,26 @@ export class PropertyService implements IPropertyService {
     return out
   }
 
+  /**
+   * Writes the string "NULL" into `payload` for every column an upload row
+   * cleared, so the receiving service clears it too instead of reading the
+   * absent key as "unchanged".
+   */
+  private applyNulledSyncFields(
+    payload: Record<string, any>,
+    nulledFields: readonly string[] | undefined,
+    fieldMap: Readonly<Record<string, string | readonly string[]>>
+  ): void {
+    if (!nulledFields?.length) return
+    for (const field of nulledFields) {
+      const keys = fieldMap[field]
+      if (!keys) continue
+      for (const key of typeof keys === 'string' ? [keys] : keys) {
+        payload[key] = EXCEL_NULL_TOKEN
+      }
+    }
+  }
+
   private decryptCredentialValue(val: string | null | undefined): string {
     if (!val) return ''
     try {
@@ -5885,7 +6039,8 @@ export class PropertyService implements IPropertyService {
 
   private async syncUpsertPropertyToScraper(
     property: PropertyWithRelations,
-    timeoutMs?: number
+    timeoutMs?: number,
+    nulledFields?: readonly string[]
   ): Promise<{ success: boolean; reason?: string }> {
     if (!this.scraperJwtClient) {
       const reason =
@@ -5959,6 +6114,12 @@ export class PropertyService implements IPropertyService {
         ? { booking_password: safeDecrypt(credentials.bookingPassword) }
         : {})
     }
+
+    this.applyNulledSyncFields(
+      payload,
+      nulledFields,
+      SCRAPER_NULLABLE_SYNC_FIELDS
+    )
 
     try {
       const r = await this.scraperJwtClient.post(
@@ -6153,7 +6314,8 @@ export class PropertyService implements IPropertyService {
 
   private async syncUpsertPropertyToDashboard(
     property: PropertyWithRelations,
-    timeoutMs?: number
+    timeoutMs?: number,
+    nulledFields?: readonly string[]
   ): Promise<{ success: boolean; reason?: string }> {
     if (!this.dashboardJwtClient) {
       const reason =
@@ -6200,6 +6362,11 @@ export class PropertyService implements IPropertyService {
       },
       card_descriptor: property.card_descriptor ?? '',
       portfolio_parent_id: property.portfolio_id,
+      // DBMS owns the OTA access levels, so send them unconditionally — a null
+      // has to reach the dashboard and clear the old value there.
+      expedia_access_level: property.expedia_access_level ?? null,
+      booking_access_level: property.booking_access_level ?? null,
+      agoda_access_level: property.agoda_access_level ?? null,
       credentials: {
         expedia_id: property.expedia_id?.toString() ?? '',
         expedia_username: credentials?.expediaUsername ?? '',
@@ -6212,6 +6379,17 @@ export class PropertyService implements IPropertyService {
         booking_password: safeDecrypt(credentials?.bookingPassword)
       }
     }
+
+    this.applyNulledSyncFields(
+      payload,
+      nulledFields,
+      DASHBOARD_NULLABLE_SYNC_FIELDS
+    )
+    this.applyNulledSyncFields(
+      payload.credentials,
+      nulledFields,
+      DASHBOARD_NULLABLE_CREDENTIAL_SYNC_FIELDS
+    )
 
     try {
       const r = await this.dashboardJwtClient.post(

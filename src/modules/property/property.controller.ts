@@ -1,27 +1,27 @@
 import {
-    BadRequestException,
-    Body,
-    Controller,
-    Delete,
-    Get,
-    HttpCode,
-    Inject,
-    Param,
-    Patch,
-    Post,
-    UploadedFile,
-    UseGuards,
-    UseInterceptors
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Inject,
+  Param,
+  Patch,
+  Post,
+  UploadedFile,
+  UseGuards,
+  UseInterceptors
 } from '@nestjs/common'
 import {
-    ApiBearerAuth,
-    ApiBody,
-    ApiConsumes,
-    ApiExtraModels,
-    ApiHeader,
-    ApiOperation,
-    ApiResponse,
-    ApiTags
+  ApiBearerAuth,
+  ApiBody,
+  ApiConsumes,
+  ApiExtraModels,
+  ApiHeader,
+  ApiOperation,
+  ApiResponse,
+  ApiTags
 } from '@nestjs/swagger'
 import { ParseQuery } from '../../common/decorators/parse-query.decorator'
 import { RequirePermission } from '../../common/decorators/require-permission.decorator'
@@ -30,8 +30,8 @@ import { PermissionGuard } from '../../common/guards/permission.guard'
 import { ExcelFileInterceptor } from '../../common/interceptors/excel-file.interceptor'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
 import {
-    ModuleType,
-    PermissionAction
+  ModuleType,
+  PermissionAction
 } from '../../common/interfaces/permission.interface'
 import { CurrentUser } from '../auth/decorators/current-user.decorator'
 import { Public } from '../auth/decorators/public.decorator'
@@ -41,25 +41,25 @@ import { PropertyAgodaCheckerService } from './property-agoda-checker.service'
 import { PropertyBookingCheckerService } from './property-booking-checker.service'
 import { PropertyExpediaCheckerService } from './property-expedia-checker.service'
 import {
-    AgodaCheckPropertiesDto,
-    AllDataForGlobalFilterResponseDto,
-    BookingCheckPropertiesDto,
-    BulkDeletePropertyDto,
-    BulkTransferPropertyDto,
-    CreatePropertyDto,
-    ExpediaCheckPropertiesDto,
-    ExportPropertyExcelDto,
-    GetPropertyCredentialDto,
-    GlobalFilterIdNameDto,
-    GlobalFilterSubportfolioDto,
-    PROPERTY_FILTER_OPERATION_DESCRIPTION,
-    PROPERTY_FILTER_SWAGGER_EXAMPLE_FILTERS,
-    PropertyFilterDto,
-    SyncBulkDeleteBodyDto,
-    SyncByOtaDto,
-    TransferPropertyDto,
-    UpdatePropertyDto,
-    UploadJobAcceptedDto
+  AgodaCheckPropertiesDto,
+  AllDataForGlobalFilterResponseDto,
+  BookingCheckPropertiesDto,
+  BulkDeletePropertyDto,
+  BulkTransferPropertyDto,
+  CreatePropertyDto,
+  ExpediaCheckPropertiesDto,
+  ExportPropertyExcelDto,
+  GetPropertyCredentialDto,
+  GlobalFilterIdNameDto,
+  GlobalFilterSubportfolioDto,
+  PROPERTY_FILTER_OPERATION_DESCRIPTION,
+  PROPERTY_FILTER_SWAGGER_EXAMPLE_FILTERS,
+  PropertyFilterDto,
+  SyncBulkDeleteBodyDto,
+  SyncByOtaDto,
+  TransferPropertyDto,
+  UpdatePropertyDto,
+  UploadJobAcceptedDto
 } from './property.dto'
 import type { IPropertyService } from './property.interface'
 
@@ -242,19 +242,26 @@ export class PropertyController {
     description:
       'Useful to resume watching progress after a page refresh. Returns undefined if the caller has no job in the last 24 hours.'
   })
-  @ApiResponse({ status: 200, description: 'Latest upload job status (or empty body if none)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Latest upload job status (or empty body if none)'
+  })
   getCurrentUploadJob(@CurrentUser() user: IUserWithPermissions) {
     return this.propertyService.getLatestUploadJobForUser(user.id)
   }
 
   @Get('upload-job/:jobId')
   @ApiOperation({
-    summary: 'Poll the live status of a background bulk import / bulk-update job',
+    summary:
+      'Poll the live status of a background bulk import / bulk-update job',
     description:
       'The import and bulk-update endpoints return instantly with a jobId. Poll this endpoint to watch per-portfolio and per-property progress across DBMS, scraper and dashboard (state: pending | processing | created | updated | skipped | failed). Job status is retained in Redis for 24 hours after completion; a fresh file upload always starts a new job.'
   })
   @ApiResponse({ status: 200, description: 'Upload job status' })
-  @ApiResponse({ status: 404, description: 'Job not found (expired or unknown jobId)' })
+  @ApiResponse({
+    status: 404,
+    description: 'Job not found (expired or unknown jobId)'
+  })
   getUploadJob(@Param('jobId') jobId: string) {
     return this.propertyService.getUploadJobStatus(jobId)
   }
@@ -464,7 +471,7 @@ export class PropertyController {
   @ApiOperation({
     summary: 'Export filtered properties to Excel and send via email (async)',
     description:
-      "Queues an Excel (.xlsx) export of the filtered property list and returns 200 immediately — the file is generated in the background and emailed to the authenticated user's address. Files up to 10MB arrive as an attachment; larger ones are uploaded to S3 and the email carries a presigned download link valid for 7 days. All filters are optional — send an empty body {} to export everything. Pagination (page/limit) is ignored; all matching records are always exported, up to a limit of 25,000 rows per file — if the filters match more than that, no file is produced and the caller is emailed to narrow the filters. Column headers are the canonical spellings that /property/import and /property/bulk-update accept, so an exported file can be edited and re-uploaded to either endpoint without renaming anything. Pass `columns` as an array of column codes to include only those columns; omit, null, or [] to export all columns. Columns are additionally narrowed by the caller's role column template, so a restricted role never receives columns it cannot see in the list view. Because the work is backgrounded, outcomes that used to be returned inline (no matching records, no permitted columns, generation failure) are reported by email instead."
+      "Queues an Excel (.xlsx) export of the filtered property list and returns 200 immediately — the file is generated in the background and emailed to the authenticated user's address. Files up to 10MB arrive as an attachment; larger ones are uploaded to S3 and the email carries a presigned download link valid for 7 days. All filters are optional — send an empty body {} to export everything. Pagination (page/limit) is ignored; all matching records are always exported, up to a limit of 25,000 rows per file — if the filters match more than that, no file is produced and the caller is emailed to narrow the filters. Column headers are the canonical spellings that /property/import and /property/bulk-update accept, so an exported file can be edited and re-uploaded to either endpoint without renaming anything. Pass `columns` as an array of column codes to include only those columns; omit, null, or [] to export all columns. Columns are additionally narrowed by the caller's role column template, so a restricted role never receives columns it cannot see in the list view. Exports are queued and only a couple are built at a time, so a request made while others are running waits its turn; the file still arrives by email. Because the work is backgrounded, outcomes that used to be returned inline (no matching records, no permitted columns, generation failure, or a queue that is too long to accept more work) are reported by email instead."
   })
   @ApiBody({
     type: ExportPropertyExcelDto,
@@ -734,7 +741,7 @@ export class PropertyController {
   @ApiOperation({
     summary: 'Transfer property to a different portfolio',
     description:
-      "Moves a property to a new portfolio in DBMS, then pushes the new " +
+      'Moves a property to a new portfolio in DBMS, then pushes the new ' +
       "portfolio to the dashboard and the scraper. Requires the caller's " +
       'account password for confirmation. The two downstream upserts are ' +
       'independent — one failing never prevents the other. A 200 means the ' +
@@ -845,7 +852,10 @@ export class PropertyController {
         message: 'Property deleted successfully',
         sync: {
           dashboard: { success: true },
-          scraper: { success: false, reason: 'Property not found with parent_id: abc' }
+          scraper: {
+            success: false,
+            reason: 'Property not found with parent_id: abc'
+          }
         }
       }
     }
@@ -962,7 +972,7 @@ export class PropertyController {
   @ApiOperation({
     summary: 'Bulk transfer properties to a different portfolio',
     description:
-      "Accepts the transfer and runs it in the background, like bulk update. " +
+      'Accepts the transfer and runs it in the background, like bulk update. ' +
       "The caller's account password, the target portfolio and the property " +
       'ids are validated up front (a bad password or portfolio still returns ' +
       '400 immediately); everything after that — the DBMS moves and the ' +
