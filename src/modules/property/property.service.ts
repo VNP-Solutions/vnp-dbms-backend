@@ -2823,7 +2823,10 @@ export class PropertyService implements IPropertyService {
             str === 'no' ||
             str === 'n' ||
             str === 'not verified' ||
-            str === 'access lost'
+            str === 'access lost' ||
+            str === 'access level issue' ||
+            str === 'access required' ||
+            str === 'no review required'
           )
             return 'false'
           return undefined
@@ -4386,11 +4389,29 @@ export class PropertyService implements IPropertyService {
           const parseBoolCell = (
             val: string | undefined
           ): boolean | string | undefined => {
-            if (val === undefined) return undefined
+            if (val === null || val === undefined || val === '') return undefined
             if (isExcelNullToken(val)) return EXCEL_NULL_TOKEN
-            const l = val.toLowerCase()
-            if (l === 'true' || l === '1' || l === 'yes') return true
-            if (l === 'false' || l === '0' || l === 'no') return false
+            const str = String(val).trim().toLowerCase()
+            if (
+              str === 'true' ||
+              str === '1' ||
+              str === 'yes' ||
+              str === 'y' ||
+              str === 'verified'
+            )
+              return true
+            if (
+              str === 'false' ||
+              str === '0' ||
+              str === 'no' ||
+              str === 'n' ||
+              str === 'not verified' ||
+              str === 'access lost' ||
+              str === 'access level issue' ||
+              str === 'access required' ||
+              str === 'no review required'
+            )
+              return false
             return undefined
           }
 
