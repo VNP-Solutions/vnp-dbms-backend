@@ -2088,13 +2088,14 @@ export class AgodaCheckPropertyItemDto {
   @IsNotEmpty()
   agoda_username: string
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     example: 'secret123',
-    description: 'Agoda account password (never logged)'
+    description:
+      'Agoda account password (optional — Agoda is not password-authenticated; never logged)'
   })
   @IsString()
-  @IsNotEmpty()
-  agoda_password: string
+  @IsOptional()
+  agoda_password?: string
 }
 
 export class AgodaCheckPropertiesDto {
