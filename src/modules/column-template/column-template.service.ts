@@ -1,4 +1,4 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common'
+import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common'
 import { ColumnTemplate } from '@prisma/client'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
 import { PrismaService } from '../prisma/prisma.service'
@@ -58,6 +58,14 @@ export class ColumnTemplateService implements IColumnTemplateService {
 
   async remove(id: string): Promise<{ message: string }> {
     await this.findOne(id)
+
+    const roleNames = await this.repo.findAssociatedRoleNames(id)
+    if (roleNames.length > 0) {
+      throw new BadRequestException(
+        `This column template is associated with roles ${roleNames.join(', ')}.`
+      )
+    }
+
     await this.repo.delete(id)
     return { message: 'Column template deleted successfully' }
   }

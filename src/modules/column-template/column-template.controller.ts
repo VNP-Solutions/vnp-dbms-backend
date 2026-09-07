@@ -86,6 +86,10 @@ export class ColumnTemplateController {
   @Delete(':id')
   @ApiOperation({ summary: 'Delete column template by ID' })
   @ApiResponse({ status: 200, description: 'Column template deleted' })
+  @ApiResponse({
+    status: 400,
+    description: 'Column template is associated with one or more roles'
+  })
   @ApiResponse({ status: 404, description: 'Column template not found' })
   remove(@Param('id') id: string) {
     return this.service.remove(id)
