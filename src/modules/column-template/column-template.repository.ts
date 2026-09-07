@@ -27,6 +27,15 @@ export class ColumnTemplateRepository implements IColumnTemplateRepository {
     })
   }
 
+  async findAssociatedRoleNames(id: string): Promise<string[]> {
+    const roles = await this.prisma.userRole.findMany({
+      where: { user_column_template_id: id },
+      select: { name: true },
+      orderBy: { name: 'asc' }
+    })
+    return roles.map(role => role.name)
+  }
+
   update(id: string, data: UpdateColumnTemplateDto): Promise<ColumnTemplate> {
     return this.prisma.columnTemplate.update({ where: { id }, data })
   }

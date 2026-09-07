@@ -12,6 +12,7 @@ export interface IColumnTemplateRepository {
   findAll(): Promise<ColumnTemplate[]>
   findById(id: string): Promise<ColumnTemplate | null>
   findByUserId(userId: string): Promise<ColumnTemplate[]>
+  findAssociatedRoleNames(id: string): Promise<string[]>
   update(id: string, data: UpdateColumnTemplateDto): Promise<ColumnTemplate>
   delete(id: string): Promise<ColumnTemplate>
 }
