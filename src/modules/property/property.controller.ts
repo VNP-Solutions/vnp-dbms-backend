@@ -1033,6 +1033,7 @@ export class PropertyController {
     summary: 'Dispatch Agoda property check',
     description:
       'Groups the given properties by Agoda account (agoda_username) and pushes one check payload per group to the AWS SQS queue. ' +
+      'agoda_password is optional because Agoda is not password-authenticated. ' +
       'After enqueueing, the checker Lambda is triggered asynchronously to drain the queue and process the checks in the background.'
   })
   @ApiBody({ type: AgodaCheckPropertiesDto })
