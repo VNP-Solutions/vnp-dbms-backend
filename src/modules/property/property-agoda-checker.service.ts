@@ -59,7 +59,7 @@ export class PropertyAgodaCheckerService {
     const messages: SqsMessage[] = Array.from(groups.values()).map(groupItems => {
       const payload: AgodaCheckerUpstreamPayload = {
         username: groupItems[0].agoda_username,
-        password: groupItems[0].agoda_password,
+        password: groupItems[0].agoda_password ?? '',
         agoda_ids: groupItems.map(i => ({ _id: i._id, agoda_id: i.agoda_id }))
       }
 
