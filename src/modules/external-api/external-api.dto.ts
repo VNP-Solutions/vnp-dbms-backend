@@ -11,6 +11,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Matches,
   Max,
   Min,
   ValidateNested
@@ -488,6 +489,21 @@ export class BulkCreateParserJobsDto {
   @IsString()
   @IsIn(['expedia', 'booking', 'agoda', 'expedia_db'])
   ota_type: ParserJobOtaType
+
+  @ApiPropertyOptional({
+    example: '2026-08-31',
+    description:
+      'Optional override for the historical "to" date. When present, every property in ' +
+      'the request uses this date in place of its own <ota>_to value while the job ' +
+      'window is calculated; the calculation itself is unchanged. When omitted, each ' +
+      'property uses its own stored <ota>_to as before. Format: YYYY-MM-DD.'
+  })
+  @IsOptional()
+  @IsDateString({ strict: true })
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, {
+    message: 'end_date must be a calendar date in YYYY-MM-DD format'
+  })
+  end_date?: string
 }
 
 /** A single job entry forwarded to the parser backend */
