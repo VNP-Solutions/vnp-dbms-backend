@@ -431,12 +431,16 @@ export class ExternalRecurringJobsService {
             : ota === 'booking'
               ? property.booking_id
               : property.agoda_id,
+        // A request-level `end_date` stands in for every property's own
+        // historical "to" date. The window calculation below is unchanged —
+        // only the date it starts from differs.
         historical_to:
-          ota === 'expedia'
+          dto.end_date ??
+          (ota === 'expedia'
             ? property.expedia_to
             : ota === 'booking'
               ? property.booking_to
-              : property.agoda_to,
+              : property.agoda_to),
         crs:
           ota === 'expedia'
             ? property.expedia_crs
