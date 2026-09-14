@@ -493,10 +493,10 @@ export class BulkCreateParserJobsDto {
   @ApiPropertyOptional({
     example: '2026-08-31',
     description:
-      'Optional override for the historical "to" date. When present, every property in ' +
-      'the request uses this date in place of its own <ota>_to value while the job ' +
-      'window is calculated; the calculation itself is unchanged. When omitted, each ' +
-      'property uses its own stored <ota>_to as before. Format: YYYY-MM-DD.'
+      'Optional fixed end date for the job window. When present, each property\'s job runs ' +
+      'from its own <ota>_to + 1 day through this date and CRS is not used; a property whose ' +
+      '<ota>_to + 1 day falls after this date is skipped. When omitted, the window is ' +
+      'calculated from <ota>_to and CRS as before. Format: YYYY-MM-DD.'
   })
   @IsOptional()
   @IsDateString({ strict: true })
@@ -514,7 +514,7 @@ export interface ParserJobEntryPayload {
   ota_type: ParserJobOtaType
   /** Job window start date (YYYY-MM-DD) — historical_to + 1 day */
   start_date: string
-  /** Job window end date  (YYYY-MM-DD) — start_date + CRS months [+ 1 yr for booking] */
+  /** Job window end date  (YYYY-MM-DD) — the request's end_date when given, otherwise start_date + CRS days [+ 1 yr for booking] */
   end_date: string
   /** Billing type name for this OTA, if configured */
   billing_type: string | null

@@ -89,8 +89,9 @@ export class ExternalRecurringJobsController {
       'If the scraper backend returns an error, the requesting user is notified by email. ' +
       'For each property, creates one job for the specified OTA type when historical "to" date ' +
       'and CRS are configured. Jobs are forwarded to POST /api/jobs/bulk-create-from-dbms. ' +
-      'Pass the optional `end_date` (YYYY-MM-DD) to run the same calculation against that ' +
-      'date for every property in the request instead of each one\'s own <ota>_to value.'
+      'Pass the optional `end_date` (YYYY-MM-DD) to fix the window end: each property then runs ' +
+      'from its own <ota>_to + 1 day through `end_date`, CRS is not used, and a property whose ' +
+      '<ota>_to + 1 day is after `end_date` is skipped.'
   })
   @ApiBody({ type: BulkCreateParserJobsDto })
   @ApiResponse({

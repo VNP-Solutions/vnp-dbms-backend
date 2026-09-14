@@ -7,6 +7,8 @@ Welcome to the VNP DBMS Backend documentation. This folder contains comprehensiv
 ```
 docs/
 ├── README.md (this file)
+├── access-portal/
+│   └── ACCESS_PORTAL_DESIGN.md
 └── role-management/
     ├── QUICK_START.md
     ├── MULTI_PROJECT_ROLE_MANAGEMENT.md
@@ -43,6 +45,15 @@ Documentation for the Multi-Project Role Management System that enables unified 
 - [API Endpoints →](./role-management/MULTI_PROJECT_ROLE_MANAGEMENT.md#api-endpoints)
 - [Integration Guide →](./role-management/MULTI_PROJECT_ROLE_MANAGEMENT.md#integration-with-dashboard-and-parser)
 
+### 🚪 Access Portal
+
+Design for the internal Access Portal that opens DBMS, Dashboard and Parser from one place using saved, encrypted credentials. **Status: draft for review — not implemented.**
+
+**Location:** [`access-portal/`](./access-portal/)
+
+**Files:**
+- **[ACCESS_PORTAL_DESIGN.md](./access-portal/ACCESS_PORTAL_DESIGN.md)** - Flows, data model, answers to the client's complexities, app changes and rollout
+
 ---
 
 ## 🎯 Quick Navigation
@@ -63,6 +74,9 @@ Documentation for the Multi-Project Role Management System that enables unified 
 
 **...integrate with Dashboard or Parser**
 → Follow [Integration Guide](./role-management/MULTI_PROJECT_ROLE_MANAGEMENT.md#integration-with-dashboard-and-parser)
+
+**...understand the Access Portal design**
+→ Read [access-portal/ACCESS_PORTAL_DESIGN.md](./access-portal/ACCESS_PORTAL_DESIGN.md)
 
 ---
 
@@ -131,5 +145,5 @@ When adding new documentation:
 
 ---
 
-**Last Updated:** March 3, 2026  
+**Last Updated:** September 13, 2026  
 **Maintained by:** VNP Development Team
