@@ -358,10 +358,13 @@ export class ExternalRecurringJobsService {
   /**
    * For each property ID in the request:
    *  1. Fetches the property from the database.
-   *  2. For every OTA type that has a configured historical-to date and CRS value,
-   *     computes:
-   *       start_date = historical_to + 1 day
-   *       end_date   = start_date + crs_months  (booking gets +1 year on top)
+   *  2. For the requested OTA, computes the job window from the property's own
+   *     historical-to date:
+   *       with dto.end_date:  start_date = historical_to + 1 day
+   *                           end_date   = dto.end_date  (CRS is not used)
+   *       without it:         start_date = historical_to + 1 day
+   *                           end_date   = start_date + crs_days  (booking gets +1 year on top)
+   *                           (Agoda uses its own ±crs window instead)
    *  3. Forwards all generated jobs to the parser backend in a single POST request.
    *
    * Returns a summary of jobs created / OTAs skipped per property alongside the
@@ -431,16 +434,12 @@ export class ExternalRecurringJobsService {
             : ota === 'booking'
               ? property.booking_id
               : property.agoda_id,
-        // A request-level `end_date` stands in for every property's own
-        // historical "to" date. The window calculation below is unchanged —
-        // only the date it starts from differs.
         historical_to:
-          dto.end_date ??
-          (ota === 'expedia'
+          ota === 'expedia'
             ? property.expedia_to
             : ota === 'booking'
               ? property.booking_to
-              : property.agoda_to),
+              : property.agoda_to,
         crs:
           ota === 'expedia'
             ? property.expedia_crs
@@ -456,6 +455,8 @@ export class ExternalRecurringJobsService {
         is_booking: ota === 'booking'
       }
 
+      let jobWindow: { startDate: string; endDate: string } | null = null
+
       if (otaConfig.ota_id == null) {
         result.skipped_otas.push({
           ota_type: ota,
@@ -466,6 +467,19 @@ export class ExternalRecurringJobsService {
           ota_type: ota,
           reason: `No historical "to" date (${ota}_to) configured`
         })
+      } else if (dto.end_date) {
+        // Fixed end: the window still starts the day after this property's own
+        // {ota}_to, but ends on the requested date. CRS plays no part, so the
+        // per-OTA formulas (Agoda's ±crs window, Booking's extra year) don't apply.
+        const startDate = calcParserJobStartDate(otaConfig.historical_to)
+        if (dto.end_date < startDate) {
+          result.skipped_otas.push({
+            ota_type: ota,
+            reason: `end_date ${dto.end_date} is before start_date ${startDate} (${ota}_to + 1 day)`
+          })
+        } else {
+          jobWindow = { startDate, endDate: dto.end_date }
+        }
       } else {
         const crsDays = parseCrsDays(otaConfig.crs)
         if (crsDays === null) {
@@ -473,30 +487,36 @@ export class ExternalRecurringJobsService {
             ota_type: ota,
             reason: `CRS value "${otaConfig.crs}" is missing or not a valid positive integer`
           })
-        } else {
-          let startDate: string
-          let endDate: string
-
-          if (ota === 'agoda') {
-            startDate = calcAgodaParserJobStartDate(otaConfig.historical_to, crsDays)
-            endDate = calcAgodaParserJobEndDate(otaConfig.historical_to, crsDays)
-          } else {
-            startDate = calcParserJobStartDate(otaConfig.historical_to)
-            endDate = calcParserJobEndDate(startDate, crsDays, otaConfig.is_booking)
+        } else if (ota === 'agoda') {
+          jobWindow = {
+            startDate: calcAgodaParserJobStartDate(otaConfig.historical_to, crsDays),
+            endDate: calcAgodaParserJobEndDate(otaConfig.historical_to, crsDays)
           }
-
-          jobs.push({
-            parent_id: property.id,
-            ota_type: ota,
-            start_date: startDate,
-            end_date: endDate,
-            billing_type: otaConfig.billing_type,
-            priority: jobPriority,
-            booking_otp_number: property.booking_otp_number ?? null
-          })
-
-          result.jobs_created.push({ ota_type: ota, start_date: startDate, end_date: endDate })
+        } else {
+          const startDate = calcParserJobStartDate(otaConfig.historical_to)
+          jobWindow = {
+            startDate,
+            endDate: calcParserJobEndDate(startDate, crsDays, otaConfig.is_booking)
+          }
         }
+      }
+
+      if (jobWindow) {
+        jobs.push({
+          parent_id: property.id,
+          ota_type: ota,
+          start_date: jobWindow.startDate,
+          end_date: jobWindow.endDate,
+          billing_type: otaConfig.billing_type,
+          priority: jobPriority,
+          booking_otp_number: property.booking_otp_number ?? null
+        })
+
+        result.jobs_created.push({
+          ota_type: ota,
+          start_date: jobWindow.startDate,
+          end_date: jobWindow.endDate
+        })
       }
 
       summary.push(result)
