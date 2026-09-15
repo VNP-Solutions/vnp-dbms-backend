@@ -183,9 +183,11 @@ export class ExternalRecurringJobsController {
       '(3) Computes the run date: end_date + 1 day + CRS days + 15 days (uses CRS 30 after HIGH→REGULAR). ' +
       '(4) Persists the run date into the OTA run-date field ' +
       '(expedia_run_date / booking_run_date / agoda_run_date). ' +
+      'When a REGULAR property has no valid CRS (e.g. its job was sent with a fixed end_date), ' +
+      'steps 3-4 are skipped: {ota}_to is still written, the run date is left unchanged, and ' +
+      'run_date is returned as null. ' +
       'All fields are written in a single DB update. ' +
       '200 = updates applied successfully; ' +
-      '400 = CRS value is missing or invalid (REGULAR only); ' +
       '404 = property not found.'
   })
   @ApiBody({ type: UpdateHistoricalAndRunDateDto })
@@ -201,7 +203,7 @@ export class ExternalRecurringJobsController {
       }
     }
   })
-  @ApiResponse({ status: 400, description: 'CRS value is missing or not a valid positive integer' })
+  @ApiResponse({ status: 400, description: 'Invalid request body' })
   @ApiResponse({ status: 404, description: 'Property not found' })
   async updateHistoricalAndRunDate(
     @Body() dto: UpdateHistoricalAndRunDateDto

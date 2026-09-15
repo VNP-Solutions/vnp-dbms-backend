@@ -618,8 +618,8 @@ export interface UpdateHistoricalAndRunDateResult {
   ota_type: ParserJobOtaType
   /** end_date written into {ota}_to */
   historical_to_updated: string
-  /** Computed run date written into {ota}_run_date_from  (end_date + 1 day + CRS days + 15 days) */
-  run_date: string
+  /** Computed run date written into {ota}_run_date_from  (end_date + 1 day + CRS days + 15 days); null when there is no CRS and the run date was left unchanged */
+  run_date: string | null
 }
 
 // ─── Bulk Upload Retrieval Jobs ─────────────────────────────────────────────

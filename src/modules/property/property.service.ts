@@ -29,6 +29,7 @@ import { ColoredLogger } from '../../common/utils/colored-logger.util'
 import { EmailUtil } from '../../common/utils/email.util'
 import { EncryptionUtil } from '../../common/utils/encryption.util'
 import { withTimeout } from '../../common/utils/promise-timeout.util'
+import { insensitiveEquals } from '../../common/utils/regex.util'
 import {
   applyExcelNullTokens,
   createPropertyExcelRowMapper,
@@ -3878,7 +3879,7 @@ export class PropertyService implements IPropertyService {
             const nameMatches = await withTimeout(
               this.prisma.property.findMany({
                 where: {
-                  name: { equals: propertyName, mode: 'insensitive' }
+                  name: insensitiveEquals(propertyName)
                 },
                 take: 2,
                 include: {
@@ -3966,7 +3967,7 @@ export class PropertyService implements IPropertyService {
             if (isExcelNullToken(name)) return EXCEL_NULL_TOKEN
             const normalized = name.trim()
             let rec = await this.prisma.processor.findFirst({
-              where: { name: { equals: normalized, mode: 'insensitive' } }
+              where: { name: insensitiveEquals(normalized) }
             })
             if (!rec) {
               const last = await this.prisma.processor.findFirst({
@@ -3990,7 +3991,7 @@ export class PropertyService implements IPropertyService {
             if (isExcelNullToken(name)) return EXCEL_NULL_TOKEN
             const normalized = toUpperSnakeCase(name)
             let rec = await this.prisma.serviceType.findFirst({
-              where: { type: { equals: normalized, mode: 'insensitive' } }
+              where: { type: insensitiveEquals(normalized) }
             })
             if (!rec) {
               const maxOrder = await this.prisma.serviceType.findFirst({
@@ -4014,7 +4015,7 @@ export class PropertyService implements IPropertyService {
             if (isExcelNullToken(name)) return EXCEL_NULL_TOKEN
             const normalized = name.trim()
             let rec = await this.prisma.billingType.findFirst({
-              where: { name: { equals: normalized, mode: 'insensitive' } }
+              where: { name: insensitiveEquals(normalized) }
             })
             if (!rec) {
               const last = await this.prisma.billingType.findFirst({
@@ -4038,7 +4039,7 @@ export class PropertyService implements IPropertyService {
             if (isExcelNullToken(name)) return EXCEL_NULL_TOKEN
             const normalized = toUpperSnakeCase(name)
             let rec = await this.prisma.frequency.findFirst({
-              where: { name: { equals: normalized, mode: 'insensitive' } }
+              where: { name: insensitiveEquals(normalized) }
             })
             if (!rec) {
               const last = await this.prisma.frequency.findFirst({
@@ -4062,7 +4063,7 @@ export class PropertyService implements IPropertyService {
             if (isExcelNullToken(name)) return EXCEL_NULL_TOKEN
             const normalized = name.trim()
             let rec = await this.prisma.priority.findFirst({
-              where: { name: { equals: normalized, mode: 'insensitive' } }
+              where: { name: insensitiveEquals(normalized) }
             })
             if (!rec) {
               const last = await this.prisma.priority.findFirst({
@@ -4165,7 +4166,7 @@ export class PropertyService implements IPropertyService {
           } else if (currencyCode !== undefined) {
             const normalized = currencyCode.trim().toUpperCase()
             let currencyRec = await this.prisma.currency.findFirst({
-              where: { code: { equals: normalized, mode: 'insensitive' } }
+              where: { code: insensitiveEquals(normalized) }
             })
             if (!currencyRec) {
               const last = await this.prisma.currency.findFirst({
@@ -6018,7 +6019,7 @@ export class PropertyService implements IPropertyService {
     if (priorities.length === 0) return null
     return {
       OR: priorities.map(v => ({
-        [fieldName]: { equals: v, mode: 'insensitive' }
+        [fieldName]: insensitiveEquals(v)
       }))
     }
   }
