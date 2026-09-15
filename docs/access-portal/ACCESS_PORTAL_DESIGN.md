@@ -1,8 +1,8 @@
 # Access Portal — Design
 
 **Status:** Draft for review — design only, nothing is implemented
-**Version:** 0.1
-**Last Updated:** September 13, 2026
+**Version:** 0.2
+**Last Updated:** September 15, 2026
 **Applies to:** a new Access Portal (frontend, backend, database) and the DBMS, Dashboard and Parser backends and frontends it connects to
 
 ---
@@ -45,7 +45,7 @@
 - Internal staff open DBMS, Dashboard and Parser from one place without retyping passwords.
 - Admins add, change and remove a person's access to every system from one screen.
 - Everyone else keeps logging in to each system directly, exactly as today.
-- Saved passwords and tokens never reach the browser, except the normal session each system gives its own frontend.
+- Saved passwords never reach the browser; system tokens are kept only in `HttpOnly` cookies that page scripts cannot read.
 
 ### 1.3 Non-goals
 
@@ -69,12 +69,12 @@ Some internal people. All other users continue to use the systems' own login pag
 | P2 | Portal login | Email + password + emailed 6-digit code |
 | P3 | System login | The portal backend sends the saved email and password to that system's login API; the user types that system's emailed code in a portal popup |
 | P4 | Saved passwords | Encrypted with AES-256-GCM using a dedicated key; decrypted only on the portal backend, in memory, when needed |
-| P5 | Remembered sessions | The portal reuses a system session for up to 12 hours (the client can change this) |
+| P5 | Remembered sessions | Each system's tokens are kept in `HttpOnly` cookies on the portal (for example `dbms_acc_token`, `dbms_refresh_token`); a click first tries the refresh token and falls back to email + password + OTP |
 | P6 | Handoff to the new tab | A 60-second single-use code in the URL; tokens never appear in URLs |
 | P7 | Systems' own login pages | Stay available |
 | P8 | Existing accounts | Linked (the person enters their existing password once and the portal verifies it with a test login) or created where missing |
-| P9 | Removing access | Disable the account in the app through a new `is_active` flag; never delete |
-| P10 | Roles | Picked in the portal from each app's live role list; portfolio and property scope set later inside the app |
+| P9 | Removing access | The portal backend makes an HTTP call to that system's new disable API (`PATCH /api/users/:id/status` with `{ "is_active": false }`); never delete |
+| P10 | Roles | Never stored in the portal: role lists and each person's current role are always fetched from that system's API; portfolio and property scope set later inside the app |
 | P11 | Password rule for accounts the portal creates | 8–32 characters with at least one letter, one number and one special character (the strictest rule of the three apps) |
 | P12 | Stripe and Comms | Stripe is a plain link with no saved credentials; Comms is out of scope |
 
@@ -89,7 +89,7 @@ Some internal people. All other users continue to use the systems' own login pag
 ┌──────────────────────────┐          ┌────────────────────────────────────────────┐
 │ Portal frontend          │ ───────▶ │ Portal backend                             │
 │ login · access list      │          │ portal login + code · saved passwords      │
-│ code popup · admin pages │          │ system sessions · handoff codes · invites  │
+│ code popup · admin pages │          │ token cookies · handoff codes · invites    │
 └────────────▲─────────────┘          └───────┬──────────────────────┬─────────────┘
              │ opens a new tab                 │ own database         │ calls each system's
              │ /portal-login?code=…            ▼                      │ existing APIs
@@ -103,7 +103,7 @@ Some internal people. All other users continue to use the systems' own login pag
 | Component | Responsibility |
 |---|---|
 | Portal frontend | Portal login and code screens, access list with one button per system, code popup, admin pages for users, systems and roles |
-| Portal backend | Portal accounts and sessions, encrypted system passwords, remembered system sessions, handoff codes, invitations, audit log. NestJS 11 on Node 24 with Prisma 6, the same stack as the existing backends |
+| Portal backend | Portal accounts and sessions, encrypted system passwords, system token cookies, handoff codes, invitations, audit log. NestJS 11 on Node 24 with Prisma 6, the same stack as the existing backends |
 | Portal database | MongoDB database owned only by the portal, run as a replica set (Prisma requires one) |
 | System connectors | One module per system inside the portal backend, each implementing the capabilities in 3.2 |
 | `/portal-login` page | A small page added to the DBMS, Dashboard and Parser frontends that redeems the handoff code |
@@ -120,9 +120,10 @@ Paths are relative to each API's base URL.
 | Check a session | `GET /api/users/profile` | `GET /api/users/profile` | `GET /auth/me` |
 | Renew a session | `POST /api/auth/refresh` with `refresh_token`; sets new cookies | `POST /api/auth/refresh` with `refresh_token`; returns new tokens | Not available |
 | List roles | `GET /api/user-role` | `GET /api/user-role` | Fixed: `admin`, `partial` |
+| Read a person's current role | `GET /api/users/:id` | `GET /api/users/:id` | `GET /user/:id` (after finding F2 is fixed) |
 | Create an account | `POST /api/invitations`, then `POST /api/invitations/accept/:token` with the password | New endpoint (Section 12) | `POST /invitations`, then `POST /invitations/accept/:token` with `name` and `password` |
 | Change role | `PATCH /api/users/:id/role` with `role_id` | `PATCH /api/users/:id/role` with `role_id` | `PATCH /user/:id` with `role` (after finding F2 is fixed) |
-| Disable or enable | New endpoint (Section 12) | New endpoint | New endpoint |
+| Disable or enable | `PATCH /api/users/:id/status` with `is_active` (new, Section 12) | `PATCH /api/users/:id/status` with `is_active` (new) | `PATCH /user/:id/status` with `is_active` (new) |
 
 ---
 
@@ -136,15 +137,28 @@ Paths are relative to each API's base URL.
 | `portal_login_codes` | Hashed 6-digit code, attempts, expiry, consumed time | 10-minute expiry, 5 attempts |
 | `portal_sessions` | Portal user, device, IP, created, last seen, expiry | 12-hour lifetime |
 | `portal_login_throttle` | Failure counters per email and per IP, expiry | Removed automatically when expired |
-| `system_accounts` | Portal user, system (`DBMS` / `DASHBOARD` / `PARSER`), the system's user id, system email, encrypted password (ciphertext, IV, auth tag, key id), role id and name, status, last error, timestamps | One row per portal user per system |
-| `system_sessions` | Portal user, system, encrypted tokens, obtained time, token expiry, reuse-until time | Deleted on portal logout, access removal, password change, or when reuse-until passes |
-| `handoff_codes` | Hash of the code, portal user, system, expiry, used time | 60-second expiry, single use |
+| `system_accounts` | Portal user, system (`DBMS` / `DASHBOARD` / `PARSER`), the system's user id, system email, encrypted password (ciphertext, IV, auth tag, key id), status, last error, timestamps | One row per portal user per system; no role is stored |
+| `handoff_codes` | Hash of the code, portal user, system, the token to hand over (encrypted), expiry, used time | 60-second expiry, single use, deleted after use |
 | `portal_invitations` | Email, hashed token, inviter, expiry, accepted time | 7-day expiry |
 | `audit_events` | Actor, action, system, target, result, IP, time | Append-only |
 
 `system_accounts.status` is one of `active`, `waiting_for_password`, `creating`, `disabled`, `failed`.
 
-### 4.2 Mapping to the client's diagram
+### 4.2 System token cookies
+
+Set by the portal backend on `portal.dashboardvnps.com`. They are never stored in the portal database.
+
+| Cookie | Holds | Used for |
+|---|---|---|
+| `dbms_acc_token` | DBMS access token | Handing a live DBMS session to the new tab |
+| `dbms_refresh_token` | DBMS refresh token | Getting new DBMS tokens without an OTP |
+| `dashboard_acc_token` | Dashboard access token | Handing a live Dashboard session to the new tab |
+| `dashboard_refresh_token` | Dashboard refresh token | Getting new Dashboard tokens without an OTP |
+| `parser_acc_token` | Parser access token | Reusing a Parser session; Parser has no refresh token |
+
+Every cookie is `HttpOnly`, `Secure`, `SameSite=Lax`, host-only on `portal.dashboardvnps.com`, with `Path=/` and an expiry equal to the token's own expiry. All of them are cleared on portal logout.
+
+### 4.3 Mapping to the client's diagram
 
 The diagram keeps every system's fields on the user row (`dbms_email`, `dbms_pass`, `dbms_access_status`, `remember`, `dash_email`, `dash_pass`, …). This design stores the same information as one `system_accounts` row per system, so adding a system later needs no schema change. Stripe and Comms have no rows.
 
@@ -156,21 +170,21 @@ The diagram keeps every system's fields on the user row (`dbms_email`, `dbms_pas
 - Throttling: 5 wrong passwords for one email in 15 minutes locks that email for 15 minutes and sends a notice email; 50 failures from one IP in 15 minutes blocks that IP for 15 minutes. Every failure shows the same message.
 - The portal session is a cookie limited to `portal.dashboardvnps.com`, marked `Secure`, `HttpOnly` and `SameSite=Lax`, lasting 12 hours.
 - A user created by an admin must change the portal password at first login.
-- Logging out of the portal deletes the portal session and all of that user's remembered system sessions.
+- Logging out of the portal deletes the portal session and clears all system token cookies.
 
 ---
 
 ## 6. Opening a System
 
 ```
-User clicks DBMS
-  portal backend: remembered DBMS session still usable? (Section 7) ── yes ──▶ step 5
+User clicks DBMS  (the browser sends the portal's DBMS token cookies with the request)
+  portal backend: dbms_refresh_token cookie works? (Section 7) ── yes, new tokens ──▶ step 5
   1  decrypt the saved DBMS password in memory
   2  ──▶ DBMS request-otp (email, password)
   3  popup: "Enter the code DBMS sent to your email"
   4  ──▶ DBMS verify-otp (email, code) ──▶ DBMS tokens (read from the cookie headers)
-     save the tokens encrypted in system_sessions
-  5  create a single-use code (60 s) ──▶ open a new tab
+     set dbms_acc_token and dbms_refresh_token cookies on the portal
+  5  create a single-use code (60 s) holding the token to hand over ──▶ open a new tab
      https://dbms.dashboardvnps.com/portal-login?code=…
   6  DBMS frontend ──▶ portal backend: redeem the code
      ◀── DBMS refresh token
@@ -192,21 +206,28 @@ User clicks DBMS
 ## 7. Remembering System Sessions (Complexity 1)
 
 ```
-LATER click on DBMS
-  portal backend ──(saved token)──▶ DBMS GET /api/users/profile
-     token still valid                    → new tab, no popup
-     expired, refresh token still valid  → DBMS POST /api/auth/refresh → new tab, no popup
-     both expired, or 12 hours passed    → popup again (Section 6, steps 1–4)
+User clicks DBMS or Dashboard
+  <system>_refresh_token cookie present?
+     yes → portal backend ──▶ that system's POST /api/auth/refresh
+              accepted → set new <system>_acc_token and <system>_refresh_token cookies
+                         → open the tab, no popup
+              rejected → clear that system's cookies → email + password + OTP (Section 6, steps 1–4)
+     no  → email + password + OTP (Section 6, steps 1–4)
+
+User clicks Parser (no refresh token)
+  parser_acc_token cookie present and accepted by GET /auth/me?
+     yes → open the tab, no popup
+     no  → email + password + OTP
 ```
 
-| Rule | Default (the client can change it) |
+| Rule | Value |
 |---|---|
-| How long the portal reuses a system session | 12 hours after the code was entered, or until that system's tokens expire, whichever comes first |
-| Where tokens are kept | Portal database only, encrypted with AES-256-GCM, never sent to the portal page |
-| When remembered tokens are deleted | Portal logout, access removed for that system, saved password changed, or 12 hours passed |
-| Differences per system | DBMS and Dashboard renew silently with their refresh token; Parser has no refresh, so the popup returns when its token expires |
+| Where tokens are kept | `HttpOnly` cookies on `portal.dashboardvnps.com`, set by the portal backend (Section 4.2); never in the portal database and never readable by the portal page's scripts |
+| How long no OTP is needed | As long as that system accepts its refresh token (DBMS, Dashboard) or its access token (Parser) |
+| When cookies are cleared | Portal logout; the system rejects the token (for example after access was disabled or the password changed); cookie expiry |
+| Differences per system | DBMS and Dashboard renew with their refresh token; Parser has no refresh token, so the popup returns when its access token expires |
 
-A session handed to a browser lasts as long as that system's own tokens. The local configuration files set DBMS and Parser access tokens to `3650d`, so each system should shorten its token lifetimes (Section 12).
+How long a login is remembered therefore depends on each system's token lifetimes. The local configuration files set DBMS refresh tokens to `7d`, Dashboard refresh tokens to `365d` and Parser access tokens to `3650d`; each system should choose lifetimes it accepts for remembered logins (Section 12).
 
 ---
 
@@ -233,7 +254,7 @@ User: logs in to the portal; for each waiting_for_password system, enters that s
 | Dashboard | New endpoint that creates a verified user with `role_id`, name and password (Section 12) |
 | Parser | `POST /invitations` with `email`, `role` and `send_email: false` (new option), then `POST /invitations/accept/:token` with `name` and `password` |
 
-- Calls run as the admin inside each system, using the admin's remembered session for that system; if it has expired, the admin sees the code popup first. Each system's own permission rules therefore apply.
+- Calls run as the admin inside each system, using the admin's own token cookies for that system; if they are missing or rejected, the admin sees the code popup first. Each system's own permission rules therefore apply.
 - Each system shows its own result on the admin screen, with Retry for failures. Repeating the action never creates duplicates, because each system rejects an email that already exists.
 
 ---
@@ -247,9 +268,9 @@ User: logs in to the portal; for each waiting_for_password system, enters that s
 ☐ Stripe      link only, no account
 ```
 
-- Role lists are loaded when the admin opens the screen, using the admin's session in each system, so new roles appear without portal changes.
+- Role lists are fetched from each system's API every time the admin opens the screen (DBMS and Dashboard `GET /api/user-role`; Parser's fixed `admin` / `partial`), using the admin's token cookies for that system, so new roles appear without portal changes.
 - Portfolio and property scope are not chosen in the portal. After creating an account with a partial role (a DBMS or Dashboard role with partial access, or Parser `partial`), an admin sets the scope inside that app. Until then that person sees no restricted data there.
-- The portal stores the chosen role id and name only to display them; the app remains the source of truth.
+- The portal never stores roles. Wherever it shows a person's role, it reads it from that system at that moment (`GET /api/users/:id` in DBMS and Dashboard, `GET /user/:id` in Parser).
 
 ---
 
@@ -257,19 +278,19 @@ User: logs in to the portal; for each waiting_for_password system, enters that s
 
 ### 10.1 Remove a person's access to one system
 
-1. The portal calls that system's new disable endpoint as the admin.
-2. The system sets `is_active = false`; that person's next request and next login are rejected.
-3. Only after the system confirms, the portal marks the `system_accounts` row `disabled` and deletes its saved password and remembered tokens.
+1. The portal backend makes an HTTP call to that system as the admin: `PATCH /api/users/:id/status` with `{ "is_active": false }` in DBMS and Dashboard, `PATCH /user/:id/status` with `{ "is_active": false }` in Parser.
+2. The system sets `is_active = false`. That person's next login is refused, and their existing tokens are rejected on the next request, including refresh.
+3. Only after the system confirms, the portal marks the `system_accounts` row `disabled` and deletes its saved password. The person's token cookies stop working because the system rejects them.
 
 The person's data in that system stays intact. Deleting is not used, because deleting a user removes business data in Dashboard (notes, tasks, contract URLs, consolidated reports, pending requests), is refused in DBMS for users who uploaded files or saved column templates, and in Parser leaves existing tokens working.
 
 ### 10.2 Give access again
 
-The portal calls the enable endpoint, sets the row back to `waiting_for_password` and the person enters that system's password once more.
+The portal makes the same HTTP call with `{ "is_active": true }`, sets the row back to `waiting_for_password`, and the person enters that system's password once more.
 
 ### 10.3 Change a role
 
-The portal calls that system's role endpoint (Section 3.2) and updates the displayed role only after the system confirms.
+The portal makes an HTTP call to that system's role endpoint (Section 3.2), then reads the role back from the system to display it. Nothing is stored in the portal.
 
 ### 10.4 Add another system later
 
@@ -281,7 +302,7 @@ Because direct login stays available, a person may change a password inside a sy
 
 ### 10.6 Disable a whole portal user
 
-The portal account is disabled and all portal and remembered system sessions are deleted. The admin chooses per system whether to disable the account there too; systems the person also uses directly are unaffected unless selected.
+The portal account is disabled and its portal sessions are deleted. The admin chooses per system whether to disable the account there too; systems the person also uses directly are unaffected unless selected.
 
 ### 10.7 When one system fails
 
@@ -293,11 +314,12 @@ Each system shows its own result. The portal never shows "removed" for a system 
 
 | Area | Rule |
 |---|---|
-| Encryption of saved passwords and tokens | AES-256-GCM with a random 96-bit IV per value and the authentication tag stored alongside; a random 32-byte key held outside the database (environment or secret store) with a key id on every record so the key can be rotated. The existing DBMS `EncryptionUtil` is not reused (see F16). |
+| Encryption of saved passwords and handoff tokens | AES-256-GCM with a random 96-bit IV per value and the authentication tag stored alongside; a random 32-byte key held outside the database (environment or secret store) with a key id on every record so the key can be rotated. The existing DBMS `EncryptionUtil` is not reused (see F16). |
 | Use of saved passwords | Decrypted only inside the portal backend for a single login call; never logged, never returned by any API, never sent to a browser |
 | Portal login | Password plus emailed code, throttling and generic errors (Section 5) |
 | Portal session cookie | Host-only on `portal.dashboardvnps.com`, `Secure`, `HttpOnly`, `SameSite=Lax`, 12 hours |
-| CSRF | `SameSite=Lax` cookie plus an Origin check on every state-changing portal request |
+| System token cookies | Set only by the portal backend; `HttpOnly`, `Secure`, `SameSite=Lax`, host-only on `portal.dashboardvnps.com`; never readable by page scripts; reach a system's frontend only through a handoff code |
+| CSRF | `SameSite=Lax` cookies plus an Origin check on every state-changing portal request |
 | Handoff codes | Random, stored only as a hash, single use, 60 seconds, bound to one user and one system |
 | Redeem endpoint | Accepts requests only from `https://dbms.dashboardvnps.com`, `https://new.dashboardvnps.com` and `https://parser.dashboardvnps.com` |
 | Tokens in URLs | Never |
@@ -312,6 +334,7 @@ Each system shows its own result. The portal never shows "removed" for a system 
 | If the portal database and the encryption key both leak, every saved system password leaks | Key kept outside the database, restricted access, audit log, portal limited to internal staff; runbook to reset every saved password in the systems (Section 16) |
 | Direct login stays available, so the portal alone cannot block a person | Removing access always disables the account inside the system (Section 10.1) |
 | A session handed to a browser lasts as long as the system's own tokens | Shorten token lifetimes in each system (Section 12) |
+| Someone who copies a user's portal cookies can use that person's system tokens until they are rejected | `HttpOnly` and `Secure` cookies; disabling through the system's API (10.1) makes the system reject them; sensible refresh token lifetimes (Section 12) |
 
 ---
 
@@ -319,15 +342,15 @@ Each system shows its own result. The portal never shows "removed" for a system 
 
 | App | Change | Needed for |
 |---|---|---|
-| DBMS backend | `is_active` on `User`; login and the JWT strategy reject inactive users; admin endpoint to disable and enable a user | Removing access (10.1) |
+| DBMS backend | `is_active` on `User`; login, refresh and the JWT strategy reject inactive users; new `PATCH /api/users/:id/status` taking `{ "is_active": boolean }` | Removing access (10.1) |
 | DBMS backend | Optional `send_email` on `POST /api/invitations` | Creating accounts without a second email (8) |
-| Dashboard backend | `is_active` on `User`; login and the JWT strategy reject inactive users; admin endpoint to disable and enable a user | Removing access (10.1) |
+| Dashboard backend | `is_active` on `User`; login, refresh and the JWT strategy reject inactive users; new `PATCH /api/users/:id/status` taking `{ "is_active": boolean }` | Removing access (10.1) |
 | Dashboard backend | Admin endpoint that creates a verified user with role, name and password | Creating accounts (8); today's invite emails a temporary password and returns nothing |
-| Parser backend | The JWT strategy looks the user up on every request and rejects inactive or deleted users; login rejects inactive users; admin endpoint to disable and enable | Removing access actually working (10.1) |
+| Parser backend | The JWT strategy looks the user up on every request and rejects inactive or deleted users; login rejects inactive users; new `PATCH /user/:id/status` taking `{ "is_active": boolean }` | Removing access actually working (10.1) |
 | Parser backend | Guards on `POST /auth/register` and `GET/PATCH/DELETE /user/:id` (F1, F2) | Security; role changes (10.3) |
 | Parser backend | Optional `send_email` on `POST /invitations` | Creating accounts without a second email (8) |
 | DBMS, Dashboard, Parser frontends | A `/portal-login` page that redeems the handoff code (Section 6) | Opening a system from the portal |
-| All three backends | Shorter access and refresh token lifetimes (recommended) | Limiting how long a handed-off session lasts (11.1) |
+| All three backends | Deliberate access and refresh token lifetimes (recommended) | How long a login is remembered (7) and how long a handed-off session lasts (11.1) |
 
 ---
 
@@ -336,6 +359,7 @@ Each system shows its own result. The portal never shows "removed" for a system 
 | Failure | What the user sees | Response |
 |---|---|---|
 | A system's API is down or slow | "DBMS is not responding, try again" | 10-second timeout per call; no retry loop |
+| Refresh token rejected | The code popup | That system's cookies are cleared, then email + password + OTP |
 | Saved password rejected | "Your DBMS password may have changed. Enter it again." | Test login, then save (10.5) |
 | Code email not received | Resend after 60 seconds | The portal allows a resend after 60 seconds; the systems themselves have no resend limit today (F4) |
 | Handoff code expired or already used | The system's page shows "Link expired, open it again from the portal" | Nothing stored; the user clicks the button again |
@@ -370,10 +394,10 @@ The portal is additive: if it has to be switched off, every system keeps working
 | Connector contract tests (against staging APIs) | For each system: request code, verify code, check session, renew, list roles, create account, change role, disable and enable |
 | Encryption | Encrypt and decrypt round trip; a tampered ciphertext is rejected; key rotation re-encrypts old records |
 | Handoff | A code works once; an expired code fails; a code for DBMS cannot be redeemed as Dashboard; the redeem endpoint rejects other origins |
-| Remembered sessions | Reused within 12 hours; popup after 12 hours; cleared on portal logout, access removal and password change |
+| Token cookies | Refresh token cookie tried before any OTP; OTP when the cookie is missing or rejected; cookies are `HttpOnly`, `Secure` and host-only; cleared on portal logout; Parser access token reused until rejected |
 | Portal login | Code expiry and attempt limit; throttling per email and per IP; generic errors |
 | Adding users | Created, linked and failed paths per system; Retry does not duplicate |
-| Removing access | After disabling, the person's next request in that system is rejected, including Parser |
+| Removing access | After the disable HTTP call, the person's next request and next refresh in that system are rejected, including Parser; roles are read back from the system, never from the portal |
 | Security cases | Saved passwords never appear in any API response or log; tokens never appear in URLs; non-admins cannot reach admin endpoints |
 
 The portal backend uses Jest with `ts-jest`, `@nestjs/testing` and `supertest`, following Parser's existing setup, and runs its tests in CI on every pull request.

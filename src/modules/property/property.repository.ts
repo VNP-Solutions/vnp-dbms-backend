@@ -5,6 +5,7 @@ import {
   isExcelNullToken
 } from '../../common/utils/property-excel.util'
 import { PrismaService } from '../prisma/prisma.service'
+import { insensitiveEquals } from '../../common/utils/regex.util'
 import {
   collectPropertyUniqueConflicts,
   normalizePropertyIdentifier,
@@ -296,7 +297,7 @@ export class PropertyRepository implements IPropertyRepository {
   async findByPropertyIdentifier(identifier: string) {
     return this.prisma.property.findFirst({
       where: {
-        property_identifier: { equals: identifier, mode: 'insensitive' }
+        property_identifier: insensitiveEquals(identifier)
       }
     })
   }
@@ -834,7 +835,7 @@ export class PropertyRepository implements IPropertyRepository {
         if (isExcelNullToken(name)) return EXCEL_NULL_TOKEN
         const normalized = name.trim()
         let rec = await this.prisma.processor.findFirst({
-          where: { name: { equals: normalized, mode: 'insensitive' } }
+          where: { name: insensitiveEquals(normalized) }
         })
         if (!rec) {
           const last = await this.prisma.processor.findFirst({
@@ -861,7 +862,7 @@ export class PropertyRepository implements IPropertyRepository {
         if (isExcelNullToken(name)) return EXCEL_NULL_TOKEN
         const normalized = toUpperSnakeCase(name)
         let rec = await this.prisma.serviceType.findFirst({
-          where: { type: { equals: normalized, mode: 'insensitive' } }
+          where: { type: insensitiveEquals(normalized) }
         })
         if (!rec) {
           const maxOrder = await this.prisma.serviceType.findFirst({
@@ -888,7 +889,7 @@ export class PropertyRepository implements IPropertyRepository {
         if (isExcelNullToken(name)) return EXCEL_NULL_TOKEN
         const normalized = name.trim()
         let rec = await this.prisma.billingType.findFirst({
-          where: { name: { equals: normalized, mode: 'insensitive' } }
+          where: { name: insensitiveEquals(normalized) }
         })
         if (!rec) {
           const last = await this.prisma.billingType.findFirst({
@@ -915,7 +916,7 @@ export class PropertyRepository implements IPropertyRepository {
         if (isExcelNullToken(name)) return EXCEL_NULL_TOKEN
         const normalized = toUpperSnakeCase(name)
         let rec = await this.prisma.frequency.findFirst({
-          where: { name: { equals: normalized, mode: 'insensitive' } }
+          where: { name: insensitiveEquals(normalized) }
         })
         if (!rec) {
           const last = await this.prisma.frequency.findFirst({
@@ -942,7 +943,7 @@ export class PropertyRepository implements IPropertyRepository {
         if (isExcelNullToken(name)) return EXCEL_NULL_TOKEN
         const normalized = name.trim()
         let rec = await this.prisma.priority.findFirst({
-          where: { name: { equals: normalized, mode: 'insensitive' } }
+          where: { name: insensitiveEquals(normalized) }
         })
         if (!rec) {
           const last = await this.prisma.priority.findFirst({
@@ -969,7 +970,7 @@ export class PropertyRepository implements IPropertyRepository {
         if (isExcelNullToken(code)) return EXCEL_NULL_TOKEN
         const normalized = code.trim().toUpperCase()
         let rec = await this.prisma.currency.findFirst({
-          where: { code: { equals: normalized, mode: 'insensitive' } }
+          where: { code: insensitiveEquals(normalized) }
         })
         if (!rec) {
           const last = await this.prisma.currency.findFirst({
@@ -1320,7 +1321,7 @@ export class PropertyRepository implements IPropertyRepository {
     // lookup would miss "highgate hotels" against a stored "Highgate Hotels"
     // and then happily create a second, near-duplicate portfolio.
     const existing = await this.prisma.portfolio.findFirst({
-      where: { name: { equals: trimmed, mode: 'insensitive' } },
+      where: { name: insensitiveEquals(trimmed) },
       select: { id: true, name: true }
     })
     if (existing) {
@@ -1420,7 +1421,7 @@ export class PropertyRepository implements IPropertyRepository {
 
     // Case-insensitive for the same reason as resolveOrCreatePortfolio above.
     const subportfolio = await this.prisma.subportfolio.findFirst({
-      where: { name: { equals: trimmed, mode: 'insensitive' } }
+      where: { name: insensitiveEquals(trimmed) }
     })
     if (!subportfolio) {
       try {

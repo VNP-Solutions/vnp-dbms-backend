@@ -38,6 +38,7 @@ import type {
     PortfolioContact,
     PortfolioWithCounts
 } from './portfolio.interface'
+import { insensitiveEquals } from '../../common/utils/regex.util'
 
 const CACHE_TTL_ITEM = 5 * 60 * 1000 // 5 minutes for individual records
 const CACHE_KEY = (id: string) => `portfolio:${id}`
@@ -819,7 +820,7 @@ export class PortfolioService implements IPortfolioService, OnModuleInit {
         if (row?.[serviceTypeCol]) {
           const stName = String(row[serviceTypeCol]).trim()
           let st = await this.prisma.serviceType.findFirst({
-            where: { type: { equals: stName, mode: 'insensitive' } }
+            where: { type: insensitiveEquals(stName) }
           })
           if (!st) {
             this.logger.log(

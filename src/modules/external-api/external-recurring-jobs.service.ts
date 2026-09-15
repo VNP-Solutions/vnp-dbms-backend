@@ -825,8 +825,9 @@ export class ExternalRecurringJobsService {
    *  1. Fetches the property from the database.
    *  2. If the OTA priority is HIGH, converts it to REGULAR and sets CRS to 30.
    *  3. Writes `end_date` into the OTA's historical "to" field  ({ota}_to).
-   *  4. Calculates the run date:
+   *  4. Calculates the run date (only when a valid CRS is available):
    *       run_date = end_date + 1 day + CRS days + 15 days
+   *     Without CRS the run date is left unchanged and `run_date` returns null.
    *  5. Writes the run date into the OTA's run-date field:
    *       expedia → expedia_run_date
    *       booking → booking_run_date
@@ -881,30 +882,31 @@ export class ExternalRecurringJobsService {
     // 2. HIGH → REGULAR + CRS 30; otherwise keep existing CRS
     const crsRaw = isHighPriority ? '30' : otaFields.crs
 
-    if (!parseCrsDays(crsRaw)) {
-      throw new BadRequestException(
-        `CRS value "${crsRaw}" for ${dto.ota_type} is missing or not a valid positive integer`
+    // 3. Calculate capacity-checked run date via shared service. It needs CRS,
+    // but a job sent with a fixed end_date may have none — {ota}_to is still
+    // saved so the next job starts after this one; the run date is left as is.
+    let runDate: string | null = null
+    if (parseCrsDays(crsRaw)) {
+      runDate = await this.runDateCalculator.calcRunDate(
+        dto.end_date,
+        crsRaw,
+        dto.ota_type,
+        dto.parent_id
       )
+
+      if (!runDate) {
+        throw new BadRequestException(
+          `Could not calculate run date for ${dto.ota_type} — CRS is invalid`
+        )
+      }
     }
 
-    // 3. Calculate capacity-checked run date via shared service
-    const runDate = await this.runDateCalculator.calcRunDate(
-      dto.end_date,
-      crsRaw,
-      dto.ota_type,
-      dto.parent_id
-    )
-
-    if (!runDate) {
-      throw new BadRequestException(
-        `Could not calculate run date for ${dto.ota_type} — CRS is invalid`
-      )
-    }
-
-    // 4. Persist historical-to, run date, and HIGH→REGULAR conversion
+    // 4. Persist historical-to, run date (when calculated), and HIGH→REGULAR conversion
     const updateData: Record<string, string> = {
-      [otaFields.toKey]: dto.end_date,
-      [otaFields.runDateKey]: runDate
+      [otaFields.toKey]: dto.end_date
+    }
+    if (runDate) {
+      updateData[otaFields.runDateKey] = runDate
     }
     if (isHighPriority) {
       updateData[otaFields.priorityKey] = 'REGULAR'
@@ -920,7 +922,7 @@ export class ExternalRecurringJobsService {
 
     this.logger.log(
       `[updateHistoricalAndRunDate] property=${dto.parent_id} ota=${dto.ota_type} ` +
-        `historical_to=${dto.end_date} run_date=${runDate}` +
+        `historical_to=${dto.end_date} run_date=${runDate ?? 'unchanged (no CRS)'}` +
         (isHighPriority ? ' priority HIGH→REGULAR crs→30' : '')
     )
 
