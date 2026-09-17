@@ -29,6 +29,7 @@ import { ColoredLogger } from '../../common/utils/colored-logger.util'
 import { EmailUtil } from '../../common/utils/email.util'
 import { EncryptionUtil } from '../../common/utils/encryption.util'
 import { withTimeout } from '../../common/utils/promise-timeout.util'
+import { isNotApplicableToken } from '../../common/utils/not-applicable.util'
 import { insensitiveEquals } from '../../common/utils/regex.util'
 import {
   applyExcelNullTokens,
@@ -145,6 +146,86 @@ const DASHBOARD_NULLABLE_CREDENTIAL_SYNC_FIELDS: Readonly<
   bookingUsername: 'booking_username',
   bookingPassword: 'booking_password'
 }
+
+/**
+ * Filter fields whose values are ids but that users see as a related record's
+ * name. Sorting by the ObjectId would order by creation time, which looks
+ * random, so these sort by the same value the export shows for them.
+ *
+ * The user_name_* entries point into credentials, a to-many relation Prisma
+ * can't order by — PropertyRepository sorts those in memory.
+ */
+const SORT_BY_RELATED_NAME: Readonly<
+  Record<string, (dir: 'asc' | 'desc') => Record<string, unknown>>
+> = {
+  property_id: dir => ({ name: dir }),
+  portfolio_id: dir => ({ portfolio: { name: dir } }),
+  subportfolio_id: dir => ({ subportfolio: { name: dir } }),
+  service_type_id: dir => ({ service_type: { type: dir } }),
+  currency_id: dir => ({ currency: { code: dir } }),
+  priority_id: dir => ({ priority: { name: dir } }),
+  expedia_processor_id: dir => ({ expedia_processor: { name: dir } }),
+  booking_processor_id: dir => ({ booking_processor: { name: dir } }),
+  agoda_processor_id: dir => ({ agoda_processor: { name: dir } }),
+  expedia_billing_type_id: dir => ({ expedia_billing_type: { name: dir } }),
+  booking_billing_type_id: dir => ({ booking_billing_type: { name: dir } }),
+  agoda_billing_type_id: dir => ({ agoda_billing_type: { name: dir } }),
+  expedia_service_type_id: dir => ({ expedia_service_type: { type: dir } }),
+  booking_service_type_id: dir => ({ booking_service_type: { type: dir } }),
+  agoda_service_type_id: dir => ({ agoda_service_type: { type: dir } }),
+  expedia_frequency_id: dir => ({ expedia_frequency: { name: dir } }),
+  booking_frequency_id: dir => ({ booking_frequency: { name: dir } }),
+  agoda_frequency_id: dir => ({ agoda_frequency: { name: dir } }),
+  user_name_expedia: dir => ({ credentials: { expediaUsername: dir } }),
+  user_name_booking: dir => ({ credentials: { bookingUsername: dir } }),
+  user_name_agoda: dir => ({ credentials: { agodaUsername: dir } })
+}
+
+/** The other half of each date-range filter pair. */
+const DATE_RANGE_PARTNER: Readonly<Record<string, string>> = {
+  expedia_from: 'expedia_to',
+  expedia_to: 'expedia_from',
+  booking_from: 'booking_to',
+  booking_to: 'booking_from',
+  agoda_from: 'agoda_to',
+  agoda_to: 'agoda_from',
+  from_db: 'to_db',
+  to_db: 'from_db',
+  expedia_scheduler_review_from: 'expedia_scheduler_review_to',
+  expedia_scheduler_review_to: 'expedia_scheduler_review_from',
+  expedia_scheduler_review_db_from: 'expedia_scheduler_review_db_to',
+  expedia_scheduler_review_db_to: 'expedia_scheduler_review_db_from'
+}
+
+/** Filter names that match a credentials field instead of a property field. */
+const CREDENTIAL_FILTER_FIELDS: Readonly<Record<string, string>> = {
+  user_name_expedia: 'expediaUsername',
+  user_name_booking: 'bookingUsername',
+  user_name_agoda: 'agodaUsername'
+}
+
+/** Filter fields every property always has, so "N/A" can never match. */
+const NEVER_EMPTY_FILTER_FIELDS: ReadonlySet<string> = new Set([
+  'property_id',
+  'portfolio_id',
+  'created_at',
+  'updated_at'
+])
+
+/**
+ * Fields an update may not clear: the schema requires them, or — like the
+ * property identifier — the property is unusable without them. Mirrors the
+ * columns the Excel upload refuses to set to NULL.
+ */
+const NOT_NULLABLE_UPDATE_FIELDS = [
+  'name',
+  'property_identifier',
+  'portfolio_id',
+  'is_active',
+  'show_in_portfolio',
+  'others_case_emails',
+  'discontinued_email_ids'
+] as const
 
 @Injectable()
 export class PropertyService implements IPropertyService {
@@ -695,32 +776,41 @@ export class PropertyService implements IPropertyService {
     const filterMap = new Map<string, any>()
 
     if (filterDto.filters && Array.isArray(filterDto.filters)) {
+      // "N/A" in a filter means "has no value". Split it out up front so every
+      // branch below — the date-range pairing included — sees only real values.
+      const filters = filterDto.filters.map(filter => {
+        const raw = Array.isArray(filter.in) ? filter.in : []
+        return {
+          ...filter,
+          in: raw.filter(v => !isNotApplicableToken(v)),
+          matchEmpty: raw.some(v => isNotApplicableToken(v))
+        }
+      })
+
       // Build a map of all filters for easy lookup
-      for (const filter of filterDto.filters) {
+      for (const filter of filters) {
         filterMap.set(filter.name, filter)
       }
 
-      for (const filter of filterDto.filters) {
-        const { name, sort_by, in: values } = filter
+      for (const filter of filters) {
+        const { name, sort_by, in: values, matchEmpty } = filter
 
         // Skip if already processed as part of a date range pair
         if (processedFilters.has(name)) continue
 
         // Collect sort_by for multi-field sorting (independent of filter values)
         if (sort_by) {
-          // Handle special cases for relation fields
-          if (name === 'property_id') {
-            // Map property_id to the actual id field
-            orderByArray.push({ id: sort_by })
-          } else if (name === 'portfolio_id') {
-            // Sort by the actual portfolio_id field, not the relation
-            orderByArray.push({ portfolio_id: sort_by })
-          } else if (name === 'subportfolio_id') {
-            // Sort by the actual subportfolio_id field, not the relation
-            orderByArray.push({ subportfolio_id: sort_by })
-          } else {
-            orderByArray.push({ [name]: sort_by })
-          }
+          const byRelatedName = SORT_BY_RELATED_NAME[name]
+          orderByArray.push(
+            byRelatedName ? byRelatedName(sort_by) : { [name]: sort_by }
+          )
+        }
+
+        if (matchEmpty) {
+          whereConditions.push(
+            this.emptyOrValuesFilterCondition(name, values, filterMap)
+          )
+          continue
         }
 
         // Skip filter logic if no values provided, but keep sort_by
@@ -1667,6 +1757,24 @@ export class PropertyService implements IPropertyService {
   ): Promise<PropertyWithRelations> {
     await this.findOne(id, user)
 
+    // "N/A" arrives here as null and clears a field — but not one a property
+    // can't exist without.
+    const payload = data as Record<string, unknown>
+    const clearedRequired: string[] = NOT_NULLABLE_UPDATE_FIELDS.filter(
+      field => payload[field] === null
+    )
+    const credentialsPayload = data.credentials as
+      | Record<string, unknown>
+      | undefined
+    if (credentialsPayload?.multiplePortfolioEmails === null) {
+      clearedRequired.push('credentials.multiplePortfolioEmails')
+    }
+    if (clearedRequired.length) {
+      throw new BadRequestException(
+        `${clearedRequired.join(', ')} cannot be set to N/A`
+      )
+    }
+
     const normalizedIdentifier =
       data.property_identifier !== undefined
         ? (normalizePropertyIdentifier(data.property_identifier) ?? null)
@@ -1710,6 +1818,12 @@ export class PropertyService implements IPropertyService {
     if (webmail_password)
       encryptedData.webmail_password =
         this.encryptionUtil.encrypt(webmail_password)
+    // Secrets are kept out of the spread above, so a cleared one has to be
+    // written back explicitly.
+    const secrets = { qp_password, qp_api_key, fp_password, webmail_password }
+    for (const [key, value] of Object.entries(secrets)) {
+      if (value === null) encryptedData[key] = null
+    }
 
     await this.repo.update(id, encryptedData)
     await this.recalcRunDatesAfterUpdate(id, data)
@@ -1810,12 +1924,24 @@ export class PropertyService implements IPropertyService {
     if (!existing) throw new NotFoundException('Property not found')
     const updated = await this.update(id, data, user)
 
+    // Downstream reads a missing key as "unchanged", so cleared fields must be
+    // named explicitly or they stay set in the dashboard and scraper.
+    const nulledFields = this.nulledUpdateFields(data)
+
     const [dashboardResult, parserResult] = await Promise.all([
-      this.syncUpsertPropertyToDashboard(updated).catch(e => ({
+      this.syncUpsertPropertyToDashboard(
+        updated,
+        undefined,
+        nulledFields
+      ).catch(e => ({
         success: false,
         reason: e?.message ?? String(e)
       })),
-      this.syncUpsertPropertyToScraper(updated).catch(e => ({
+      this.syncUpsertPropertyToScraper(
+        updated,
+        undefined,
+        nulledFields
+      ).catch(e => ({
         success: false,
         reason: e?.message ?? String(e)
       }))
@@ -5954,6 +6080,59 @@ export class PropertyService implements IPropertyService {
     return [...set]
   }
 
+  /**
+   * Condition for a filter row that includes "N/A": the property has no value
+   * for the field, or it matches the row's other values as it normally would.
+   */
+  private emptyOrValuesFilterCondition(
+    name: string,
+    values: (string | number | boolean)[],
+    filterMap: Map<string, any>
+  ): Record<string, unknown> {
+    const empty = this.emptyValueFilterCondition(name)
+    if (!values.length) return empty
+
+    // A lone *_from / *_to is ignored, so a date field takes its range partner
+    // along to keep the range the two would otherwise form.
+    const rows: Array<{ name: string; in: (string | number | boolean)[] }> = [
+      { name, in: values }
+    ]
+    const partnerName = DATE_RANGE_PARTNER[name]
+    const partner = partnerName ? filterMap.get(partnerName) : undefined
+    if (partner?.in?.length) rows.push({ name: partnerName, in: partner.in })
+
+    const { where } = this.buildPropertyFilterQuery(
+      { filters: rows } as PropertyFilterDto,
+      'all'
+    )
+    return 'AND' in where ? { OR: [empty, where] } : empty
+  }
+
+  /**
+   * Matches properties with no value for a filter field. A missing key counts
+   * the same as null — most properties never had the field written at all.
+   */
+  private emptyValueFilterCondition(name: string): Record<string, unknown> {
+    const unsetOrNull = (field: string) => ({
+      OR: [{ [field]: null }, { [field]: { isSet: false } }]
+    })
+
+    const credentialField = CREDENTIAL_FILTER_FIELDS[name]
+    if (credentialField) {
+      return {
+        OR: [
+          { credentials: { none: {} } },
+          { credentials: { some: unsetOrNull(credentialField) } }
+        ]
+      }
+    }
+    if (name === 'discontinued_email_ids') {
+      return { discontinued_email_ids: { isEmpty: true } }
+    }
+    if (NEVER_EMPTY_FILTER_FIELDS.has(name)) return { id: { in: [] } }
+    return unsetOrNull(name)
+  }
+
   private booleanFilterCondition(
     fieldName: string,
     values: (string | number | boolean)[]
@@ -6028,6 +6207,15 @@ export class PropertyService implements IPropertyService {
     const out: Record<string, any> = {}
     for (const f of fields) if (src?.[f] !== undefined) out[f] = src[f]
     return out
+  }
+
+  /** Property and credential fields an update request clears (sets to null). */
+  private nulledUpdateFields(data: UpdatePropertyDto): string[] {
+    const nulledKeys = (obj: object | null | undefined) =>
+      Object.entries(obj ?? {})
+        .filter(([, value]) => value === null)
+        .map(([key]) => key)
+    return [...nulledKeys(data), ...nulledKeys(data.credentials)]
   }
 
   /**

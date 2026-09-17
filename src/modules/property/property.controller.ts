@@ -28,6 +28,7 @@ import { RequirePermission } from '../../common/decorators/require-permission.de
 import { ExternalJwtGuard } from '../../common/guards/external-jwt.guard'
 import { PermissionGuard } from '../../common/guards/permission.guard'
 import { ExcelFileInterceptor } from '../../common/interceptors/excel-file.interceptor'
+import { NotApplicableToNullInterceptor } from '../../common/interceptors/not-applicable-to-null.interceptor'
 import type { IUserWithPermissions } from '../../common/interfaces/permission.interface'
 import {
   ModuleType,
@@ -787,12 +788,15 @@ export class PropertyController {
 
   @Patch(':id')
   @RequirePermission(ModuleType.PROPERTY, PermissionAction.UPDATE, true)
+  @UseInterceptors(NotApplicableToNullInterceptor)
   @ApiOperation({
     summary: 'Update property by ID',
     description:
       'When the request changes an OTA\'s "to" date, CRS or priority, that OTA run date ' +
       '(expedia_run_date / booking_run_date / agoda_run_date) is recalculated automatically ' +
-      'using the same rules as property creation. Sending the run date explicitly keeps the supplied value.'
+      'using the same rules as property creation. Sending the run date explicitly keeps the supplied value. ' +
+      'Send "N/A" (any case, / or \\, surrounding spaces ignored) as a value to clear that field to null — ' +
+      'including in credentials. name, property_identifier, portfolio_id, is_active and list fields cannot be cleared (400).'
   })
   @ApiResponse({ status: 200, description: 'Property updated' })
   @ApiResponse({ status: 404, description: 'Property not found' })
@@ -806,12 +810,15 @@ export class PropertyController {
 
   @Patch(':id/sync')
   @RequirePermission(ModuleType.PROPERTY, PermissionAction.UPDATE, true)
+  @UseInterceptors(NotApplicableToNullInterceptor)
   @ApiOperation({
     summary: 'Update property and sync to dashboard + scraper',
     description:
       'When the request changes an OTA\'s "to" date, CRS or priority, that OTA run date ' +
       '(expedia_run_date / booking_run_date / agoda_run_date) is recalculated automatically ' +
-      'using the same rules as property creation. Sending the run date explicitly keeps the supplied value.'
+      'using the same rules as property creation. Sending the run date explicitly keeps the supplied value. ' +
+      'Send "N/A" (any case, / or \\, surrounding spaces ignored) as a value to clear that field to null — ' +
+      'including in credentials. name, property_identifier, portfolio_id, is_active and list fields cannot be cleared (400).'
   })
   @ApiBody({
     type: UpdatePropertyDto,
