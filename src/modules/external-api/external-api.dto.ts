@@ -491,12 +491,28 @@ export class BulkCreateParserJobsDto {
   ota_type: ParserJobOtaType
 
   @ApiPropertyOptional({
+    example: '2026-06-01',
+    description:
+      'Optional fixed start date for the job window. When present, every property\'s job starts ' +
+      'exactly on this date and <ota>_to is not used. With end_date the job runs from start_date ' +
+      'through end_date (CRS is not used); without it the end is start_date + CRS days ' +
+      '(Booking: + 1 extra year, Agoda: start_date + 2 × CRS days). Format: YYYY-MM-DD.'
+  })
+  @IsOptional()
+  @IsDateString({ strict: true })
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, {
+    message: 'start_date must be a calendar date in YYYY-MM-DD format'
+  })
+  start_date?: string
+
+  @ApiPropertyOptional({
     example: '2026-08-31',
     description:
-      'Optional fixed end date for the job window. When present, each property\'s job runs ' +
-      'from its own <ota>_to + 1 day through this date and CRS is not used; a property whose ' +
-      '<ota>_to + 1 day falls after this date is skipped. When omitted, the window is ' +
-      'calculated from <ota>_to and CRS as before. Format: YYYY-MM-DD.'
+      'Optional fixed end date for the job window. When present, CRS is not used and each ' +
+      'property\'s job ends on this date; it starts on start_date when that is sent, otherwise ' +
+      'on its own <ota>_to + 1 day (a property whose <ota>_to + 1 day falls after this date is ' +
+      'skipped). When both dates are omitted, the window is calculated from <ota>_to and CRS as ' +
+      'before. Format: YYYY-MM-DD.'
   })
   @IsOptional()
   @IsDateString({ strict: true })
@@ -512,9 +528,9 @@ export interface ParserJobEntryPayload {
   parent_id: string
   /** OTA platform this job targets */
   ota_type: ParserJobOtaType
-  /** Job window start date (YYYY-MM-DD) — historical_to + 1 day */
+  /** Job window start date (YYYY-MM-DD) — the request's start_date when given, otherwise historical_to + 1 day (Agoda: historical_to − CRS + 1 day) */
   start_date: string
-  /** Job window end date  (YYYY-MM-DD) — the request's end_date when given, otherwise start_date + CRS days [+ 1 yr for booking] */
+  /** Job window end date  (YYYY-MM-DD) — the request's end_date when given, otherwise start_date + CRS days [+ 1 yr for booking; Agoda with a custom start_date: + 2 × CRS days] */
   end_date: string
   /** Billing type name for this OTA, if configured */
   billing_type: string | null

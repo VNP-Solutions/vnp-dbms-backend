@@ -360,9 +360,16 @@ export class ExternalRecurringJobsService {
    *  1. Fetches the property from the database.
    *  2. For the requested OTA, computes the job window from the property's own
    *     historical-to date:
-   *       with dto.end_date:  start_date = historical_to + 1 day
+   *       with dto.start_date and dto.end_date:
+   *                           start_date = dto.start_date, end_date = dto.end_date  (CRS and _to unused)
+   *       with dto.start_date only:
+   *                           start_date = dto.start_date  ({ota}_to is not used)
+   *                           end_date   = start_date + crs_days  (booking: +1 year on top,
+   *                                                                agoda: + 2 × crs_days instead)
+   *       with dto.end_date only:
+   *                           start_date = historical_to + 1 day
    *                           end_date   = dto.end_date  (CRS is not used)
-   *       without it:         start_date = historical_to + 1 day
+   *       without either:     start_date = historical_to + 1 day
    *                           end_date   = start_date + crs_days  (booking gets +1 year on top)
    *                           (Agoda uses its own ±crs window instead)
    *  3. Forwards all generated jobs to the parser backend in a single POST request.
@@ -380,6 +387,12 @@ export class ExternalRecurringJobsService {
       )
       throw new BadGatewayException(
         'Scraper backend URL is not configured. Contact the administrator.'
+      )
+    }
+
+    if (dto.start_date && dto.end_date && dto.end_date < dto.start_date) {
+      throw new BadRequestException(
+        `end_date ${dto.end_date} is before start_date ${dto.start_date}`
       )
     }
 
@@ -462,6 +475,31 @@ export class ExternalRecurringJobsService {
           ota_type: ota,
           reason: `No ${ota}_id configured`
         })
+      } else if (dto.start_date) {
+        // Fixed start: the window starts exactly on the requested date, so the
+        // property's {ota}_to plays no part.
+        if (dto.end_date) {
+          jobWindow = { startDate: dto.start_date, endDate: dto.end_date }
+        } else {
+          const crsDays = parseCrsDays(otaConfig.crs)
+          if (crsDays === null) {
+            result.skipped_otas.push({
+              ota_type: ota,
+              reason: `CRS value "${otaConfig.crs}" is missing or not a valid positive integer`
+            })
+          } else {
+            // Agoda keeps its usual window length of 2 × CRS days; Booking
+            // gets its extra year as usual.
+            jobWindow = {
+              startDate: dto.start_date,
+              endDate: calcParserJobEndDate(
+                dto.start_date,
+                ota === 'agoda' ? crsDays * 2 : crsDays,
+                otaConfig.is_booking
+              )
+            }
+          }
+        }
       } else if (!otaConfig.historical_to) {
         result.skipped_otas.push({
           ota_type: ota,
