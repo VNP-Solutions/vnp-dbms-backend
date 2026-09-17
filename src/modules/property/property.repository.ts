@@ -59,6 +59,51 @@ function withTotalNotes<T extends { _count: { notes: number } }>(
   return { ...rest, total_notes: _count.notes }
 }
 
+/**
+ * Prisma can't order by a field of a to-many relation, and a property's
+ * credentials are one. A sort that includes a credentials username is
+ * therefore done in memory — see PropertyRepository.idsSortedInMemory.
+ */
+function sortsByCredentials(
+  orderBy: unknown
+): orderBy is Record<string, unknown>[] {
+  return (
+    Array.isArray(orderBy) &&
+    orderBy.some(
+      entry => entry !== null && typeof entry === 'object' && 'credentials' in entry
+    )
+  )
+}
+
+/** Flattens `{ portfolio: { name: 'asc' } }` into its field path and direction. */
+function sortKey(entry: Record<string, unknown>): {
+  path: string[]
+  dir: 'asc' | 'desc'
+} {
+  const path: string[] = []
+  let node: unknown = entry
+  while (node !== null && typeof node === 'object') {
+    const [key] = Object.keys(node)
+    path.push(key)
+    node = (node as Record<string, unknown>)[key]
+  }
+  return { path, dir: node === 'desc' ? 'desc' : 'asc' }
+}
+
+/** Orders two values the way MongoDB does: missing/null first, then ascending. */
+function compareSortValues(a: unknown, b: unknown): number {
+  const aEmpty = a === null || a === undefined
+  const bEmpty = b === null || b === undefined
+  if (aEmpty || bEmpty) return aEmpty === bEmpty ? 0 : aEmpty ? -1 : 1
+  if (typeof a === 'string' && typeof b === 'string') {
+    return a < b ? -1 : a > b ? 1 : 0
+  }
+  // Numbers, booleans and dates.
+  const x = Number(a)
+  const y = Number(b)
+  return x < y ? -1 : x > y ? 1 : 0
+}
+
 @Injectable()
 export class PropertyRepository implements IPropertyRepository {
   constructor(@Inject(PrismaService) private prisma: PrismaService) {}
@@ -218,6 +263,23 @@ export class PropertyRepository implements IPropertyRepository {
   }): Promise<PropertyWithRelations[]> {
     const { where, skip, take, orderBy } = queryOptions
     const safeWhere = await this.withValidPortfolioFilter(where)
+
+    if (sortsByCredentials(orderBy)) {
+      const ids = await this.idsSortedInMemory(safeWhere, orderBy)
+      const start = skip ?? 0
+      const pageIds =
+        take === undefined ? ids.slice(start) : ids.slice(start, start + take)
+      const page = await this.prisma.property.findMany({
+        where: { id: { in: pageIds } },
+        include: propertyInclude
+      })
+      const position = new Map(pageIds.map((id, index) => [id, index]))
+      page.sort(
+        (a, b) => (position.get(a.id) ?? 0) - (position.get(b.id) ?? 0)
+      )
+      return page.map(withTotalNotes) as PropertyWithRelations[]
+    }
+
     const rows = await this.prisma.property.findMany({
       where: safeWhere,
       skip,
@@ -239,12 +301,58 @@ export class PropertyRepository implements IPropertyRepository {
    */
   async findIds(where: any, orderBy?: any): Promise<string[]> {
     const safeWhere = await this.withValidPortfolioFilter(where)
+    if (sortsByCredentials(orderBy)) {
+      return this.idsSortedInMemory(safeWhere, orderBy)
+    }
     const rows = await this.prisma.property.findMany({
       where: safeWhere,
       orderBy,
       select: { id: true }
     })
     return rows.map(r => r.id)
+  }
+
+  /**
+   * Ids of every property matching `where`, ordered by `orderBy` in memory.
+   * Only the id and the sorted fields are fetched. A property keeps exactly one
+   * credentials record, so credentials fields sort by the first in the array.
+   */
+  private async idsSortedInMemory(
+    where: any,
+    orderBy: Record<string, unknown>[]
+  ): Promise<string[]> {
+    const keys = orderBy.map(sortKey)
+
+    const select: Record<string, any> = { id: true }
+    for (const { path } of keys) {
+      const [field, nested] = path
+      if (nested === undefined) {
+        select[field] = true
+        continue
+      }
+      select[field] = {
+        ...(field === 'credentials' ? { take: 1 } : {}),
+        select: { ...select[field]?.select, [nested]: true }
+      }
+    }
+
+    const rows: any[] = await this.prisma.property.findMany({ where, select })
+    const valueAt = (row: unknown, path: string[]): unknown =>
+      path.reduce<unknown>((node, key) => {
+        const item = Array.isArray(node) ? node[0] : node
+        return item === null || item === undefined
+          ? undefined
+          : (item as Record<string, unknown>)[key]
+      }, row)
+
+    rows.sort((a, b) => {
+      for (const { path, dir } of keys) {
+        const order = compareSortValues(valueAt(a, path), valueAt(b, path))
+        if (order !== 0) return dir === 'asc' ? order : -order
+      }
+      return 0
+    })
+    return rows.map(row => row.id as string)
   }
 
   /**

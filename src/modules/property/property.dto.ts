@@ -1525,7 +1525,10 @@ export class PropertyFilterItem {
 
   @ApiPropertyOptional({
     description:
-      'Sort order for this field (applied in array order for multi-field sorting)',
+      'Sort order for this field (applied in array order for multi-field sorting). ' +
+      'Id fields (portfolio_id, subportfolio_id, currency_id, *_processor_id, *_billing_type_id, ' +
+      '*_service_type_id, *_frequency_id, priority_id, property_id) sort by the related record\'s name; ' +
+      'user_name_expedia / user_name_booking / user_name_agoda sort by the credentials username.',
     example: 'asc',
     enum: ['asc', 'desc']
   })
@@ -1535,7 +1538,8 @@ export class PropertyFilterItem {
 
   @ApiProperty({
     description:
-      'Values to match with OR semantics. Use [] only for sort-only rows (created_at, updated_at) together with sort_by.',
+      'Values to match with OR semantics. Use [] only for sort-only rows (created_at, updated_at) together with sort_by. ' +
+      'Include "N/A" (any case, / or \\, surrounding spaces ignored) to also match properties with no value for the field.',
     example: ['507f1f77bcf86cd799439013', '507f1f77bcf86cd799439014'],
     type: [String]
   })
